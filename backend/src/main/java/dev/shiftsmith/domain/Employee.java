@@ -1,6 +1,6 @@
 package dev.shiftsmith.domain;
 
-import ai.timefold.solver.core.api.domain.lookup.PlanningId;
+import ai.timefold.solver.core.api.domain.common.PlanningId;
 
 import java.time.LocalDate;
 import java.util.HashSet;
