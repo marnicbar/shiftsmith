@@ -1,6 +1,7 @@
 package dev.shiftsmith.service;
 
 import ai.timefold.solver.core.api.solver.SolverManager;
+import ai.timefold.solver.core.api.solver.SolveRequest;
 import dev.shiftsmith.domain.Employee;
 import dev.shiftsmith.domain.EmployeeSchedule;
 import dev.shiftsmith.domain.Shift;
@@ -50,11 +51,11 @@ public class ScheduleService {
             solverManager.terminateEarly(JOB_ID);
         } catch (Exception ignored) {}
         bestSolution = null;
-        solverManager.solveAndListen(
-                JOB_ID,
-                id -> new EmployeeSchedule(new ArrayList<>(employees), new ArrayList<>(shifts)),
-                solution -> this.bestSolution = solution
-        );
+        solverManager.solve(SolveRequest.builder()
+                .withProblemId(JOB_ID)
+                .withProblem(new EmployeeSchedule(new ArrayList<>(employees), new ArrayList<>(shifts)))
+                .withBestSolutionConsumer(solution -> this.bestSolution = solution)
+                .build());
     }
 
     public void stopSolving() {

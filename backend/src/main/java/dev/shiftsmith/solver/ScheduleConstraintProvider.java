@@ -2,6 +2,7 @@ package dev.shiftsmith.solver;
 
 import ai.timefold.solver.core.api.score.buildin.hardsoft.HardSoftScore;
 import ai.timefold.solver.core.api.score.stream.Constraint;
+import ai.timefold.solver.core.api.score.stream.ConstraintCollectors;
 import ai.timefold.solver.core.api.score.stream.ConstraintFactory;
 import ai.timefold.solver.core.api.score.stream.ConstraintProvider;
 import ai.timefold.solver.core.api.score.stream.Joiners;
@@ -100,7 +101,7 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
         // Penalize count^2 per employee so distributing shifts evenly scores better.
         return factory.forEach(Shift.class)
                 .filter(shift -> shift.getEmployee() != null)
-                .groupBy(Shift::getEmployee, ai.timefold.solver.core.api.score.stream.ConstraintCollectors.count())
+                .groupBy(Shift::getEmployee, ConstraintCollectors.count())
                 .penalize(HardSoftScore.ONE_SOFT, (employee, count) -> count * count)
                 .asConstraint("Balance employee shift assignments");
     }
