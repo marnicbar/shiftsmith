@@ -1,0 +1,19 @@
+# Java / Maven / Quarkus
+target/
+*.class
+*.jar
+*.war
+.quarkus/
+
+# Node / Vite / Svelte
+node_modules/
+dist/
+.svelte-kit/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Misc
+.DS_Store
