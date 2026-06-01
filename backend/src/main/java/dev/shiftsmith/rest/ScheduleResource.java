@@ -1,19 +1,18 @@
 package dev.shiftsmith.rest;
 
-import ai.timefold.solver.core.api.score.HardMediumSoftScore;
-import ai.timefold.solver.core.api.solver.SolverStatus;
-import dev.shiftsmith.domain.Schedule;
-import dev.shiftsmith.domain.ShiftAssignment;
+import dev.shiftsmith.realtime.ScheduleBroadcaster;
 import dev.shiftsmith.rest.dto.ProblemDTO;
 import dev.shiftsmith.rest.dto.ScheduleDTO;
 import dev.shiftsmith.service.ScheduleService;
+import io.smallrye.mutiny.Multi;
+import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.jboss.resteasy.reactive.RestStreamElementType;
 
-import java.time.LocalDate;
-import java.util.List;
+import java.time.Duration;
 
 @Path("/api")
 @Produces(MediaType.APPLICATION_JSON)
@@ -23,35 +22,43 @@ public class ScheduleResource {
     @Inject
     ScheduleService service;
 
+    @Inject
+    ScheduleBroadcaster broadcaster;
+
     /** Full state: problem data + the solver's current best assignment + status. */
     @GET
     @Path("/schedule")
     public ScheduleDTO getSchedule() {
-        ScheduleDTO dto = new ScheduleDTO();
-        dto.employees = service.getEmployees();
-        dto.positions = service.getPositions();
-        dto.settings = service.getSettings();
-        dto.overrides = service.getOverrides();
+        return service.snapshotDTO();
+    }
 
-        List<ShiftAssignment> assignments = service.currentAssignments();
-        dto.assignments = assignments.stream().map(ScheduleDTO.Slot::of).toList();
-        dto.total = assignments.size();
-        dto.staffed = (int) assignments.stream().filter(a -> a.getEmployee() != null).count();
-        dto.unassigned = dto.total - dto.staffed;
+    /**
+     * Live stream of the full state, pushed over Server-Sent Events. Emits the
+     * current snapshot immediately, then a fresh snapshot on every change (new
+     * best solution, problem edit, solver start/stop), plus a periodic heartbeat
+     * to keep the connection alive through proxies.
+     *
+     * <p>Snapshots are rebuilt off the solver thread (via {@code emitOn}) so the
+     * solver is never blocked by serialization or slow clients.
+     */
+    @GET
+    @Path("/stream")
+    @Produces(MediaType.SERVER_SENT_EVENTS)
+    @RestStreamElementType(MediaType.APPLICATION_JSON)
+    public Multi<ScheduleDTO> stream() {
+        Multi<ScheduleDTO> initial = Multi.createFrom().item(service::snapshotDTO);
 
-        LocalDate today = LocalDate.now();
-        dto.horizonStart = service.getSettings().horizonStart(today);
-        dto.horizonEnd = service.getSettings().horizonEnd(today);
+        Multi<ScheduleDTO> updates = broadcaster.ticks()
+                .emitOn(Infrastructure.getDefaultWorkerPool())
+                .map(tick -> service.snapshotDTO());
 
-        SolverStatus status = service.status();
-        dto.solverStatus = status == null ? "NOT_SOLVING" : status.name();
+        Multi<ScheduleDTO> heartbeat = Multi.createFrom().ticks().every(Duration.ofSeconds(25))
+                .emitOn(Infrastructure.getDefaultWorkerPool())
+                .map(tick -> service.snapshotDTO());
 
-        Schedule best = service.getBestSolution();
-        if (best != null && best.getScore() != null) {
-            HardMediumSoftScore s = best.getScore();
-            dto.score = new ScheduleDTO.Score(s.hardScore(), s.mediumScore(), s.softScore());
-        }
-        return dto;
+        return Multi.createBy().concatenating().streams(
+                initial,
+                Multi.createBy().merging().streams(updates, heartbeat));
     }
 
     /** Replace the problem (employees / positions / settings / overrides) and re-solve. */

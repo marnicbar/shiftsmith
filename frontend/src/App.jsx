@@ -72,7 +72,6 @@ export default function App() {
   const [error, setError] = useState(null);
 
   const lastSyncRef = useRef(null);
-  const pollRef = useRef(null);
 
   useEffect(() => { Theme.applyTheme({ palette: prefs.palette, accent: prefs.accent, dark: prefs.dark }); }, [prefs.palette, prefs.accent, prefs.dark]);
   useEffect(() => { document.documentElement.style.setProperty('--ui-font', FONTS[prefs.font] || FONTS.Geist); }, [prefs.font]);
@@ -83,18 +82,7 @@ export default function App() {
     horizonStart: d.horizonStart, horizonEnd: d.horizonEnd,
   }), []);
 
-  const startPolling = useCallback(() => {
-    if (pollRef.current) return;
-    pollRef.current = setInterval(async () => {
-      try {
-        const d = await api.getSchedule();
-        setMeta(d);
-        if (d.solverStatus === 'NOT_SOLVING') { clearInterval(pollRef.current); pollRef.current = null; }
-      } catch { /* transient — keep polling */ }
-    }, 1500);
-  }, [setMeta]);
-
-  // Initial load from the backend (seeds demo data on a fresh container).
+  // Initial load from the backend (seeds demo data on a fresh database).
   useEffect(() => {
     (async () => {
       try {
@@ -109,11 +97,17 @@ export default function App() {
         setMeta(d);
         lastSyncRef.current = JSON.stringify({ employees: d.employees, positions: d.positions, settings: d.settings, overrides: d.overrides || {} });
         setLoaded(true);
-        if (d.solverStatus && d.solverStatus !== 'NOT_SOLVING') startPolling();
       } catch (e) { setError(e.message); }
     })();
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [setMeta, startPolling]);
+  }, [setMeta]);
+
+  // Live updates: subscribe to the backend's SSE stream once loaded. The solver's
+  // progress, our own edits and other clients' edits all arrive here, so the
+  // timeline, score and status stay current without polling.
+  useEffect(() => {
+    if (!loaded) return;
+    return api.subscribeSchedule(setMeta);
+  }, [loaded, setMeta]);
 
   // Debounced sync: push the problem to the backend whenever the user edits it.
   useEffect(() => {
@@ -122,11 +116,11 @@ export default function App() {
     const ser = JSON.stringify(problem);
     if (ser === lastSyncRef.current) return;
     const t = setTimeout(async () => {
-      try { await api.putProblem(problem); lastSyncRef.current = ser; startPolling(); }
+      try { await api.putProblem(problem); lastSyncRef.current = ser; }
       catch (e) { setError(e.message); }
     }, 600);
     return () => clearTimeout(t);
-  }, [loaded, employees, positions, settings, overrides, startPolling]);
+  }, [loaded, employees, positions, settings, overrides]);
 
   const snap = SNAP_MAP[prefs.snapLabel] ?? 15;
   const newFlow = FLOW_MAP[prefs.newFlowLabel] ?? 'quick';
@@ -145,7 +139,7 @@ export default function App() {
     return m;
   }, [sched.assignments, empById]);
 
-  async function solveNow() { try { await api.startSolving(); startPolling(); } catch (e) { setError(e.message); } }
+  async function solveNow() { try { await api.startSolving(); } catch (e) { setError(e.message); } }
   async function pauseSolver() { try { await api.stopSolving(); } catch (e) { setError(e.message); } }
 
   if (!loaded && !error) {
