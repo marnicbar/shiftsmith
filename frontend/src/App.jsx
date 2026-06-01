@@ -176,8 +176,8 @@ export default function App() {
       {tab === 'dashboard' && <Dashboard employees={employees} positions={positions} sched={sched} onGo={setTab} />}
       {tab === 'personnel' && <Personnel employees={employees} setEmployees={setEmployees} skills={SS.SKILLS} selId={selEmp} setSelId={setSelEmp} snap={snap} newFlow={newFlow} />}
       {tab === 'positions' && <Positions employees={employees} positions={positions} setPositions={setPositions} groupOrder={groupOrder} setGroupOrder={setGroupOrder} skills={SS.SKILLS} selId={selPos} setSelId={setSelPos} snap={snap} newFlow={newFlow} />}
-      {tab === 'shiftplan' && <ShiftPlan key={tlDefault} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} assign={assignMap} overrides={overrides} setOverrides={setOverrides} />}
-      {tab === 'settings' && <SettingsView prefs={prefs} setPref={setPref} fonts={FONTS} settings={settings} setSettings={setSettings} sched={sched} onSolve={solveNow} onPause={pauseSolver} />}
+      {tab === 'shiftplan' && <ShiftPlan key={tlDefault} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} assign={assignMap} overrides={overrides} setOverrides={setOverrides} sched={sched} onSolve={solveNow} onPause={pauseSolver} />}
+      {tab === 'settings' && <SettingsView prefs={prefs} setPref={setPref} fonts={FONTS} settings={settings} setSettings={setSettings} sched={sched} />}
     </div>
   );
 }

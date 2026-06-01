@@ -1,7 +1,6 @@
 // settings.jsx — full-page settings: Appearance, Calendar, Shift plan and Solver.
 import React from 'react';
 import { Theme } from './theme.js';
-import { Ic } from './icons.jsx';
 import { SS } from './data.js';
 
 function Seg({ value, options, onChange }) {
@@ -52,7 +51,7 @@ function horizonSummary(sched, settings) {
   return { noun, n, range };
 }
 
-export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sched, onSolve, onPause }) {
+export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sched }) {
   const accents = Object.entries(Theme.ACCENTS);
   const active = sched.solverStatus === 'SOLVING_ACTIVE' || sched.solverStatus === 'SOLVING_SCHEDULED';
   const { noun, n, range } = horizonSummary(sched, settings);
@@ -123,14 +122,8 @@ export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sch
               <span className={`solver-badge ${active ? 'on' : ''}`}><span className="dot"></span>{active ? 'Solving…' : 'Steady'}</span>
               <span className="muted">Solving {n} {noun} ahead{range ? ` · ${range}` : ''}</span>
             </div>
-            <div className="ss-stats">
-              <div className="ss-stat"><span className="ss-val">{sched.staffed}/{sched.total}</span><span className="ss-lbl">slots staffed</span></div>
-              <div className="ss-stat"><span className="ss-val">{sched.unassigned}</span><span className="ss-lbl">unassigned</span></div>
-              {sched.score && <div className="ss-stat"><span className="ss-val mono">{sched.score.hard}/{sched.score.medium}/{sched.score.soft}</span><span className="ss-lbl">hard / medium / soft</span></div>}
-            </div>
-            <div className="ss-actions">
-              <button className="btn primary" onClick={onSolve} disabled={active}><Ic.play size={14}/> Solve now</button>
-              <button className="btn" onClick={onPause} disabled={!active}><Ic.pause size={14}/> Pause</button>
+            <div className="hint" style={{ marginTop: 8 }}>
+              Live coverage and the Solve / Pause controls are on the Shift Plan view.
             </div>
           </div>
         </div>
