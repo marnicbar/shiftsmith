@@ -1,5 +1,6 @@
 package dev.shiftsmith.service;
 
+import ai.timefold.solver.core.api.score.HardMediumSoftScore;
 import ai.timefold.solver.core.api.solver.SolverManager;
 import ai.timefold.solver.core.api.solver.SolverStatus;
 import dev.shiftsmith.domain.Employee;
@@ -7,32 +8,52 @@ import dev.shiftsmith.domain.Position;
 import dev.shiftsmith.domain.Schedule;
 import dev.shiftsmith.domain.Settings;
 import dev.shiftsmith.domain.ShiftAssignment;
-import jakarta.annotation.PostConstruct;
+import dev.shiftsmith.persistence.ProblemDocument;
+import dev.shiftsmith.persistence.ProblemStore;
+import dev.shiftsmith.realtime.ScheduleBroadcaster;
+import dev.shiftsmith.rest.dto.ScheduleDTO;
+import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Holds the canonical problem (employees, positions, settings, manual overrides)
  * and runs Timefold continuously over the configured horizon.
  *
- * Continuous solving: {@code solveAndListen} streams each new best solution into
- * {@link #bestSolution}. Termination is governed by {@code unimproved-spent-limit}
- * in application.properties, so the solver pauses once the solution is steady.
- * Any change to the problem restarts the solve from the new state.
+ * <p>The problem is persisted to the database as a JSONB document so it survives
+ * restarts; on boot we rehydrate from it (falling back to seeded demo data on a
+ * fresh database). Every change — a new best solution from the solver, a problem
+ * edit, or a solver start/stop — pushes a tick to {@link ScheduleBroadcaster}, so
+ * connected browsers get live updates over SSE instead of polling.
+ *
+ * <p>Continuous solving: {@code solveBuilder().run()} streams each new best
+ * solution into {@link #bestSolution}. Termination is governed by
+ * {@code unimproved-spent-limit} in application.properties, so the solver pauses
+ * once the solution is steady. Any change to the problem restarts the solve.
  */
 @ApplicationScoped
 public class ScheduleService {
 
+    private static final Logger LOG = Logger.getLogger(ScheduleService.class);
     private static final String JOB_ID = "MAIN";
 
     @Inject
     SolverManager<Schedule> solverManager;
+
+    @Inject
+    ProblemStore store;
+
+    @Inject
+    ScheduleBroadcaster broadcaster;
 
     private final List<Employee> employees = new ArrayList<>();
     private final List<Position> positions = new ArrayList<>();
@@ -41,9 +62,22 @@ public class ScheduleService {
 
     private volatile Schedule bestSolution;
 
-    @PostConstruct
-    void init() {
-        DemoData.seed(employees, positions);
+    /** Load the persisted problem (empty on a fresh database) and start solving at boot. */
+    void onStart(@Observes StartupEvent ev) {
+        Optional<ProblemDocument> saved = store.load();
+        if (saved.isPresent()) {
+            ProblemDocument d = saved.get();
+            if (d.employees != null) { employees.addAll(d.employees); }
+            if (d.positions != null) { positions.addAll(d.positions); }
+            if (d.settings != null) { settings = d.settings; }
+            if (d.overrides != null) { overrides = new HashMap<>(d.overrides); }
+            LOG.infof("Loaded problem from database: %d employees, %d positions",
+                    employees.size(), positions.size());
+        } else {
+            // Fresh database: start empty (no demo data). The first edit persists.
+            persist();
+            LOG.info("Fresh database — starting with an empty problem");
+        }
         startSolving();
     }
 
@@ -54,6 +88,23 @@ public class ScheduleService {
                 positions, employees, settings, overrides, LocalDate.now());
         // Deep-ish copy of employees is unnecessary: the solver only reads them.
         return new Schedule(new ArrayList<>(employees), assignments);
+    }
+
+    private ProblemDocument snapshot() {
+        ProblemDocument d = new ProblemDocument();
+        d.employees = new ArrayList<>(employees);
+        d.positions = new ArrayList<>(positions);
+        d.settings = settings;
+        d.overrides = new HashMap<>(overrides);
+        return d;
+    }
+
+    private void persist() {
+        try {
+            store.save(snapshot());
+        } catch (Exception e) {
+            LOG.error("Failed to persist problem", e);
+        }
     }
 
     // --- solver lifecycle ------------------------------------------------
@@ -67,13 +118,23 @@ public class ScheduleService {
         // Nothing to solve (no shifts) — keep the empty snapshot as the result.
         if (problem.getAssignments().isEmpty()) {
             bestSolution = problem;
+            broadcaster.fire();
             return;
         }
-        solverManager.solveAndListen(JOB_ID, problem, solution -> this.bestSolution = solution);
+        solverManager.solveBuilder()
+                .withProblemId(JOB_ID)
+                .withProblem(problem)
+                .withBestSolutionEventConsumer(event -> { this.bestSolution = event.solution(); broadcaster.fire(); })
+                .withFinalBestSolutionEventConsumer(event -> { this.bestSolution = event.solution(); broadcaster.fire(); })
+                .withExceptionHandler((id, ex) -> LOG.errorf(ex, "Solver job %s failed", id))
+                .run();
+        // Tell clients solving (re)started right away, before the first improvement.
+        broadcaster.fire();
     }
 
     public void stopSolving() {
         solverManager.terminateEarly(JOB_ID);
+        broadcaster.fire();
     }
 
     public SolverStatus status() {
@@ -88,8 +149,8 @@ public class ScheduleService {
     public Map<String, List<String>> getOverrides() { return overrides; }
 
     /**
-     * Replace the whole problem from the frontend and re-solve. Null fields are
-     * left unchanged so partial syncs (e.g. settings only) are cheap.
+     * Replace the whole problem from the frontend, persist it and re-solve. Null
+     * fields are left unchanged so partial syncs (e.g. settings only) are cheap.
      */
     public synchronized void replaceProblem(List<Employee> newEmployees, List<Position> newPositions,
                                             Settings newSettings, Map<String, List<String>> newOverrides) {
@@ -97,6 +158,7 @@ public class ScheduleService {
         if (newPositions != null) { positions.clear(); positions.addAll(newPositions); }
         if (newSettings != null) { settings = newSettings; }
         if (newOverrides != null) { overrides = new HashMap<>(newOverrides); }
+        persist();
         startSolving();
     }
 
@@ -116,4 +178,38 @@ public class ScheduleService {
     }
 
     public Schedule getBestSolution() { return bestSolution; }
+
+    /**
+     * Build the full state payload the frontend consumes — over both
+     * {@code GET /api/schedule} and the SSE stream. Synchronized so the snapshot
+     * is internally consistent; copies the editable collections so they can be
+     * serialized off-thread without a concurrent edit triggering a CME.
+     */
+    public synchronized ScheduleDTO snapshotDTO() {
+        ScheduleDTO dto = new ScheduleDTO();
+        dto.employees = new ArrayList<>(employees);
+        dto.positions = new ArrayList<>(positions);
+        dto.settings = settings;
+        dto.overrides = new HashMap<>(overrides);
+
+        List<ShiftAssignment> assignments = currentAssignments();
+        dto.assignments = assignments.stream().map(ScheduleDTO.Slot::of).toList();
+        dto.total = assignments.size();
+        dto.staffed = (int) assignments.stream().filter(a -> a.getEmployee() != null).count();
+        dto.unassigned = dto.total - dto.staffed;
+
+        LocalDate today = LocalDate.now();
+        dto.horizonStart = settings.horizonStart(today);
+        dto.horizonEnd = settings.horizonEnd(today);
+
+        SolverStatus status = status();
+        dto.solverStatus = status == null ? "NOT_SOLVING" : status.name();
+
+        Schedule best = bestSolution;
+        if (best != null && best.getScore() != null) {
+            HardMediumSoftScore s = best.getScore();
+            dto.score = new ScheduleDTO.Score(s.hardScore(), s.mediumScore(), s.softScore());
+        }
+        return dto;
+    }
 }

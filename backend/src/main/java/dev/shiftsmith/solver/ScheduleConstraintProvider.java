@@ -34,6 +34,7 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
                 // hard
                 requiredSkills(f),
                 vacation(f),
+                availability(f),
                 overlappingShifts(f),
                 minRestBetweenShifts(f),
                 maxHoursPerDay(f),
@@ -74,6 +75,19 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
                 .filter(a -> a.getEmployee() != null && a.getEmployee().isOnVacation(a.getDate()))
                 .penalize(HardMediumSoftScore.ONE_HARD)
                 .asConstraint("Employee on vacation");
+    }
+
+    /**
+     * Employees are available only inside the windows defined by their preferred
+     * and undesired blocks (an empty calendar means unavailable). A shift that
+     * doesn't fit entirely within one window cannot be assigned to them.
+     */
+    Constraint availability(ConstraintFactory f) {
+        return f.forEach(ShiftAssignment.class)
+                .filter(a -> a.getEmployee() != null
+                        && !a.getEmployee().isAvailableFor(a.getDate(), a.getStartMinutes(), a.getEndMinutes()))
+                .penalize(HardMediumSoftScore.ONE_HARD)
+                .asConstraint("Outside availability");
     }
 
     Constraint overlappingShifts(ConstraintFactory f) {
@@ -205,23 +219,23 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
                 .asConstraint("Preferred employee for shift");
     }
 
-    /** Reward working inside a preferred time block on the calendar. */
+    /** Reward the hours of a shift that fall inside a preferred window. */
     Constraint preferredTimeBlock(ConstraintFactory f) {
         return f.forEach(ShiftAssignment.class)
                 .filter(a -> a.getEmployee() != null
-                        && a.getEmployee().preferenceScore(a.getDate(), a.getStartMinutes(), a.getEndMinutes()) > 0)
+                        && a.getEmployee().preferredMinutes(a.getDate(), a.getStartMinutes(), a.getEndMinutes()) > 0)
                 .reward(HardMediumSoftScore.ONE_SOFT,
-                        a -> a.getEmployee().preferenceScore(a.getDate(), a.getStartMinutes(), a.getEndMinutes()))
+                        a -> Math.round(a.getEmployee().preferredMinutes(a.getDate(), a.getStartMinutes(), a.getEndMinutes()) / 60f))
                 .asConstraint("Preferred time block");
     }
 
-    /** Penalise working inside an undesired time block on the calendar. */
+    /** Penalise the hours of a shift that fall inside an undesired window. */
     Constraint undesiredTimeBlock(ConstraintFactory f) {
         return f.forEach(ShiftAssignment.class)
                 .filter(a -> a.getEmployee() != null
-                        && a.getEmployee().preferenceScore(a.getDate(), a.getStartMinutes(), a.getEndMinutes()) < 0)
+                        && a.getEmployee().undesiredMinutes(a.getDate(), a.getStartMinutes(), a.getEndMinutes()) > 0)
                 .penalize(HardMediumSoftScore.ONE_SOFT,
-                        a -> -a.getEmployee().preferenceScore(a.getDate(), a.getStartMinutes(), a.getEndMinutes()))
+                        a -> Math.round(a.getEmployee().undesiredMinutes(a.getDate(), a.getStartMinutes(), a.getEndMinutes()) / 60f))
                 .asConstraint("Undesired time block");
     }
 
