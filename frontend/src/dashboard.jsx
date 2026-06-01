@@ -3,15 +3,19 @@ import React from 'react';
 import { SS } from './data.js';
 import { Ic } from './icons.jsx';
 
-export function Dashboard({ employees, positions, onGo }) {
-  let shiftSlots = 0;
-  positions.forEach((p) => p.shifts.forEach((s) => {
-    const occ = s.repeat === 'daily' ? 7 : s.repeat === 'weekly' ? 1 : 1;
-    shiftSlots += s.headcount * occ;
-  }));
-  const assigned = Math.round(shiftSlots * 0.78);
-  const unassigned = shiftSlots - assigned;
-  const coverage = Math.round((assigned / shiftSlots) * 100);
+export function Dashboard({ employees, positions, sched = {}, onGo }) {
+  // Real coverage from the solver over the configured horizon; fall back to a
+  // rough per-week estimate before the first solve completes.
+  let shiftSlots = sched.total || 0;
+  if (!shiftSlots) {
+    positions.forEach((p) => p.shifts.forEach((s) => {
+      const occ = s.repeat === 'daily' ? 7 : 1;
+      shiftSlots += s.headcount * occ;
+    }));
+  }
+  const assigned = sched.total ? sched.staffed : Math.round(shiftSlots * 0.78);
+  const unassigned = sched.total ? sched.unassigned : shiftSlots - assigned;
+  const coverage = shiftSlots ? Math.round((assigned / shiftSlots) * 100) : 0;
 
   const kpis = [
     { ic: 'alert', cls: 'undes', val: unassigned, lbl: 'Unassigned shifts', delta: 'this week', deltaCls: 'muted' },

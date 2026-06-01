@@ -1,8 +1,19 @@
 services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8080:8080"
+
   frontend:
     build:
       context: ./frontend
     ports:
       - "5173:5173"
+    environment:
+      # The Vite dev server proxies /api/* to the backend container.
+      - VITE_API_PROXY=http://backend:8080
     volumes:
       - ./frontend/src:/app/src
+    depends_on:
+      - backend

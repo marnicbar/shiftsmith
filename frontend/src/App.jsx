@@ -1,18 +1,15 @@
-// App.jsx — shell: top tab bar, theme toggle, view routing, Tweaks.
-import { useState as useStateApp, useEffect as useEffectApp, useMemo } from 'react';
+// App.jsx — shell: top tab bar, settings, view routing, backend sync + solver polling.
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import React from 'react';
 import { Theme } from './theme.js';
 import { Ic } from './icons.jsx';
 import { SS } from './data.js';
-import { UI } from './ui.jsx';
-import {
-  useTweaks, TweaksPanel, TweakSection, TweakRow,
-  TweakToggle, TweakRadio, TweakSelect,
-} from './tweaks-panel.jsx';
 import { Personnel } from './personnel.jsx';
 import { Positions } from './positions.jsx';
-import { ShiftPlan, buildPlan, matchesDay } from './shiftplan.jsx';
+import { ShiftPlan } from './shiftplan.jsx';
 import { Dashboard } from './dashboard.jsx';
+import { SettingsView } from './settings.jsx';
+import * as api from './lib/api.js';
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
@@ -21,61 +18,139 @@ const TABS = [
   { id: 'shiftplan', label: 'Shift Plan', icon: 'timeline' },
 ];
 
-const FONTS = {
+export const FONTS = {
   'Geist':          "'Geist', system-ui, sans-serif",
   'Helvetica Neue': "'Helvetica Neue', Helvetica, Arial, sans-serif",
   'Figtree':        "'Figtree', system-ui, sans-serif",
 };
 
-const TWEAK_DEFAULTS = {
-  "dark": false,
-  "palette": "slate",
-  "accent": "indigo",
-  "font": "Geist",
-  "snapLabel": "15 min",
-  "newFlowLabel": "Paint, then tweak",
-  "tlDefaultLabel": "Week"
+const PREF_DEFAULTS = {
+  dark: false, palette: 'slate', accent: 'indigo', font: 'Geist',
+  snapLabel: '15 min', newFlowLabel: 'Paint, then tweak', tlDefaultLabel: 'Week',
 };
-
-// Apply theme immediately on module load to avoid flash of unstyled content
-Theme.applyTheme({ palette: TWEAK_DEFAULTS.palette, accent: TWEAK_DEFAULTS.accent, dark: TWEAK_DEFAULTS.dark });
-document.documentElement.style.setProperty('--ui-font', FONTS[TWEAK_DEFAULTS.font] || FONTS.Geist);
 
 const SNAP_MAP = { '15 min': 15, '30 min': 30, '60 min': 60 };
 const FLOW_MAP = { 'Paint, then tweak': 'quick', 'Open a form': 'menu' };
 const TL_MAP = { 'Day': 'day', 'Week': 'week', 'Continuous': 'free' };
+const PREF_KEY = 'shiftsmith.prefs';
+
+const initialPrefs = (() => {
+  try { return { ...PREF_DEFAULTS, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') }; }
+  catch { return PREF_DEFAULTS; }
+})();
+
+// Apply theme immediately on module load to avoid a flash of unstyled content.
+Theme.applyTheme({ palette: initialPrefs.palette, accent: initialPrefs.accent, dark: initialPrefs.dark });
+document.documentElement.style.setProperty('--ui-font', FONTS[initialPrefs.font] || FONTS.Geist);
+
+function usePrefs() {
+  const [prefs, setPrefs] = useState(initialPrefs);
+  const setPref = useCallback((k, v) => setPrefs((p) => {
+    const next = { ...p, [k]: v };
+    try { localStorage.setItem(PREF_KEY, JSON.stringify(next)); } catch {}
+    return next;
+  }), []);
+  return [prefs, setPref];
+}
 
 export default function App() {
-  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [tab, setTab] = useStateApp('personnel');
-  const init = useMemo(() => SS.seed(), []);
-  const [employees, setEmployees] = useStateApp(init.employees);
-  const [positions, setPositions] = useStateApp(init.positions);
-  const [selEmp, setSelEmp] = useStateApp(init.employees[0].id);
-  const [selPos, setSelPos] = useStateApp(init.positions[0].id);
-  const [groupOrder, setGroupOrder] = useStateApp(() => {
-    const g = []; init.positions.forEach((p) => { if (p.group && !g.includes(p.group)) g.push(p.group); }); return g;
-  });
-  const [overrides, setOverrides] = useStateApp({});
+  const [prefs, setPref] = usePrefs();
+  const [tab, setTab] = useState('personnel');
 
-  useEffectApp(() => { Theme.applyTheme({ palette: t.palette, accent: t.accent, dark: t.dark }); }, [t.palette, t.accent, t.dark]);
-  useEffectApp(() => { document.documentElement.style.setProperty('--ui-font', FONTS[t.font] || FONTS.Geist); }, [t.font]);
+  // Problem state (client-authoritative, synced to the backend).
+  const [employees, setEmployees] = useState([]);
+  const [positions, setPositions] = useState([]);
+  const [settings, setSettings] = useState({ horizonUnit: 'week', horizonCount: 1 });
+  const [overrides, setOverrides] = useState({});
+  const [groupOrder, setGroupOrder] = useState([]);
+  const [selEmp, setSelEmp] = useState(null);
+  const [selPos, setSelPos] = useState(null);
 
-  const snap = SNAP_MAP[t.snapLabel] ?? 15;
-  const newFlow = FLOW_MAP[t.newFlowLabel] ?? 'quick';
-  const tlDefault = TL_MAP[t.tlDefaultLabel] ?? 'week';
+  // Solver result + status (read-only, refreshed by polling).
+  const [sched, setSched] = useState({ assignments: [], solverStatus: 'NOT_SOLVING', score: null, total: 0, staffed: 0, unassigned: 0 });
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(null);
 
-  const unassigned = useMemo(() => {
-    const dayList = Array.from({ length: 7 }, (_, i) => SS.iso(i));
-    const assign = buildPlan(employees, positions, dayList, overrides);
-    let need = 0, got = 0;
-    positions.forEach((p) => p.shifts.forEach((sh) => dayList.forEach((d) => {
-      if (matchesDay(sh, d)) { need += sh.headcount; got += (assign[`${sh.id}@${d}`] || []).length; }
-    })));
-    return need - got;
-  }, [employees, positions, overrides]);
+  const lastSyncRef = useRef(null);
+  const pollRef = useRef(null);
 
-  const accents = Object.entries(Theme.ACCENTS);
+  useEffect(() => { Theme.applyTheme({ palette: prefs.palette, accent: prefs.accent, dark: prefs.dark }); }, [prefs.palette, prefs.accent, prefs.dark]);
+  useEffect(() => { document.documentElement.style.setProperty('--ui-font', FONTS[prefs.font] || FONTS.Geist); }, [prefs.font]);
+
+  const setMeta = useCallback((d) => setSched({
+    assignments: d.assignments || [], solverStatus: d.solverStatus, score: d.score,
+    total: d.total, staffed: d.staffed, unassigned: d.unassigned,
+    horizonStart: d.horizonStart, horizonEnd: d.horizonEnd,
+  }), []);
+
+  const startPolling = useCallback(() => {
+    if (pollRef.current) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const d = await api.getSchedule();
+        setMeta(d);
+        if (d.solverStatus === 'NOT_SOLVING') { clearInterval(pollRef.current); pollRef.current = null; }
+      } catch { /* transient — keep polling */ }
+    }, 1500);
+  }, [setMeta]);
+
+  // Initial load from the backend (seeds demo data on a fresh container).
+  useEffect(() => {
+    (async () => {
+      try {
+        const d = await api.getSchedule();
+        setEmployees(d.employees); setPositions(d.positions);
+        setSettings(d.settings || { horizonUnit: 'week', horizonCount: 1 });
+        setOverrides(d.overrides || {});
+        setSelEmp(d.employees[0]?.id ?? null);
+        setSelPos(d.positions[0]?.id ?? null);
+        const g = []; (d.positions || []).forEach((p) => { if (p.group && !g.includes(p.group)) g.push(p.group); });
+        setGroupOrder(g);
+        setMeta(d);
+        lastSyncRef.current = JSON.stringify({ employees: d.employees, positions: d.positions, settings: d.settings, overrides: d.overrides || {} });
+        setLoaded(true);
+        if (d.solverStatus && d.solverStatus !== 'NOT_SOLVING') startPolling();
+      } catch (e) { setError(e.message); }
+    })();
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [setMeta, startPolling]);
+
+  // Debounced sync: push the problem to the backend whenever the user edits it.
+  useEffect(() => {
+    if (!loaded) return;
+    const problem = { employees, positions, settings, overrides };
+    const ser = JSON.stringify(problem);
+    if (ser === lastSyncRef.current) return;
+    const t = setTimeout(async () => {
+      try { await api.putProblem(problem); lastSyncRef.current = ser; startPolling(); }
+      catch (e) { setError(e.message); }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [loaded, employees, positions, settings, overrides, startPolling]);
+
+  const snap = SNAP_MAP[prefs.snapLabel] ?? 15;
+  const newFlow = FLOW_MAP[prefs.newFlowLabel] ?? 'quick';
+  const tlDefault = TL_MAP[prefs.tlDefaultLabel] ?? 'week';
+
+  // Map the solver's slots into the per-occurrence shape the timeline expects.
+  const empById = useMemo(() => Object.fromEntries(employees.map((e) => [e.id, e])), [employees]);
+  const assignMap = useMemo(() => {
+    const m = {};
+    (sched.assignments || []).forEach((s) => {
+      const k = `${s.shiftTemplateId}@${s.date}`;
+      const arr = (m[k] = m[k] || []);
+      if (s.employeeId && empById[s.employeeId]) arr[s.slotIndex] = empById[s.employeeId];
+    });
+    Object.keys(m).forEach((k) => { m[k] = m[k].filter(Boolean); });
+    return m;
+  }, [sched.assignments, empById]);
+
+  async function solveNow() { try { await api.startSolving(); startPolling(); } catch (e) { setError(e.message); } }
+  async function pauseSolver() { try { await api.stopSolving(); } catch (e) { setError(e.message); } }
+
+  if (!loaded && !error) {
+    return <div className="app"><div className="loading">Loading schedule…</div></div>;
+  }
 
   return (
     <div className="app">
@@ -85,45 +160,33 @@ export default function App() {
           {TABS.map((x) => (
             <button key={x.id} className={`tab ${tab === x.id ? 'active' : ''}`} onClick={() => setTab(x.id)}>
               {React.createElement(Ic[x.icon], { size: 16 })}{x.label}
-              {x.id === 'shiftplan' && unassigned > 0 && <span className="pill">{unassigned}</span>}
+              {x.id === 'shiftplan' && sched.unassigned > 0 && <span className="pill">{sched.unassigned}</span>}
             </button>
           ))}
         </nav>
         <div className="spacer"></div>
-        <button className="iconbtn" title="Toggle theme" onClick={() => setTweak('dark', !t.dark)}>
-          {t.dark ? <Ic.sun/> : <Ic.moon/>}
+        <SolverBadge status={sched.solverStatus} />
+        <button className={`iconbtn ${tab === 'settings' ? 'active' : ''}`} title="Settings" onClick={() => setTab('settings')}>
+          <Ic.settings/>
         </button>
       </div>
 
-      {tab === 'dashboard' && <Dashboard employees={employees} positions={positions} onGo={setTab} />}
+      {error && <div className="api-error">Backend error: {error}. Is the backend running on :8080?</div>}
+
+      {tab === 'dashboard' && <Dashboard employees={employees} positions={positions} sched={sched} onGo={setTab} />}
       {tab === 'personnel' && <Personnel employees={employees} setEmployees={setEmployees} skills={SS.SKILLS} selId={selEmp} setSelId={setSelEmp} snap={snap} newFlow={newFlow} />}
       {tab === 'positions' && <Positions employees={employees} positions={positions} setPositions={setPositions} groupOrder={groupOrder} setGroupOrder={setGroupOrder} skills={SS.SKILLS} selId={selPos} setSelId={setSelPos} snap={snap} newFlow={newFlow} />}
-      {tab === 'shiftplan' && <ShiftPlan key={tlDefault} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} overrides={overrides} setOverrides={setOverrides} />}
-
-      <TweaksPanel>
-        <TweakSection label="Appearance" />
-        <TweakToggle label="Dark mode" value={t.dark} onChange={(v) => setTweak('dark', v)} />
-        <TweakRadio label="Palette" value={t.palette} options={['slate','stone','mono']} onChange={(v) => setTweak('palette', v)} />
-        <TweakRow label="Accent">
-          <div style={{ display: 'flex', gap: 6 }}>
-            {accents.map(([key, a]) => (
-              <button key={key} title={a.label} onClick={() => setTweak('accent', key)}
-                style={{ width: 24, height: 24, borderRadius: 7, cursor: 'pointer',
-                  background: `oklch(0.6 ${a.c} ${a.hue})`,
-                  border: t.accent === key ? '2px solid var(--text)' : '2px solid transparent',
-                  boxShadow: '0 0 0 1px var(--border)' }} />
-            ))}
-          </div>
-        </TweakRow>
-        <TweakSelect label="UI font" value={t.font} options={Object.keys(FONTS)} onChange={(v) => setTweak('font', v)} />
-
-        <TweakSection label="Calendar interaction" />
-        <TweakRadio label="Time snap" value={t.snapLabel} options={['15 min','30 min','60 min']} onChange={(v) => setTweak('snapLabel', v)} />
-        <TweakSelect label="New block" value={t.newFlowLabel} options={['Paint, then tweak','Open a form']} onChange={(v) => setTweak('newFlowLabel', v)} />
-
-        <TweakSection label="Shift plan" />
-        <TweakRadio label="Default view" value={t.tlDefaultLabel} options={['Day','Week','Continuous']} onChange={(v) => setTweak('tlDefaultLabel', v)} />
-      </TweaksPanel>
+      {tab === 'shiftplan' && <ShiftPlan key={tlDefault} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} assign={assignMap} overrides={overrides} setOverrides={setOverrides} />}
+      {tab === 'settings' && <SettingsView prefs={prefs} setPref={setPref} fonts={FONTS} settings={settings} setSettings={setSettings} sched={sched} onSolve={solveNow} onPause={pauseSolver} />}
     </div>
+  );
+}
+
+function SolverBadge({ status }) {
+  const active = status === 'SOLVING_ACTIVE' || status === 'SOLVING_SCHEDULED';
+  return (
+    <span className={`solver-badge ${active ? 'on' : ''}`} title={active ? 'Solver running' : 'Solver idle (steady state)'}>
+      <span className="dot"></span>{active ? 'Solving…' : 'Steady'}
+    </span>
   );
 }
