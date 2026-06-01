@@ -5,10 +5,12 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * A schedulable person (Personnel view). Identity is the stable {@code id}, so
@@ -39,17 +41,63 @@ public class Employee {
     }
 
     /**
-     * Soft preference score for working {@code [start,end)} minutes on day {@code d}:
-     * +2 per overlapping preferred block, -2 per overlapping undesired block.
+     * Soft preference, in minutes of the shift {@code [start,end)} on day {@code d}
+     * that fall inside a preferred window (counts positive) or an undesired window
+     * (counts negative). Availability itself is enforced separately as a hard rule.
      */
-    public int preferenceScore(LocalDate d, int start, int end) {
-        int sc = 0;
-        for (Block b : blocks) {
-            if (!b.overlapsMinutes(d, start, end)) continue;
-            if ("pref".equals(b.getType())) sc += 2;
-            else if ("undes".equals(b.getType())) sc -= 2;
+    public int preferredMinutes(LocalDate d, int start, int end) {
+        return overlapMinutes(mergedRanges(d, b -> "pref".equals(b.getType())), start, end);
+    }
+
+    public int undesiredMinutes(LocalDate d, int start, int end) {
+        return overlapMinutes(mergedRanges(d, b -> "undes".equals(b.getType())), start, end);
+    }
+
+    /**
+     * Hard availability: an employee is available only inside the windows defined
+     * by their preferred and undesired blocks (an empty calendar means unavailable).
+     * A shift may only be assigned if it fits entirely within one such window;
+     * adjacent/overlapping blocks merge into a single window.
+     */
+    public boolean isAvailableFor(LocalDate d, int start, int end) {
+        for (int[] w : availableWindows(d)) {
+            if (w[0] <= start && end <= w[1]) return true;
         }
-        return sc;
+        return false;
+    }
+
+    /** Merged available windows (preferred ∪ undesired) on day {@code d}. */
+    public List<int[]> availableWindows(LocalDate d) {
+        return mergedRanges(d, b -> "pref".equals(b.getType()) || "undes".equals(b.getType()));
+    }
+
+    /** Minute ranges of matching blocks active on {@code d}, sorted and merged (adjacent ranges join). */
+    private List<int[]> mergedRanges(LocalDate d, Predicate<Block> match) {
+        List<int[]> raw = new ArrayList<>();
+        for (Block b : blocks) {
+            if (!match.test(b) || !b.occursOn(d)) continue;
+            if (b.isAllDay()) raw.add(new int[]{0, 1440});
+            else if (b.getStart() < b.getEnd()) raw.add(new int[]{b.getStart(), b.getEnd()});
+        }
+        raw.sort(Comparator.comparingInt(r -> r[0]));
+        List<int[]> merged = new ArrayList<>();
+        for (int[] r : raw) {
+            int[] last = merged.isEmpty() ? null : merged.get(merged.size() - 1);
+            if (last != null && r[0] <= last[1]) {
+                last[1] = Math.max(last[1], r[1]);   // overlapping or touching → merge
+            } else {
+                merged.add(new int[]{r[0], r[1]});
+            }
+        }
+        return merged;
+    }
+
+    private static int overlapMinutes(List<int[]> windows, int start, int end) {
+        int total = 0;
+        for (int[] w : windows) {
+            total += Math.max(0, Math.min(end, w[1]) - Math.max(start, w[0]));
+        }
+        return total;
     }
 
     // --- Working-time rules (time-varying) ------------------------------

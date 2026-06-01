@@ -62,7 +62,7 @@ public class ScheduleService {
 
     private volatile Schedule bestSolution;
 
-    /** Load the persisted problem (or seed demo data) and start solving at boot. */
+    /** Load the persisted problem (empty on a fresh database) and start solving at boot. */
     void onStart(@Observes StartupEvent ev) {
         Optional<ProblemDocument> saved = store.load();
         if (saved.isPresent()) {
@@ -74,9 +74,9 @@ public class ScheduleService {
             LOG.infof("Loaded problem from database: %d employees, %d positions",
                     employees.size(), positions.size());
         } else {
-            DemoData.seed(employees, positions);
+            // Fresh database: start empty (no demo data). The first edit persists.
             persist();
-            LOG.info("Fresh database — seeded demo data");
+            LOG.info("Fresh database — starting with an empty problem");
         }
         startSolving();
     }

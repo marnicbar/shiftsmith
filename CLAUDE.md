@@ -30,8 +30,8 @@ docker compose up --build   # postgres :5432, backend :8080, frontend :5173
 React SPA → Vite/nginx proxy → Quarkus REST → Timefold Solver, with PostgreSQL
 for persistence. `ScheduleService` keeps the working problem in memory (the
 solver needs it there) but **persists it to Postgres as a single JSONB
-document** so it survives restarts. On boot it rehydrates from the DB, falling
-back to seeded demo data only on an empty database.
+document** so it survives restarts. On boot it rehydrates from the DB; an empty
+database starts with an empty problem (no demo data).
 
 ### Persistence (`persistence` package)
 The whole editable problem (employees, positions, settings, overrides) is stored
@@ -62,10 +62,16 @@ replaces the old `GET /api/schedule` polling loop and also propagates one
 client's edits to others live.
 
 ### Domain model
-- **Employee** — `skills`, calendar `blocks` (`pref`/`undes`/`vac`), and working-time
-  `rules` (`dayHours`/`weekHours`/`monthHours`/`consecDays`/`restHours`, with
-  `preferred` = soft and `min`/`max` = hard). Rules carry date-scheduled `changes`
-  resolved per-date by `Rule.effectiveAt`.
+- **Employee** — `skills`, calendar `blocks`, and working-time `rules`
+  (`dayHours`/`weekHours`/`monthHours`/`consecDays`/`restHours`, with `preferred`
+  = soft and `min`/`max` = hard). Rules carry date-scheduled `changes` resolved
+  per-date by `Rule.effectiveAt`.
+  - **Availability is the calendar.** `pref` and `undes` blocks both define when
+    an employee is *available* (an empty calendar = unavailable); a shift may only
+    be assigned if it fits entirely within one window. Adjacent/overlapping blocks
+    merge into one window internally (see `Employee.availableWindows`). On top of
+    that hard rule, hours inside `pref` windows score soft-positive and hours
+    inside `undes` windows soft-negative. `vac` is hard time-off.
 - **Position → ShiftTemplate** — recurring shift definitions (`repeat` none/daily/weekly,
   `headcount`, `preferred` employees).
 - **ShiftAssignment** (`@PlanningEntity`) — one slot per template occurrence per headcount.
@@ -86,10 +92,10 @@ unit + `horizonCount` units. So `week × 1` covers "this week and the next".
 solution is steady. Any `PUT /api/problem` restarts it.
 
 ### Constraints (`ScheduleConstraintProvider`)
-Hard: required skills, vacation, overlaps, min rest, daily/weekly/monthly hour limits
-(time-varying), max consecutive days. Medium: coverage. Soft: preferred employees,
-preferred/undesired time blocks, preferred weekly hours, workload balance.
-Constraint names must be alphanumeric — no `/`.
+Hard: required skills, vacation, availability (shift must fit an available window),
+overlaps, min rest, daily/weekly/monthly hour limits (time-varying), max consecutive
+days. Medium: coverage. Soft: preferred employees, preferred/undesired hours worked,
+preferred weekly hours, workload balance. Constraint names must be alphanumeric — no `/`.
 
 ### Frontend notes
 - `lib/api.js` is the only integration point.
