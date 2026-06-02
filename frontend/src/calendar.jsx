@@ -71,17 +71,16 @@ function packLanes(evs) {
 export function Calendar(props) {
   const { view, anchor, items, kind, zoom = 46, paint, palette,
           newItem, onCommit, onDelete, onSplit, extraFields, dayStart = 6,
-          snap = 15, newFlow = 'quick' } = props;
+          snap = 15 } = props;
   const scrollRef = useRef(null);
   const [editor, setEditor] = useState(null);
-  const [pending, setPending] = useState(null);
+  const [draft, setDraft] = useState(null);   // local working copy; only persisted on confirm
   const [drag, setDrag] = useState(null);
   const dragRef = useRef(null);
-  const origRef = useRef(null);
   const idPfx = kind === 'availability' ? 'b' : 's';
 
   function openEditor(it, occDate) {
-    origRef.current = JSON.parse(JSON.stringify(it));
+    setDraft(JSON.parse(JSON.stringify(it)));
     setEditor({ id: it.id, isNew: false, occDate: occDate || it.date });
   }
 
@@ -97,9 +96,9 @@ export function Calendar(props) {
 
   const yToMin = (y) => Math.max(0, Math.min(1440, Math.round((y / zoom * 60) / snap) * snap));
 
-  function startCreate(draft) {
-    if (newFlow === 'menu') { setPending(draft); setEditor({ id: draft.id, isNew: true, pending: true }); }
-    else { onCommit(draft); setEditor({ id: draft.id, isNew: true }); }
+  function startCreate(d) {
+    setDraft(d);
+    setEditor({ id: d.id, isNew: true, occDate: d.date });
   }
   function addNew() {
     const date = view === 'day' ? SS.isoOf(anchor) : SS.isoOf(SS.startOfWeek(anchor));
@@ -123,34 +122,42 @@ export function Calendar(props) {
     window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
   }
 
-  const editing = editor ? (editor.pending ? pending : items.find((x) => x.id === editor.id)) || null : null;
-  const renderItems = pending ? [...items, pending] : items;
+  // Edits live only in `draft` until the user confirms (Save / Done); the grid
+  // previews them, and closing/Escape/backdrop simply throws the draft away.
+  const editing = draft;
+  const renderItems = draft
+    ? (editor.isNew ? [...items, draft] : items.map((x) => (x.id === draft.id ? draft : x)))
+    : items;
 
-  function patch(p) { if (editor && editor.pending) setPending({ ...pending, ...p }); else onCommit({ ...editing, ...p }); }
-  function discard() { setPending(null); setEditor(null); origRef.current = null; }
+  function patch(p) { setDraft((d) => ({ ...d, ...p })); }
+  function discard() { setDraft(null); setEditor(null); }
+
   function done(scope = 'all') {
-    if (editor && editor.pending && pending) { onCommit(pending); setPending(null); setEditor(null); origRef.current = null; return; }
-    const cur = items.find((x) => x.id === editor.id);
-    const orig = origRef.current;
-    const occDate = (editor && editor.occDate) || (cur && cur.date);
-    if (onSplit && cur && orig && cur.repeat !== 'none' && scope === 'this') {
+    const d = draft;
+    if (!d) { discard(); return; }
+    if (editor.isNew) { onCommit(d); discard(); return; }
+    const orig = items.find((x) => x.id === d.id);
+    const occDate = (editor && editor.occDate) || d.date;
+    if (onSplit && orig && d.repeat && d.repeat !== 'none' && scope === 'this') {
       const restored = { ...orig, except: [...(orig.except || []), occDate].filter((v, i, a) => a.indexOf(v) === i) };
-      const single = { ...cur, id: SS.uid(idPfx), repeat: 'none', date: occDate };
-      delete single.until; delete single.except;
+      const single = { ...d, id: SS.uid(idPfx), repeat: 'none', date: occDate };
+      delete single.until; delete single.except; delete single.days;
       onSplit(restored, [single]);
-    } else if (onSplit && cur && orig && cur.repeat !== 'none' && scope === 'future' && occDate > orig.date) {
+    } else if (onSplit && orig && d.repeat && d.repeat !== 'none' && scope === 'future' && occDate > orig.date) {
       const prevDay = SS.isoOf(SS.addDays(SS.parseISO(occDate), -1));
       const restored = { ...orig, until: prevDay };
-      const series = { ...cur, id: SS.uid(idPfx), date: occDate, except: (orig.except || []).filter((e) => e >= occDate) };
+      const series = { ...d, id: SS.uid(idPfx), date: occDate, except: (orig.except || []).filter((e) => e >= occDate) };
       delete series.until;
       onSplit(restored, [series]);
+    } else {
+      onCommit(d); // whole series / single item
     }
-    setPending(null); setEditor(null); origRef.current = null;
+    discard();
   }
   function remove(scope = 'all') {
-    if (editor && editor.pending) { discard(); return; }
+    if (editor.isNew) { discard(); return; } // unsaved new item — nothing to delete
     const cur = items.find((x) => x.id === editor.id);
-    if (!cur) { setPending(null); setEditor(null); origRef.current = null; return; }
+    if (!cur) { discard(); return; }
     const occDate = (editor && editor.occDate) || cur.date;
     if (cur.repeat && cur.repeat !== 'none' && scope === 'this') {
       onCommit({ ...cur, except: [...(cur.except || []), occDate].filter((v, i, a) => a.indexOf(v) === i) });
@@ -160,7 +167,7 @@ export function Calendar(props) {
     } else {
       onDelete(cur.id);
     }
-    setPending(null); setEditor(null); origRef.current = null;
+    discard();
   }
 
   return (
