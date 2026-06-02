@@ -178,7 +178,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   positions.forEach((p) => { const k = gKey(p.group); gCount[k] = (gCount[k] || 0) + 1; });
 
   const seq = [];
-  let cur = ' ';
+  let cur = '';
   positions.forEach((p) => { const g = p.group || null; if (g !== cur) { seq.push({ type: 'g', g }); cur = g; } seq.push({ type: 'p', p }); });
 
   function openEditor(ev, sh, pos, date, key) {
@@ -187,36 +187,57 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     setEditing({ key, sh, pos, date, x: r.left, y: r.bottom + 6 });
   }
 
+  // Boxes have a fixed height in every view; only their width varies, and the
+  // content is chosen purely from that width (see `bar`).
+  const BOX_H = 62, BOX_TOP = 7;
+
   function bar(p, d, di) {
     return p.shifts.filter((sh) => matchesDay(sh, d)).map((sh) => {
       const key = `${sh.id}@${d}`;
       const crew = assign[key] || [];
       const edited = !!overrides[key];
       const x = (di*24 + sh.start/60) * effPph;
-      const w = Math.max(boxOnly ? 4 : 8, (sh.end - sh.start)/60 * effPph);
+      const w = Math.max(4, (sh.end - sh.start)/60 * effPph);
       const full = crew.length >= sh.headcount;
-      const wide = w > 78;
       const title = `${sh.name} · ${SS.minLabel(sh.start)}–${SS.minLabel(sh.end)} · ${SS.shiftSkills(sh).join(' · ') || '—'} · ${crew.length}/${sh.headcount}${edited ? ' · manually set' : ''}`;
-      if (boxOnly) {
-        return <div key={key} className={`bar box ${full?'full':'under'} ${edited?'edited':''}`} title={title} onClick={(e) => openEditor(e, sh, p, d, key)} style={{ left: x+1, width: Math.max(3, w-2), top: 8, bottom: 8, height: 'auto' }}></div>;
+      const cls = `bar ${full?'full':'under'} ${edited?'edited':''}`;
+      const style = { left: x+1, width: Math.max(3, w-2), top: BOX_TOP, height: BOX_H };
+
+      // How many 18px circles (3px gap) fit across the box's inner width.
+      const fit = Math.floor((w - 16 + 3) / 21);
+      if (fit < 1) {
+        // Too small for even one circle — just a plain coloured box.
+        return <div key={key} className={cls + ' tiny'} title={title} onClick={(e) => openEditor(e, sh, p, d, key)} style={style}></div>;
       }
+
+      // One circle per headcount slot: filled avatars first, then empty slots.
+      const circles = Array.from({ length: sh.headcount }, (_, i) => {
+        const e = crew[i];
+        return e
+          ? <span key={i} className="av" style={{ background: Theme.avatarColor(e.name) }} title={e.name}>{e.name.split(' ').map(x=>x[0]).slice(0,2).join('')}</span>
+          : <span key={i} className="slot-empty"></span>;
+      });
+      // Collapse whatever doesn't fit into a single "+N" circle.
+      let shown = circles;
+      if (circles.length > fit) {
+        shown = circles.slice(0, fit - 1);
+        shown.push(<span key="more" className="av more" title={`${crew.length}/${sh.headcount} staffed`}>+{circles.length - (fit - 1)}</span>);
+      }
+
       return (
-        <div key={key} className={`bar ${full?'full':'under'} ${edited?'edited':''}`} title={title} onClick={(e) => openEditor(e, sh, p, d, key)}
-          style={{ left: x+2, width: w-4, top: 6, height: 'calc(100% - 12px)' }}>
-          {edited && <span className="bedit" title="Manually set"><Ic.user size={9}/></span>}
-          {wide && <span className="bt">{sh.name}</span>}
-          {wide && <span className="btime mono">{SS.minLabel(sh.start)}–{SS.minLabel(sh.end)}</span>}
-          <div className="crew">
-            {crew.slice(0, wide?4:2).map((e) => <span key={e.id} className="av" style={{ background: Theme.avatarColor(e.name) }} title={e.name}>{e.name.split(' ').map(x=>x[0]).slice(0,2).join('')}</span>)}
-            {Array.from({ length: Math.min(sh.headcount - crew.length, wide?3:1) }, (_, i) => <span key={i} className="slot-empty"></span>)}
-            {!wide && <span className="cnt">{crew.length}/{sh.headcount}</span>}
+        <div key={key} className={cls} title={title} onClick={(e) => openEditor(e, sh, p, d, key)} style={style}>
+          <div className="bhead">
+            <span className="bt">{sh.name}</span>
+            {edited && <span className="bedit" title="Manually set"><Ic.user size={9}/></span>}
           </div>
+          <span className="btime mono">{SS.minLabel(sh.start)}–{SS.minLabel(sh.end)}</span>
+          <div className="crew">{shown}</div>
         </div>
       );
     });
   }
 
-  const rowH = boxOnly ? 46 : 78;
+  const rowH = BOX_H + 2 * BOX_TOP;
 
   return (
     <div className="tl" style={{ '--lw': LW_TL + 'px' }}>
