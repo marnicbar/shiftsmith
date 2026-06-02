@@ -88,7 +88,9 @@ class ScheduleResourceIT {
 
     @Test
     void solverLifecycleEndpointsAreReachable() {
-        given().when().post("/api/solve").then().statusCode(204);
-        given().when().delete("/api/solve").then().statusCode(204);
+        // The resource consumes JSON; declare it so RestAssured doesn't default to a
+        // form content type on these bodyless calls (which would be rejected as 415).
+        given().contentType(ContentType.JSON).when().post("/api/solve").then().statusCode(204);
+        given().contentType(ContentType.JSON).when().delete("/api/solve").then().statusCode(204);
     }
 }
