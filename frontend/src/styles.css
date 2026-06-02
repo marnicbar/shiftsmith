@@ -476,11 +476,10 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; line-height:
 /* Global rule surfaced on a person, with its (optional) stricter personal override below. */
 .rule.rule-stacked { cursor: default; }
 .rule.rule-stacked:hover { border-color: var(--border); }
-.rule-row-global { opacity: .72; }
+.rule-row-global.dim { opacity: .72; }
 .rule-row-global .num-static { font-weight: 600; }
 .rule-row-personal { border-radius: 8px; margin: 0 -4px; padding: 2px 4px; }
 .rule-row-personal.clickable { cursor: pointer; }
-.rule-row-personal.clickable:hover { background: var(--surface-2); }
 .mini-tag { flex: 0 0 auto; margin-left: 8px; font-size: 10px; font-weight: 700; letter-spacing: .03em;
   text-transform: uppercase; color: var(--text-3); background: var(--surface-2); padding: 1px 7px; border-radius: 99px; }
 .mini-tag.accent { color: var(--accent-strong); background: var(--accent-soft); }

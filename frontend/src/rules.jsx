@@ -336,10 +336,10 @@ export function RulesEditor({ rules, onChange, globalRules = [], mode = 'persona
           <span className="rule-name">{m.label}</span>
           <span className={`str-tag ${hard ? 'hard' : 'soft'}`}>{hard ? 'Hard' : 'Soft'}</span>
         </div>
-        <div className="rule-bot rule-row-global">
+        <div className={`rule-bot rule-row-global ${hasPersonalRow ? 'dim' : ''}`}>
           <span className="op-static">{OPS[g.op]}</span>
           <div className="num"><span className="num-static mono">{gEff.active ? gEff.value : g.value}</span><span className="unit">{m.unit}</span></div>
-          <span className="mini-tag">Global</span>
+          <span className={`mini-tag ${hasPersonalRow ? '' : 'accent'}`}>Global</span>
         </div>
         {hasPersonalRow ? (
           <>
