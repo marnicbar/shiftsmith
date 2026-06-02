@@ -22,11 +22,19 @@ public class Block {
     private String repeat = "none";
     private LocalDate until;
     private Set<LocalDate> except;
+    private Set<Integer> days;     // weekly-on-selected-days (Mon=0 … Sun=6)
+    private LocalDate endDate;     // multi-day span (e.g. a vacation range), inclusive
 
     public Block() {}
 
     public boolean occursOn(LocalDate d) {
-        return Recurrence.occursOn(date, repeat, d, until, except);
+        if (d == null) return false;
+        // A multi-day span (start .. endDate, inclusive) — used for vacation ranges.
+        if (endDate != null && (repeat == null || repeat.equals("none"))) {
+            if (except != null && except.contains(d)) return false;
+            return date != null && !d.isBefore(date) && !d.isAfter(endDate);
+        }
+        return Recurrence.occursOn(date, repeat, d, until, except, days);
     }
 
     /** True when this block covers the given calendar day at all (any time). */
@@ -66,4 +74,10 @@ public class Block {
 
     public Set<LocalDate> getExcept() { return except; }
     public void setExcept(Set<LocalDate> except) { this.except = except; }
+
+    public Set<Integer> getDays() { return days; }
+    public void setDays(Set<Integer> days) { this.days = days; }
+
+    public LocalDate getEndDate() { return endDate; }
+    public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
 }

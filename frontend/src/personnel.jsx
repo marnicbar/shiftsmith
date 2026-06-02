@@ -32,7 +32,7 @@ export function Personnel({ employees, setEmployees, skills, selId, setSelId, sn
   const newItem = ({ date, start, end }) => ({ id: SS.uid('b'), type: paint, date, start, end, allDay: false, repeat: 'none' });
 
   const addEmployee = () => {
-    const e = { id: SS.uid('e'), name: 'New Person', role: 'Staff', contract: 38, skills: [], blocks: [], rules: SS.defaultRules(38) };
+    const e = { id: SS.uid('e'), name: 'New Person', contract: 38, skills: [], blocks: [], rules: SS.defaultRules(38) };
     setEmployees([...employees, e]); setSelId(e.id);
   };
 
@@ -74,7 +74,7 @@ export function Personnel({ employees, setEmployees, skills, selId, setSelId, sn
             <UI.Avatar name={emp.name} size="lg" square/>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.02em' }}>{emp.name}</div>
-              <div className="muted" style={{ fontSize: 12.5 }}>{emp.role}{prefWeekHours(emp) != null ? ` · ${prefWeekHours(emp)}h / week preferred` : ''}</div>
+              <div className="muted" style={{ fontSize: 12.5 }}>{prefWeekHours(emp) != null ? `${prefWeekHours(emp)}h / week preferred` : (emp.skills.join(' · ') || 'No skills')}</div>
             </div>
           </div>
 
@@ -82,11 +82,6 @@ export function Personnel({ employees, setEmployees, skills, selId, setSelId, sn
             <label>Full name</label>
             <input className="input" value={emp.name} onChange={(e) => updateEmp({ name: e.target.value })}/>
           </div>
-          <div className="field">
-            <label>Role</label>
-            <input className="input" value={emp.role} onChange={(e) => updateEmp({ role: e.target.value })}/>
-          </div>
-
           <div className="field">
             <label>Skills</label>
             <div className="hint">Only people with a matching skill are assigned to a shift.</div>

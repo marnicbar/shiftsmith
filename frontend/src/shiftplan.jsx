@@ -450,7 +450,7 @@ function AssignEditor({ ctx, employees, assign, overrides, setOverrides, onClose
                     {!avail && <span className="ae-tag warn"><Ic.clock size={10}/> Unavailable</span>}
                     {leave && <span className="ae-tag warn"><Ic.palm size={10}/> On leave</span>}
                     {elsewhere && <span className="ae-tag">Booked elsewhere</span>}
-                    {skill && avail && !leave && !elsewhere && <span className="ae-tag muted">{e.role}</span>}
+                    {skill && avail && !leave && !elsewhere && e.skills.length > 0 && <span className="ae-tag muted">{e.skills.join(', ')}</span>}
                   </span>
                 </span>
               </button>
