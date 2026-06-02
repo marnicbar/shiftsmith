@@ -212,10 +212,13 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
 
     // ---------------------------------------------------------------- soft
 
+    /** Soft reward for placing a shift's preferred employee on it (an explicit match weight). */
+    static final int PREFERRED_EMPLOYEE_REWARD = 4;
+
     Constraint preferredEmployee(ConstraintFactory f) {
         return f.forEach(ShiftAssignment.class)
                 .filter(a -> a.getEmployee() != null && a.isPreferred(a.getEmployee()))
-                .reward(HardMediumSoftScore.ofSoft(4))
+                .reward(HardMediumSoftScore.ONE_SOFT, a -> PREFERRED_EMPLOYEE_REWARD)
                 .asConstraint("Preferred employee for shift");
     }
 

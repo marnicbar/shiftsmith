@@ -9,6 +9,8 @@ Guidance for Claude Code when working in this repository.
 cd backend
 mvn quarkus:dev          # dev mode, live reload on :8080
 mvn package -DskipTests  # build (also validates the Timefold model)
+mvn test                 # unit + constraint + solver tests (no Docker needed)
+mvn verify               # also runs *IT integration tests if Docker is present
 java -jar target/quarkus-app/quarkus-run.jar
 ```
 
@@ -18,12 +20,22 @@ cd frontend
 npm install
 npm run dev    # dev server on :5173, proxies /api/* → :8080
 npm run build  # production build to dist/
+npm test       # Vitest unit + component tests
 ```
 
 ### Full stack
 ```bash
 docker compose up --build   # postgres :5432, backend :8080, frontend :5173
 ```
+
+### Testing
+See `TESTING.md` for the full strategy. Backend: JUnit 5 + AssertJ for domain/expansion
+units, Timefold `ConstraintVerifier` for per-constraint tests, the real solver for
+end-to-end scenario tests, and a Docker-gated `@QuarkusTest` (`*IT`) for the REST round-trip.
+Frontend: Vitest + React Testing Library (jsdom) for pure logic, the `api.js` client, and
+component smoke tests. When you change a constraint, add/adjust a `ConstraintVerifier` case;
+when you change recurrence logic, keep `Recurrence` (backend) and `matchesDay` (frontend) —
+and their tests — in lock-step.
 
 ## Architecture
 
