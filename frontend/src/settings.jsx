@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Theme } from './theme.js';
 import { SS } from './data.js';
 import { Ic } from './icons.jsx';
-import { METRICS, OPS, isHard, ruleKey } from './rules.jsx';
+import { RulesEditor } from './rules.jsx';
 
 function Seg({ value, options, onChange }) {
   return (
@@ -68,87 +68,6 @@ function SkillsManager({ skills, onAdd, onRename, onRemove }) {
           onChange={(e) => setAdding(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') commitAdd(); }} />
         <button className="btn sm" disabled={!adding.trim()} onClick={commitAdd}><Ic.plus size={14}/> Add</button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Editor for the global working-time rules that apply to everyone. Each rule is a
- * metric+op pair and may be defined only once. People inherit these unless they set
- * their own (stricter) rule for the same metric+op.
- */
-function GlobalRules({ rules, onChange }) {
-  const [warn, setWarn] = useState(null);
-  const [vals, setVals] = useState({}); // in-progress numeric edits, committed on blur
-  const keys = new Set(rules.map(ruleKey));
-
-  function commitValue(id) {
-    const raw = vals[id];
-    setVals((v) => { const n = { ...v }; delete n[id]; return n; });
-    if (raw == null) return;
-    update(id, { value: Math.max(0, Number(raw) || 0) });
-  }
-
-  function update(id, patch) {
-    const target = rules.find((r) => r.id === id);
-    const nm = patch.metric ?? target.metric;
-    const no = patch.op ?? target.op;
-    if ((patch.metric || patch.op) && rules.some((r) => r.id !== id && r.metric === nm && r.op === no)) {
-      setWarn(`A “${METRICS[nm].label} · ${OPS[no]}” rule already exists — each rule can be set only once.`);
-      return;
-    }
-    setWarn(null);
-    onChange(rules.map((r) => r.id === id ? { ...r, ...patch } : r));
-  }
-  function remove(id) { setWarn(null); onChange(rules.filter((r) => r.id !== id)); }
-  function add() {
-    let combo = null;
-    for (const m of Object.keys(METRICS)) for (const op of Object.keys(OPS)) {
-      if (!combo && !keys.has(`${m}:${op}`)) combo = [m, op];
-    }
-    if (!combo) { setWarn('Every rule is already defined.'); return; }
-    setWarn(null);
-    onChange([...rules, { id: SS.uid('r'), metric: combo[0], op: combo[1], value: combo[1] === 'preferred' ? 38 : 40, changes: [] }]);
-  }
-
-  return (
-    <div>
-      {warn && <div className="rule-warn">{warn}</div>}
-      <div className="rules">
-        {rules.map((r) => {
-          const m = METRICS[r.metric];
-          const hard = isHard(r.op);
-          return (
-            <div key={r.id} className={`rule sel ${hard ? 'hard' : 'soft'}`}>
-              <div className="rule-top">
-                <span className="rule-ic">{React.createElement(Ic[m.icon] || Ic.clock, { size: 14 })}</span>
-                <select className="bare-select rule-name" value={r.metric} onChange={(e) => update(r.id, { metric: e.target.value })}>
-                  {Object.entries(METRICS).map(([k, mm]) => <option key={k} value={k}>{mm.label}</option>)}
-                </select>
-                <span className={`str-tag ${hard ? 'hard' : 'soft'}`}>{hard ? 'Hard' : 'Soft'}</span>
-                <button className="rule-x" onClick={() => remove(r.id)} title="Remove rule"><Ic.trash size={13}/></button>
-              </div>
-              <div className="rule-bot">
-                <select className="bare-select op" value={r.op} onChange={(e) => update(r.id, { op: e.target.value })}>
-                  {Object.entries(OPS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                </select>
-                <div className="num">
-                  <input className="input mono" type="number" min="0" step="1"
-                    value={vals[r.id] ?? r.value}
-                    onChange={(e) => setVals((v) => ({ ...v, [r.id]: e.target.value }))}
-                    onBlur={() => commitValue(r.id)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
-                  <span className="unit">{m.unit}</span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        {!rules.length && <div className="hint">No global rules yet — add one to apply it to everyone.</div>}
-      </div>
-      <div className="skill-add" style={{ marginTop: 8 }}>
-        <button className="btn sm" onClick={add}><Ic.plus size={14}/> Add rule</button>
       </div>
     </div>
   );
@@ -235,7 +154,7 @@ export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sch
             their own rule for the same metric, and a personal rule can only be stricter.
             Tightening a rule here updates anyone whose personal rule was looser.
           </div>
-          <GlobalRules rules={globalRules} onChange={setGlobalRules} />
+          <RulesEditor rules={globalRules} onChange={setGlobalRules} mode="global" label={null} />
         </div>
 
         <div className="card set-card">

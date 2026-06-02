@@ -1,6 +1,6 @@
 // rules.test.jsx — the pure helpers behind global/system working-time rules.
 import { describe, it, expect } from 'vitest';
-import { tooLooseAgainst, ruleKey } from './rules.jsx';
+import { tooLooseAgainst, ruleKey, ruleEffectiveAt } from './rules.jsx';
 
 describe('tooLooseAgainst', () => {
   it('flags a personal ceiling above the global one and returns the clamp value', () => {
@@ -24,5 +24,35 @@ describe('ruleKey', () => {
   it('identifies a rule by metric+op so each can be defined once', () => {
     expect(ruleKey({ metric: 'weekHours', op: 'max' })).toBe('weekHours:max');
     expect(ruleKey({ metric: 'weekHours', op: 'max' })).toBe(ruleKey({ metric: 'weekHours', op: 'max', value: 99 }));
+  });
+});
+
+// Mirrors the backend Rule.effectiveAt — keep the two in lock-step.
+describe('ruleEffectiveAt', () => {
+  const base = { metric: 'weekHours', op: 'max', value: 40, changes: [] };
+
+  it('returns the base value when there are no scheduled changes', () => {
+    expect(ruleEffectiveAt(base, '2026-06-01')).toEqual({ active: true, metric: 'weekHours', op: 'max', value: 40 });
+  });
+
+  it('applies a set change only on or after its date', () => {
+    const r = { ...base, changes: [{ id: 'c1', date: '2026-06-10', kind: 'set', metric: 'weekHours', op: 'max', value: 30 }] };
+    expect(ruleEffectiveAt(r, '2026-06-09').value).toBe(40);
+    expect(ruleEffectiveAt(r, '2026-06-10').value).toBe(30);
+  });
+
+  it('takes the latest applicable change by date, not list order', () => {
+    const r = { ...base, changes: [
+      { id: 'c2', date: '2026-06-15', kind: 'set', value: 20 },
+      { id: 'c1', date: '2026-06-05', kind: 'set', value: 30 },
+    ] };
+    expect(ruleEffectiveAt(r, '2026-06-10').value).toBe(30);
+    expect(ruleEffectiveAt(r, '2026-06-20').value).toBe(20);
+  });
+
+  it('deactivates the rule from a remove change', () => {
+    const r = { ...base, changes: [{ id: 'c1', date: '2026-06-07', kind: 'remove' }] };
+    expect(ruleEffectiveAt(r, '2026-06-06').active).toBe(true);
+    expect(ruleEffectiveAt(r, '2026-06-07').active).toBe(false);
   });
 });
