@@ -375,18 +375,18 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; line-height:
 .bar.under { background: var(--amber-soft); border-color: color-mix(in oklab, var(--amber-solid) 50%, transparent); border-left-color: var(--amber-solid); }
 .bar.full { background: var(--green-soft); border-color: color-mix(in oklab, var(--green-solid) 45%, transparent); border-left-color: var(--green-solid); }
 .bar .bt { font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); display: flex; align-items: center; gap: 6px; }
-.bar .btime { font-size: 10px; color: var(--text-3); font-weight: 500; }
-.bar .crew { display: flex; align-items: center; gap: 3px; }
+.bar .btime { font-size: 10px; color: var(--text-3); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar .crew { display: flex; align-items: center; gap: 3px; overflow: hidden; }
 .bar .av { width: 18px; height: 18px; border-radius: 99px; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #fff; flex: 0 0 18px; }
+.bar .av.more { background: var(--text-3); }
 .bar .slot-empty { width: 18px; height: 18px; border-radius: 99px; border: 1.5px dashed var(--amber-strong); flex: 0 0 18px; }
-.bar .cnt { font-size: 10px; font-weight: 600; color: var(--text-3); margin-left: 2px; }
-.bar.box { border-radius: 4px; border-left-width: 2px; padding: 0; min-width: 3px; }
-.bar.box:hover { box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+.bar.tiny { border-radius: 4px; border-left-width: 2px; padding: 0; min-width: 3px; }
+.bar.tiny:hover { box-shadow: 0 2px 8px rgba(0,0,0,.18); }
 .tl-scroll.no-xscroll { overflow-x: hidden; }
 
 /* Manually overridden shift bars */
 .bar.edited { box-shadow: inset 0 0 0 1.5px var(--accent); }
-.bar.box.edited { box-shadow: inset 0 0 0 1.5px var(--accent); border-radius: 4px; }
+.bar.tiny.edited { box-shadow: inset 0 0 0 1.5px var(--accent); border-radius: 4px; }
 .bar .bedit {
   position: absolute; top: 5px; right: 5px; width: 15px; height: 15px; border-radius: 99px;
   background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; z-index: 2;
