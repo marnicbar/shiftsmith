@@ -226,8 +226,10 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
 
       return (
         <div key={key} className={cls} title={title} onClick={(e) => openEditor(e, sh, p, d, key)} style={style}>
-          {edited && <span className="bedit" title="Manually set"><Ic.user size={9}/></span>}
-          <span className="bt">{sh.name}</span>
+          <div className="bhead">
+            <span className="bt">{sh.name}</span>
+            {edited && <span className="bedit" title="Manually set"><Ic.user size={9}/></span>}
+          </div>
           <span className="btime mono">{SS.minLabel(sh.start)}–{SS.minLabel(sh.end)}</span>
           <div className="crew">{shown}</div>
         </div>
