@@ -126,6 +126,34 @@ export default function App() {
   const newFlow = FLOW_MAP[prefs.newFlowLabel] ?? 'quick';
   const tlDefault = TL_MAP[prefs.tlDefaultLabel] ?? 'week';
 
+  // Skill catalogue lives in settings (managed on the Settings page). Renames and
+  // removals cascade into every employee/position/shift that references the skill,
+  // so the catalogue and the data never drift apart.
+  const skills = settings.skills ?? SS.SKILLS;
+  const uniq = (arr) => arr.filter((v, i) => arr.indexOf(v) === i);
+  const addSkill = useCallback((raw) => {
+    const name = (raw || '').trim();
+    setSettings((s) => {
+      const list = s.skills ?? SS.SKILLS;
+      if (!name || list.includes(name)) return s;
+      return { ...s, skills: [...list, name] };
+    });
+  }, []);
+  const renameSkill = useCallback((oldName, raw) => {
+    const name = (raw || '').trim();
+    if (!name || name === oldName) return;
+    const map = (arr = []) => uniq(arr.map((x) => (x === oldName ? name : x)));
+    setSettings((s) => { const list = s.skills ?? SS.SKILLS; return { ...s, skills: map(list) }; });
+    setEmployees((es) => es.map((e) => ({ ...e, skills: map(e.skills) })));
+    setPositions((ps) => ps.map((p) => ({ ...p, skills: map(p.skills), shifts: p.shifts.map((sh) => ({ ...sh, skills: map(sh.skills) })) })));
+  }, []);
+  const removeSkill = useCallback((name) => {
+    const drop = (arr = []) => arr.filter((x) => x !== name);
+    setSettings((s) => { const list = s.skills ?? SS.SKILLS; return { ...s, skills: drop(list) }; });
+    setEmployees((es) => es.map((e) => ({ ...e, skills: drop(e.skills) })));
+    setPositions((ps) => ps.map((p) => ({ ...p, skills: drop(p.skills), shifts: p.shifts.map((sh) => ({ ...sh, skills: drop(sh.skills) })) })));
+  }, []);
+
   // Map the solver's slots into the per-occurrence shape the timeline expects.
   const empById = useMemo(() => Object.fromEntries(employees.map((e) => [e.id, e])), [employees]);
   const assignMap = useMemo(() => {
@@ -168,10 +196,10 @@ export default function App() {
       {error && <div className="api-error">Backend error: {error}. Is the backend running on :8080?</div>}
 
       {tab === 'dashboard' && <Dashboard employees={employees} positions={positions} sched={sched} onGo={setTab} />}
-      {tab === 'personnel' && <Personnel employees={employees} setEmployees={setEmployees} skills={SS.SKILLS} selId={selEmp} setSelId={setSelEmp} snap={snap} newFlow={newFlow} />}
-      {tab === 'positions' && <Positions employees={employees} positions={positions} setPositions={setPositions} groupOrder={groupOrder} setGroupOrder={setGroupOrder} skills={SS.SKILLS} selId={selPos} setSelId={setSelPos} snap={snap} newFlow={newFlow} />}
+      {tab === 'personnel' && <Personnel employees={employees} setEmployees={setEmployees} skills={skills} selId={selEmp} setSelId={setSelEmp} snap={snap} newFlow={newFlow} />}
+      {tab === 'positions' && <Positions employees={employees} positions={positions} setPositions={setPositions} groupOrder={groupOrder} setGroupOrder={setGroupOrder} skills={skills} selId={selPos} setSelId={setSelPos} snap={snap} newFlow={newFlow} />}
       {tab === 'shiftplan' && <ShiftPlan key={tlDefault} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} assign={assignMap} overrides={overrides} setOverrides={setOverrides} sched={sched} onSolve={solveNow} onPause={pauseSolver} />}
-      {tab === 'settings' && <SettingsView prefs={prefs} setPref={setPref} fonts={FONTS} settings={settings} setSettings={setSettings} sched={sched} />}
+      {tab === 'settings' && <SettingsView prefs={prefs} setPref={setPref} fonts={FONTS} settings={settings} setSettings={setSettings} sched={sched} skills={skills} onAddSkill={addSkill} onRenameSkill={renameSkill} onRemoveSkill={removeSkill} />}
     </div>
   );
 }

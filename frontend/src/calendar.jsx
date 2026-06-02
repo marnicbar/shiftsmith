@@ -8,14 +8,26 @@ const WD = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
 function weekdayOf(iso) { return (SS.parseISO(iso).getDay() + 6) % 7; }
 function occursOn(it, d) {
-  if (it.until && d > it.until) return false;
   if (it.except && it.except.includes(d)) return false;
-  if (it.repeat === 'none') return d === it.date;
+  // Multi-day span (e.g. a vacation range): start .. endDate, inclusive.
+  if (it.endDate && (!it.repeat || it.repeat === 'none')) return d >= it.date && d <= it.endDate;
+  if (it.until && d > it.until) return false;
+  if (!it.repeat || it.repeat === 'none') return d === it.date;
   if (it.repeat === 'daily') return d >= it.date;
-  if (it.repeat === 'weekly') return weekdayOf(d) === weekdayOf(it.date) && d >= it.date;
+  if (it.repeat === 'weekly') {
+    if (it.days && it.days.length) return d >= it.date && it.days.includes(weekdayOf(d));
+    return weekdayOf(d) === weekdayOf(it.date) && d >= it.date;
+  }
   return false;
 }
 function isOvernight(it) { return !it.allDay && it.end < it.start; }
+
+// True when applying {scope} to {item} would change or remove an occurrence before today.
+function touchesPast(scope, item, occDate) {
+  const today = SS.isoOf(new Date());
+  if (scope === 'this' || scope === 'future') return (occDate || item.date) < today;
+  return item.date < today; // 'all' — the series starts at its anchor date
+}
 
 function expand(items, dayList) {
   const out = [];
@@ -59,17 +71,16 @@ function packLanes(evs) {
 export function Calendar(props) {
   const { view, anchor, items, kind, zoom = 46, paint, palette,
           newItem, onCommit, onDelete, onSplit, extraFields, dayStart = 6,
-          snap = 15, newFlow = 'quick' } = props;
+          snap = 15 } = props;
   const scrollRef = useRef(null);
   const [editor, setEditor] = useState(null);
-  const [pending, setPending] = useState(null);
+  const [draft, setDraft] = useState(null);   // local working copy; only persisted on confirm
   const [drag, setDrag] = useState(null);
   const dragRef = useRef(null);
-  const origRef = useRef(null);
   const idPfx = kind === 'availability' ? 'b' : 's';
 
   function openEditor(it, occDate) {
-    origRef.current = JSON.parse(JSON.stringify(it));
+    setDraft(JSON.parse(JSON.stringify(it)));
     setEditor({ id: it.id, isNew: false, occDate: occDate || it.date });
   }
 
@@ -85,9 +96,9 @@ export function Calendar(props) {
 
   const yToMin = (y) => Math.max(0, Math.min(1440, Math.round((y / zoom * 60) / snap) * snap));
 
-  function startCreate(draft) {
-    if (newFlow === 'menu') { setPending(draft); setEditor({ id: draft.id, isNew: true, pending: true }); }
-    else { onCommit(draft); setEditor({ id: draft.id, isNew: true }); }
+  function startCreate(d) {
+    setDraft(d);
+    setEditor({ id: d.id, isNew: true, occDate: d.date });
   }
   function addNew() {
     const date = view === 'day' ? SS.isoOf(anchor) : SS.isoOf(SS.startOfWeek(anchor));
@@ -111,31 +122,53 @@ export function Calendar(props) {
     window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
   }
 
-  const editing = editor ? (editor.pending ? pending : items.find((x) => x.id === editor.id)) || null : null;
-  const renderItems = pending ? [...items, pending] : items;
+  // Edits live only in `draft` until the user confirms (Save / Done); the grid
+  // previews them, and closing/Escape/backdrop simply throws the draft away.
+  const editing = draft;
+  const renderItems = draft
+    ? (editor.isNew ? [...items, draft] : items.map((x) => (x.id === draft.id ? draft : x)))
+    : items;
 
-  function patch(p) { if (editor && editor.pending) setPending({ ...pending, ...p }); else onCommit({ ...editing, ...p }); }
-  function discard() { setPending(null); setEditor(null); origRef.current = null; }
+  function patch(p) { setDraft((d) => ({ ...d, ...p })); }
+  function discard() { setDraft(null); setEditor(null); }
+
   function done(scope = 'all') {
-    if (editor && editor.pending && pending) { onCommit(pending); setPending(null); setEditor(null); origRef.current = null; return; }
-    const cur = items.find((x) => x.id === editor.id);
-    const orig = origRef.current;
-    const occDate = (editor && editor.occDate) || (cur && cur.date);
-    if (onSplit && cur && orig && cur.repeat !== 'none' && scope === 'this') {
+    const d = draft;
+    if (!d) { discard(); return; }
+    if (editor.isNew) { onCommit(d); discard(); return; }
+    const orig = items.find((x) => x.id === d.id);
+    const occDate = (editor && editor.occDate) || d.date;
+    if (onSplit && orig && d.repeat && d.repeat !== 'none' && scope === 'this') {
       const restored = { ...orig, except: [...(orig.except || []), occDate].filter((v, i, a) => a.indexOf(v) === i) };
-      const single = { ...cur, id: SS.uid(idPfx), repeat: 'none', date: occDate };
-      delete single.until; delete single.except;
+      const single = { ...d, id: SS.uid(idPfx), repeat: 'none', date: occDate };
+      delete single.until; delete single.except; delete single.days;
       onSplit(restored, [single]);
-    } else if (onSplit && cur && orig && cur.repeat !== 'none' && scope === 'future' && occDate > orig.date) {
+    } else if (onSplit && orig && d.repeat && d.repeat !== 'none' && scope === 'future' && occDate > orig.date) {
       const prevDay = SS.isoOf(SS.addDays(SS.parseISO(occDate), -1));
       const restored = { ...orig, until: prevDay };
-      const series = { ...cur, id: SS.uid(idPfx), date: occDate, except: (orig.except || []).filter((e) => e >= occDate) };
+      const series = { ...d, id: SS.uid(idPfx), date: occDate, except: (orig.except || []).filter((e) => e >= occDate) };
       delete series.until;
       onSplit(restored, [series]);
+    } else {
+      onCommit(d); // whole series / single item
     }
-    setPending(null); setEditor(null); origRef.current = null;
+    discard();
   }
-  function removeAndClose() { if (!(editor && editor.pending)) onDelete(editing.id); setPending(null); setEditor(null); origRef.current = null; }
+  function remove(scope = 'all') {
+    if (editor.isNew) { discard(); return; } // unsaved new item — nothing to delete
+    const cur = items.find((x) => x.id === editor.id);
+    if (!cur) { discard(); return; }
+    const occDate = (editor && editor.occDate) || cur.date;
+    if (cur.repeat && cur.repeat !== 'none' && scope === 'this') {
+      onCommit({ ...cur, except: [...(cur.except || []), occDate].filter((v, i, a) => a.indexOf(v) === i) });
+    } else if (cur.repeat && cur.repeat !== 'none' && scope === 'future') {
+      const prevDay = SS.isoOf(SS.addDays(SS.parseISO(occDate), -1));
+      onCommit({ ...cur, until: prevDay });
+    } else {
+      onDelete(cur.id);
+    }
+    discard();
+  }
 
   return (
     <div className="cal">
@@ -150,7 +183,7 @@ export function Calendar(props) {
       {editing && (
         <Editor item={editing} kind={kind} palette={palette} isNew={editor.isNew}
           occDate={editor.occDate} scopable={!!onSplit && !editor.isNew}
-          onPatch={patch} onRemove={removeAndClose} onClose={discard} onDone={done} extraFields={extraFields} />
+          onPatch={patch} onRemove={remove} onClose={discard} onDone={done} extraFields={extraFields} />
       )}
     </div>
   );
@@ -463,13 +496,33 @@ function TimeField({ minutes, onChange, isEnd, align }) {
 function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemove, onClose, onDone, extraFields }) {
   const ref = useRef(null);
   const [scopeMenu, setScopeMenu] = useState(false);
+  const [delMenu, setDelMenu] = useState(false);
+  const [confirm, setConfirm] = useState(null); // { kind: 'save'|'delete', scope }
   useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    function onKey(e) { if (e.key === 'Escape') { if (confirm) setConfirm(null); else onClose(); } }
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [confirm]);
   const overnight = !item.allDay && item.end < item.start;
   const nextDate = item.date ? SS.parseISO(item.date) : null;
   const nextLabel = nextDate ? SS.addDays(nextDate, 1).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+  const isVac = kind === 'availability' && item.type === 'vac';
+  // Vacation spans a date range instead of recurring; everything else can repeat.
+  const recurs = !isVac && item.repeat && item.repeat !== 'none';
+
+  // Run an action, first asking for confirmation when it would alter the past.
+  const run = (kind2, scope) => {
+    setScopeMenu(false); setDelMenu(false);
+    const fn = kind2 === 'save' ? onDone : onRemove;
+    if (!isNew && touchesPast(scope, item, occDate)) setConfirm({ kind: kind2, scope });
+    else fn(scope);
+  };
+  const toggleDay = (d) => {
+    const cur = item.days && item.days.length ? item.days : [weekdayOf(item.date)];
+    const next = cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d].sort((a, b) => a - b);
+    onPatch({ days: next.length ? next : cur }); // keep at least one day selected
+  };
+  const selDays = recurs && item.repeat === 'weekly' ? (item.days && item.days.length ? item.days : [weekdayOf(item.date)]) : [];
+
   return (
     <>
       <div className="pop-backdrop" onClick={onClose}></div>
@@ -482,7 +535,8 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
         {kind === 'availability' && (
           <div className="seg full">
             {palette.map((p) => (
-              <button key={p.type} className={item.type === p.type ? 'on' : ''} onClick={() => onPatch({ type: p.type, allDay: p.type === 'vac' ? item.allDay : false })}>{p.label}</button>
+              <button key={p.type} className={item.type === p.type ? 'on' : ''}
+                onClick={() => onPatch({ type: p.type, allDay: p.type === 'vac' ? (item.allDay ?? true) : false, ...(p.type !== 'vac' ? { endDate: undefined } : {}) })}>{p.label}</button>
             ))}
           </div>
         )}
@@ -490,9 +544,24 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
         {extraFields && extraFields(item, onPatch)}
 
         <div className="field">
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Ic.calendar size={13}/> Date</label>
-          <DateField value={item.date} onChange={(iso) => onPatch({ date: iso })} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Ic.calendar size={13}/> {isVac ? 'Start date' : 'Date'}</label>
+          <DateField value={item.date} onChange={(iso) => onPatch({ date: iso, ...(item.endDate && item.endDate < iso ? { endDate: undefined } : {}) })} />
         </div>
+
+        {isVac && (
+          <div className="field">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Ic.calendar size={13}/> End date <span className="muted" style={{ fontWeight: 400 }}>· optional</span></label>
+            {item.endDate ? (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <div style={{ flex: 1, minWidth: 0 }}><DateField value={item.endDate} onChange={(iso) => onPatch({ endDate: iso >= item.date ? iso : item.date })} /></div>
+                <button className="iconbtn" style={{ width: 30, height: 30, flex: '0 0 30px' }} title="Single day" onClick={() => onPatch({ endDate: undefined })}><Ic.x size={14}/></button>
+              </div>
+            ) : (
+              <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => onPatch({ endDate: SS.isoOf(SS.addDays(SS.parseISO(item.date), 1)) })}><Ic.plus size={13}/> Add end date</button>
+            )}
+            <div className="hint">Leave empty for a single day, or set an end date to cover several days.</div>
+          </div>
+        )}
 
         {!item.allDay && (
           <div className="field">
@@ -507,49 +576,97 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
           </div>
         )}
 
-        {kind === 'availability' && item.type === 'vac' && (
+        {isVac && (
           <label className="stat-line" style={{ cursor: 'pointer' }}>
             <span className="k">All day</span>
             <input type="checkbox" checked={!!item.allDay} onChange={(e) => onPatch({ allDay: e.target.checked })} />
           </label>
         )}
 
-        <div className="field">
-          <label style={{ display:'flex', alignItems:'center', gap:6 }}><Ic.repeat size={13}/> Repeat</label>
-          <div className="seg full">
-            {[['none','Once'],['daily','Daily'],['weekly','Weekly']].map(([v,l]) => (
-              <button key={v} className={item.repeat === v ? 'on' : ''} onClick={() => onPatch({ repeat: v })}>{l}</button>
-            ))}
+        {!isVac && (
+          <div className="field">
+            <label style={{ display:'flex', alignItems:'center', gap:6 }}><Ic.repeat size={13}/> Repeat</label>
+            <div className="seg full">
+              {[['none','Once'],['daily','Daily'],['weekly','Weekly']].map(([v,l]) => (
+                <button key={v} className={(item.repeat || 'none') === v ? 'on' : ''}
+                  onClick={() => onPatch({ repeat: v, days: v === 'weekly' ? (item.days && item.days.length ? item.days : [weekdayOf(item.date)]) : undefined })}>{l}</button>
+              ))}
+            </div>
+            {item.repeat === 'weekly' && (
+              <div className="daypick">
+                {WD.map((w, d) => (
+                  <button key={w} type="button" className={selDays.includes(d) ? 'on' : ''} onClick={() => toggleDay(d)}>{w[0]}</button>
+                ))}
+              </div>
+            )}
+            {item.repeat === 'weekly' && <div className="hint">Repeats every week on the selected days.</div>}
           </div>
-        </div>
+        )}
 
         <div className="pop-actions">
-          <button className="btn danger sm" onClick={onRemove}><Ic.trash size={14}/> Delete</button>
-          {scopable && item.repeat !== 'none' ? (() => {
+          {scopable && recurs ? (
+            <div className="splitbtn danger">
+              <button className="sb-main" onClick={() => run('delete', 'all')}><Ic.trash size={13}/> Delete all</button>
+              <button className="sb-caret" onClick={() => setDelMenu((o) => !o)}><Ic.chevD size={12}/></button>
+              {delMenu && (
+                <>
+                  <div className="menu-backdrop" onClick={() => setDelMenu(false)}></div>
+                  <div className="scope-menu" onClick={(e) => e.stopPropagation()}>
+                    <div className="dm-head">Delete</div>
+                    <button onClick={() => run('delete', 'this')}><span className="sm-t">This occurrence</span><span className="sm-s">Only {SS.parseISO(occDate || item.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</span></button>
+                    <button onClick={() => run('delete', 'future')}><span className="sm-t">This &amp; following</span><span className="sm-s">{SS.parseISO(occDate || item.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} onward</span></button>
+                    <button onClick={() => run('delete', 'all')}><span className="sm-t">All occurrences</span></button>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <button className="btn danger sm" onClick={() => run('delete', 'all')}><Ic.trash size={14}/> Delete</button>
+          )}
+          {scopable && recurs ? (() => {
             const occLabel = SS.parseISO(occDate || item.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-            const everyWord = item.repeat === 'daily' ? 'day' : SS.parseISO(item.date).toLocaleDateString([], { weekday: 'long' });
+            const everyWord = item.repeat === 'daily' ? 'day' : 'week';
             return (
               <div className="splitbtn primary">
-                <button className="sb-main" onClick={() => onDone('all')}><Ic.check size={13}/> Save all</button>
+                <button className="sb-main" onClick={() => run('save', 'all')}><Ic.check size={13}/> Save all</button>
                 <button className="sb-caret" onClick={() => setScopeMenu((o) => !o)}><Ic.chevD size={12}/></button>
                 {scopeMenu && (
                   <>
                     <div className="menu-backdrop" onClick={() => setScopeMenu(false)}></div>
                     <div className="scope-menu" onClick={(e) => e.stopPropagation()}>
                       <div className="dm-head">Apply changes to</div>
-                      <button onClick={() => onDone('this')}><span className="sm-t">This occurrence</span><span className="sm-s">Only {occLabel}</span></button>
-                      <button onClick={() => onDone('future')}><span className="sm-t">This &amp; following</span><span className="sm-s">{occLabel} onward</span></button>
-                      <button onClick={() => onDone('all')}><span className="sm-t">All occurrences</span><span className="sm-s">Every {everyWord}</span></button>
+                      <button onClick={() => run('save', 'this')}><span className="sm-t">This occurrence</span><span className="sm-s">Only {occLabel}</span></button>
+                      <button onClick={() => run('save', 'future')}><span className="sm-t">This &amp; following</span><span className="sm-s">{occLabel} onward</span></button>
+                      <button onClick={() => run('save', 'all')}><span className="sm-t">All occurrences</span><span className="sm-s">Every {everyWord}</span></button>
                     </div>
                   </>
                 )}
               </div>
             );
           })() : (
-            <button className="btn primary sm" onClick={() => onDone('all')}><Ic.check size={14}/> Done</button>
+            <button className="btn primary sm" onClick={() => run('save', 'all')}><Ic.check size={14}/> Done</button>
           )}
         </div>
       </div>
+
+      {confirm && (
+        <>
+          <div className="pop-backdrop" style={{ zIndex: 70 }} onClick={() => setConfirm(null)}></div>
+          <div className="pop confirm-pop" style={{ left: '50%', top: 140, transform: 'translateX(-50%)', zIndex: 71 }}>
+            <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Ic.alert size={16}/> Affects the past</h4>
+            <p className="confirm-msg">
+              This {confirm.kind === 'delete' ? 'deletion' : 'change'} affects {confirm.scope === 'this' ? 'a date' : 'dates'} before today. Are you sure?
+            </p>
+            <div className="pop-actions">
+              <button className="btn sm" onClick={() => setConfirm(null)}>Cancel</button>
+              <button className={`btn sm ${confirm.kind === 'delete' ? 'danger' : 'primary'}`}
+                onClick={() => { (confirm.kind === 'save' ? onDone : onRemove)(confirm.scope); setConfirm(null); }}>
+                {confirm.kind === 'delete' ? 'Delete anyway' : 'Save anyway'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }

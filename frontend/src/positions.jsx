@@ -72,7 +72,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
   }
   function deleteShift(id) { updatePos({ shifts: pos.shifts.filter((x) => x.id !== id) }); }
   function splitShift(updated, added) { updatePos({ shifts: pos.shifts.map((x) => x.id === updated.id ? updated : x).concat(added) }); }
-  const newItem = ({ date, start, end }) => ({ id: SS.uid('s'), name: 'New Shift', date, start, end, skills: pos.skills.length ? pos.skills.slice() : [skills[0]], headcount: 1, repeat: 'weekly', preferred: [] });
+  const newItem = ({ date, start, end }) => ({ id: SS.uid('s'), name: 'New Shift', date, start, end, skills: pos.skills.length ? pos.skills.slice() : [skills[0]], headcount: 1, repeat: 'none', preferred: [] });
 
   const weeklySlots = pos.shifts.reduce((a, s) => a + s.headcount * (s.repeat === 'daily' ? 7 : 1), 0);
 
@@ -118,7 +118,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
           <select className="input" style={{ marginTop: 7 }} value=""
             onChange={(e) => { if (e.target.value) patch({ preferred: [...prefIds, e.target.value] }); }}>
             <option value="">+ Add preferred employee…</option>
-            {avail.map((e) => <option key={e.id} value={e.id}>{e.name} · {e.role}</option>)}
+            {avail.map((e) => <option key={e.id} value={e.id}>{e.name}{e.skills.length ? ` · ${e.skills.join(', ')}` : ''}</option>)}
           </select>
         ) : (
           <div className="hint" style={{ marginTop: 7 }}>No {chosen.length ? 'other ' : ''}employees match the required skills.</div>
@@ -139,9 +139,9 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
         <div className="rail-head">
           <div className="row">
             <span className="section-title">Positions <span className="muted">· {positions.length}</span></span>
-            <div className="rail-add">
-              <button className="iconbtn" style={{ width: 28, height: 28 }} onClick={addPosition} title="Add position"><Ic.plus size={16}/></button>
-              <button className={`iconbtn caret ${menuOpen ? 'on' : ''}`} onClick={() => setMenuOpen((o) => !o)} title="More"><Ic.chevD size={13}/></button>
+            <div className="splitbtn rail-split">
+              <button className="sb-main" onClick={addPosition} title="Add position"><Ic.plus size={16}/></button>
+              <button className={`sb-caret ${menuOpen ? 'on' : ''}`} onClick={() => setMenuOpen((o) => !o)} title="More"><Ic.chevD size={13}/></button>
               {menuOpen && (
                 <>
                   <div className="menu-backdrop" onClick={() => setMenuOpen(false)}></div>

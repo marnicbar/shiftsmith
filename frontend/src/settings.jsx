@@ -1,7 +1,8 @@
-// settings.jsx — full-page settings: Appearance, Calendar, Shift plan and Solver.
-import React from 'react';
+// settings.jsx — full-page settings: Appearance, Calendar, Skills, Shift plan and Solver.
+import React, { useState } from 'react';
 import { Theme } from './theme.js';
 import { SS } from './data.js';
+import { Ic } from './icons.jsx';
 
 function Seg({ value, options, onChange }) {
   return (
@@ -34,6 +35,43 @@ function Row({ label, hint, children }) {
   );
 }
 
+function SkillsManager({ skills, onAdd, onRename, onRemove }) {
+  const [adding, setAdding] = useState('');
+  const [editing, setEditing] = useState(null); // { idx, value }
+  const commitAdd = () => { const v = adding.trim(); if (v) onAdd(v); setAdding(''); };
+  const commitEdit = () => { if (editing) onRename(skills[editing.idx], editing.value); setEditing(null); };
+  return (
+    <div className="skills-mgr">
+      {skills.length === 0 && <div className="hint">No skills yet — add the first one below.</div>}
+      <div className="skills-list">
+        {skills.map((s, i) => (
+          <div key={s} className="skill-row">
+            {editing && editing.idx === i ? (
+              <input className="input skill-edit" autoFocus value={editing.value}
+                onChange={(e) => setEditing({ idx: i, value: e.target.value })}
+                onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') setEditing(null); }}
+                onBlur={commitEdit} />
+            ) : (
+              <span className="skill-name" onClick={() => setEditing({ idx: i, value: s })}>{s}</span>
+            )}
+            <div className="skill-actions">
+              <button className="iconbtn sm-ic" title="Rename" onClick={() => setEditing({ idx: i, value: s })}><Ic.sliders size={14}/></button>
+              <button className="iconbtn sm-ic danger" title="Remove"
+                onClick={() => { if (confirm(`Remove the skill “${s}”? It will be removed from every person and shift that requires it.`)) onRemove(s); }}><Ic.trash size={14}/></button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="skill-add">
+        <input className="input" placeholder="Add a skill…" value={adding}
+          onChange={(e) => setAdding(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') commitAdd(); }} />
+        <button className="btn sm" disabled={!adding.trim()} onClick={commitAdd}><Ic.plus size={14}/> Add</button>
+      </div>
+    </div>
+  );
+}
+
 const UNIT_LABEL = { day: 'day', week: 'week', month: 'month' };
 
 function horizonSummary(sched, settings) {
@@ -51,7 +89,7 @@ function horizonSummary(sched, settings) {
   return { noun, n, range };
 }
 
-export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sched }) {
+export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sched, skills = [], onAddSkill, onRenameSkill, onRemoveSkill }) {
   const accents = Object.entries(Theme.ACCENTS);
   const active = sched.solverStatus === 'SOLVING_ACTIVE' || sched.solverStatus === 'SOLVING_SCHEDULED';
   const { noun, n, range } = horizonSummary(sched, settings);
@@ -97,6 +135,15 @@ export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sch
           <Row label="Shift plan default view">
             <Seg value={prefs.tlDefaultLabel} options={['Day', 'Week', 'Continuous']} onChange={(v) => setPref('tlDefaultLabel', v)} />
           </Row>
+        </div>
+
+        <div className="card set-card">
+          <h3>Skills</h3>
+          <div className="hint" style={{ marginTop: -2, marginBottom: 12 }}>
+            The skills people can have and shifts can require. Renaming or removing a skill
+            updates everyone and every shift that uses it.
+          </div>
+          <SkillsManager skills={skills} onAdd={onAddSkill} onRename={onRenameSkill} onRemove={onRemoveSkill} />
         </div>
 
         <div className="card set-card">

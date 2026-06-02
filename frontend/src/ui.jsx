@@ -34,10 +34,10 @@ function SkillEditor({ value, all, onChange, accent }) {
 
 function Stepper({ value, min = 1, max = 20, onChange }) {
   return (
-    <div className="seg" style={{ padding: 2 }}>
-      <button onClick={() => onChange(Math.max(min, value - 1))}><Ic.x size={12} style={{ transform: 'rotate(45deg)' }}/></button>
-      <span className="mono" style={{ minWidth: 30, textAlign: 'center', fontWeight: 600, alignSelf: 'center' }}>{value}</span>
-      <button onClick={() => onChange(Math.min(max, value + 1))}><Ic.plus size={12}/></button>
+    <div className="seg stepper" style={{ padding: 2, alignSelf: 'flex-start' }}>
+      <button onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min} aria-label="Decrease"><Ic.minus size={12}/></button>
+      <span className="mono" style={{ minWidth: 28, textAlign: 'center', fontWeight: 600, alignSelf: 'center' }}>{value}</span>
+      <button onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max} aria-label="Increase"><Ic.plus size={12}/></button>
     </div>
   );
 }

@@ -27,11 +27,12 @@ public class ShiftTemplate {
     private List<String> preferred = new ArrayList<>();
     private LocalDate until;
     private Set<LocalDate> except;
+    private Set<Integer> days;   // weekly-on-selected-days (Mon=0 … Sun=6)
 
     public ShiftTemplate() {}
 
     public boolean occursOn(LocalDate d) {
-        return Recurrence.occursOn(date, repeat, d, until, except);
+        return Recurrence.occursOn(date, repeat, d, until, except, days);
     }
 
     public String getId() { return id; }
@@ -66,4 +67,7 @@ public class ShiftTemplate {
 
     public Set<LocalDate> getExcept() { return except; }
     public void setExcept(Set<LocalDate> except) { this.except = except; }
+
+    public Set<Integer> getDays() { return days; }
+    public void setDays(Set<Integer> days) { this.days = days; }
 }

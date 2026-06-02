@@ -3,6 +3,8 @@ package dev.shiftsmith.domain;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Solver configuration set from the Settings page.
@@ -17,6 +19,10 @@ public class Settings {
 
     private String horizonUnit = "week"; // "day" | "week" | "month"
     private int horizonCount = 1;
+
+    /** The catalogue of skills employees can have and shifts can require (managed on the Settings page). */
+    private List<String> skills = new ArrayList<>(List.of(
+            "Reception", "Floor", "Bar", "Kitchen", "Cleaning", "Supervisor", "First Aid", "Logistics"));
 
     public Settings() {}
 
@@ -48,4 +54,7 @@ public class Settings {
 
     public int getHorizonCount() { return horizonCount; }
     public void setHorizonCount(int horizonCount) { this.horizonCount = horizonCount; }
+
+    public List<String> getSkills() { return skills; }
+    public void setSkills(List<String> skills) { this.skills = skills; }
 }

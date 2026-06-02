@@ -20,6 +20,7 @@ mkIcon('sun', <><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l
 mkIcon('moon', <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>);
 mkIcon('search', <><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></>);
 mkIcon('plus', <><path d="M12 5v14M5 12h14"/></>);
+mkIcon('minus', <><path d="M5 12h14"/></>);
 mkIcon('x', <><path d="M6 6l12 12M18 6L6 18"/></>);
 mkIcon('chevL', <path d="M15 6l-6 6 6 6"/>);
 mkIcon('chevR', <path d="M9 6l6 6-6 6"/>);
