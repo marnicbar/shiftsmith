@@ -64,7 +64,7 @@ button { font-family: inherit; }
 .topbar .spacer { flex: 1; }
 
 .iconbtn {
-  appearance: none; cursor: pointer; border: 1px solid var(--border);
+  appearance: none; cursor: pointer; border: 1px solid var(--border); padding: 0;
   background: var(--surface); color: var(--text-2);
   width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
   transition: background .15s, color .15s, border-color .15s;

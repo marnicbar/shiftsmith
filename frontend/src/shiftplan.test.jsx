@@ -3,7 +3,7 @@
 //  - buildPlan:  the frontend's local greedy assignment preview (skills, vacation,
 //                headcount, preferred ordering, overrides, no double-booking)
 import { describe, it, expect } from 'vitest';
-import { matchesDay, buildPlan } from './shiftplan.jsx';
+import { matchesDay, buildPlan, availableFor } from './shiftplan.jsx';
 
 const MON = '2026-06-01'; // Monday
 const TUE = '2026-06-02';
@@ -40,6 +40,42 @@ const shift = (id, over = {}) => ({
   repeat: 'none', preferred: [], ...over,
 });
 const position = (shifts) => ({ id: 'p', name: 'P', shifts });
+
+// --- availableFor (mirrors backend Employee.isAvailableFor) -----------------
+
+describe('availableFor', () => {
+  const block = (type, over = {}) => ({ type, date: MON, repeat: 'none', allDay: false, ...over });
+  const sh = (start, end) => ({ start, end });
+
+  it('treats an empty calendar as unavailable', () => {
+    expect(availableFor(emp('e1', [], []), sh(600, 720), MON)).toBe(false);
+  });
+
+  it('is available when the shift fits inside a pref window', () => {
+    const e = emp('e1', [], [block('pref', { start: 480, end: 1080 })]);
+    expect(availableFor(e, sh(600, 960), MON)).toBe(true);
+  });
+
+  it('is unavailable when the shift spills past the window', () => {
+    const e = emp('e1', [], [block('pref', { start: 480, end: 900 })]);
+    expect(availableFor(e, sh(600, 960), MON)).toBe(false);
+  });
+
+  it('undesired blocks also define availability and merge with adjacent pref', () => {
+    const e = emp('e1', [], [block('pref', { start: 480, end: 720 }), block('undes', { start: 720, end: 1080 })]);
+    expect(availableFor(e, sh(600, 960), MON)).toBe(true); // spans the seam
+  });
+
+  it('an allDay pref block covers the whole day', () => {
+    const e = emp('e1', [], [block('pref', { allDay: true })]);
+    expect(availableFor(e, sh(0, 1440), MON)).toBe(true);
+  });
+
+  it('vacation blocks do not grant availability', () => {
+    const e = emp('e1', [], [block('vac', { allDay: true })]);
+    expect(availableFor(e, sh(600, 720), MON)).toBe(false);
+  });
+});
 
 describe('buildPlan', () => {
   it('assigns an employee who has every required skill', () => {
