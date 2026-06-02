@@ -1,13 +1,17 @@
 name: CI
 
-# Runs on every push and every pull request.
+# Pull requests are validated via the `pull_request` event; pushes to `main` are
+# validated via `push`. Restricting `push` to `main` avoids running every job twice
+# on PR branches (where a push also triggers `pull_request: synchronize`).
 on:
   push:
+    branches: [main]
   pull_request:
 
-# Cancel superseded runs on the same ref to save CI minutes.
+# Cancel superseded runs for the same PR/branch to save CI minutes. Keyed on the
+# head branch (PR source) so re-pushes cancel the in-flight run.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
