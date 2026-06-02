@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -11,6 +12,19 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': { target: apiTarget, changeOrigin: true },
+    },
+  },
+  // Vitest: jsdom for component tests, jest-dom matchers via the setup file.
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: './src/test/setup.js',
+    include: ['src/**/*.{test,spec}.{js,jsx}'],
+    css: false,
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{js,jsx}'],
+      exclude: ['src/main.jsx', 'src/**/*.{test,spec}.{js,jsx}', 'src/test/**'],
     },
   },
 });
