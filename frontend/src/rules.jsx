@@ -272,11 +272,15 @@ export function RulesEditor({ rules, onChange, globalRules = [], mode = 'persona
               {menu === 'delete' && <CalPicker kind="delete" period={periodOf(editing.metric)} onPick={deleteOn} onClose={() => setMenu(null)} />}
             </div>
           )}
-          <div className="splitbtn primary">
-            <button className="sb-main" onClick={applyNow}>Apply</button>
-            {!isNew && <button className="sb-caret" onClick={() => setMenu(menu === 'apply' ? null : 'apply')}><Ic.chevD size={12}/></button>}
-            {!isNew && menu === 'apply' && <CalPicker kind="apply" period={periodOf(editing.metric)} onPick={applyOn} onClose={() => setMenu(null)} />}
-          </div>
+          {isNew ? (
+            <button className="btn primary sm" onClick={applyNow}>Apply</button>
+          ) : (
+            <div className="splitbtn primary">
+              <button className="sb-main" onClick={applyNow}>Apply</button>
+              <button className="sb-caret" onClick={() => setMenu(menu === 'apply' ? null : 'apply')}><Ic.chevD size={12}/></button>
+              {menu === 'apply' && <CalPicker kind="apply" period={periodOf(editing.metric)} onPick={applyOn} onClose={() => setMenu(null)} />}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -352,7 +356,7 @@ export function RulesEditor({ rules, onChange, globalRules = [], mode = 'persona
           <div className="rule-actions" onClick={stop}>
             <span className="hint" style={{ margin: 0 }}>Applies to everyone</span>
             <div className="ra-right">
-              <button className="btn ghost sm" onClick={() => startOverride(g)}>{g.op === 'preferred' ? 'Customize' : 'Make stricter'}</button>
+              <button className="btn ghost sm" onClick={() => startOverride(g)}>Customize</button>
             </div>
           </div>
         )}

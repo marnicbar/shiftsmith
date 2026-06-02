@@ -19,14 +19,14 @@ describe('RulesEditor — personal mode', () => {
     expect(onChange.mock.calls[0][0]).toHaveLength(1);
   });
 
-  it('shows a global rule with a "Make stricter" affordance and no inline error', () => {
+  it('shows a global rule with a "Customize" affordance and no inline error', () => {
     render(
       <RulesEditor rules={[]} onChange={vi.fn()} mode="personal"
         globalRules={[{ id: 'g1', metric: 'dayHours', op: 'max', value: 10, changes: [] }]} />,
     );
     expect(screen.getByText('Daily hours')).toBeInTheDocument();
     expect(screen.getByText('Global')).toBeInTheDocument();
-    expect(screen.getByText('Make stricter')).toBeInTheDocument();
+    expect(screen.getByText('Customize')).toBeInTheDocument();
   });
 
   it('caps an override input at the global ceiling instead of erroring', async () => {
@@ -37,7 +37,7 @@ describe('RulesEditor — personal mode', () => {
         globalRules={[{ id: 'g1', metric: 'dayHours', op: 'max', value: 10, changes: [] }]} />,
     );
 
-    await user.click(screen.getByText('Make stricter'));
+    await user.click(screen.getByText('Customize'));
     const input = screen.getByRole('spinbutton');
     expect(input).toHaveAttribute('max', '10');   // browser-level guard
 
