@@ -9,6 +9,7 @@ import { Positions } from './positions.jsx';
 import { ShiftPlan } from './shiftplan.jsx';
 import { Dashboard } from './dashboard.jsx';
 import { SettingsView } from './settings.jsx';
+import { tooLooseAgainst } from './rules.jsx';
 import * as api from './lib/api.js';
 
 const TABS = [
@@ -70,6 +71,7 @@ export default function App() {
   const [sched, setSched] = useState({ assignments: [], solverStatus: 'NOT_SOLVING', score: null, total: 0, staffed: 0, unassigned: 0 });
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
 
   const lastSyncRef = useRef(null);
 
@@ -147,6 +149,31 @@ export default function App() {
     setEmployees((es) => es.map((e) => ({ ...e, skills: map(e.skills) })));
     setPositions((ps) => ps.map((p) => ({ ...p, skills: map(p.skills), shifts: p.shifts.map((sh) => ({ ...sh, skills: map(sh.skills) })) })));
   }, []);
+  // Global working-time rules live in settings and apply to everyone. When they
+  // change, any personal rule that is now *looser* than the new system limit is
+  // tightened to it (a personal rule can only be stricter), and we warn about it.
+  const setGlobalRules = useCallback((nextRules) => {
+    setSettings((s) => ({ ...s, globalRules: nextRules }));
+    const touched = [];
+    const next = employees.map((e) => {
+      let changed = false;
+      const rules = (e.rules || []).map((r) => {
+        const g = nextRules.find((x) => x.metric === r.metric && x.op === r.op);
+        if (!g) return r;
+        const bound = tooLooseAgainst(r.op, r.value, g.value);
+        if (bound != null) { changed = true; return { ...r, value: bound }; }
+        return r;
+      });
+      if (changed) touched.push(e.name);
+      return changed ? { ...e, rules } : e;
+    });
+    if (touched.length) {
+      setEmployees(next);
+      const names = touched.length > 3 ? `${touched.slice(0, 3).join(', ')} +${touched.length - 3} more` : touched.join(', ');
+      setNotice(`Tightened personal rules for ${names} to satisfy the new system limits.`);
+    }
+  }, [employees]);
+
   const removeSkill = useCallback((name) => {
     const drop = (arr = []) => arr.filter((x) => x !== name);
     setSettings((s) => { const list = s.skills ?? SS.SKILLS; return { ...s, skills: drop(list) }; });
@@ -194,12 +221,13 @@ export default function App() {
       </div>
 
       {error && <div className="api-error">Backend error: {error}. Is the backend running on :8080?</div>}
+      {notice && <div className="api-notice">{notice}<button className="notice-x" onClick={() => setNotice(null)} title="Dismiss"><Ic.x size={14}/></button></div>}
 
       {tab === 'dashboard' && <Dashboard employees={employees} positions={positions} sched={sched} onGo={setTab} />}
-      {tab === 'personnel' && <Personnel employees={employees} setEmployees={setEmployees} skills={skills} selId={selEmp} setSelId={setSelEmp} snap={snap} newFlow={newFlow} />}
+      {tab === 'personnel' && <Personnel employees={employees} setEmployees={setEmployees} skills={skills} settings={settings} selId={selEmp} setSelId={setSelEmp} snap={snap} newFlow={newFlow} />}
       {tab === 'positions' && <Positions employees={employees} positions={positions} setPositions={setPositions} groupOrder={groupOrder} setGroupOrder={setGroupOrder} skills={skills} selId={selPos} setSelId={setSelPos} snap={snap} newFlow={newFlow} />}
       {tab === 'shiftplan' && <ShiftPlan key={tlDefault} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} assign={assignMap} overrides={overrides} setOverrides={setOverrides} sched={sched} onSolve={solveNow} onPause={pauseSolver} />}
-      {tab === 'settings' && <SettingsView prefs={prefs} setPref={setPref} fonts={FONTS} settings={settings} setSettings={setSettings} sched={sched} skills={skills} onAddSkill={addSkill} onRenameSkill={renameSkill} onRemoveSkill={removeSkill} />}
+      {tab === 'settings' && <SettingsView prefs={prefs} setPref={setPref} fonts={FONTS} settings={settings} setSettings={setSettings} sched={sched} skills={skills} onAddSkill={addSkill} onRenameSkill={renameSkill} onRemoveSkill={removeSkill} globalRules={settings.globalRules || []} setGlobalRules={setGlobalRules} />}
     </div>
   );
 }

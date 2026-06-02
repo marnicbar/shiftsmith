@@ -12,7 +12,7 @@ const AVAIL_PALETTE = [
   { type: 'vac',   cls: 'vac',   label: 'Vacation' },
 ];
 
-export function Personnel({ employees, setEmployees, skills, selId, setSelId, snap, newFlow }) {
+export function Personnel({ employees, setEmployees, skills, settings, selId, setSelId, snap, newFlow }) {
   const [q, setQ] = useStateP('');
   const [view, setView] = useStateP('week');
   const [anchor, setAnchor] = useStateP(new Date());
@@ -32,7 +32,7 @@ export function Personnel({ employees, setEmployees, skills, selId, setSelId, sn
   const newItem = ({ date, start, end }) => ({ id: SS.uid('b'), type: paint, date, start, end, allDay: false, repeat: 'none' });
 
   const addEmployee = () => {
-    const e = { id: SS.uid('e'), name: 'New Person', contract: 38, skills: [], blocks: [], rules: SS.defaultRules(38) };
+    const e = { id: SS.uid('e'), name: 'New Person', contract: 38, skills: [], blocks: [], rules: [] };
     setEmployees([...employees, e]); setSelId(e.id);
   };
 
@@ -90,7 +90,7 @@ export function Personnel({ employees, setEmployees, skills, selId, setSelId, sn
 
           <div className="divider"></div>
 
-          <WorkingTimeRules emp={emp} onChange={updateEmp} />
+          <WorkingTimeRules emp={emp} onChange={updateEmp} globalRules={settings?.globalRules || []} />
 
           <div className="divider"></div>
           <button className="btn danger" style={{ justifyContent: 'center' }}

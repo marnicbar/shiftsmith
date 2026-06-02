@@ -1,6 +1,7 @@
 package dev.shiftsmith.domain;
 
 import ai.timefold.solver.core.api.domain.common.PlanningId;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.time.LocalDate;
@@ -27,6 +28,15 @@ public class Employee {
     private Set<String> skills = new HashSet<>();
     private List<Block> blocks = new ArrayList<>();
     private List<Rule> rules = new ArrayList<>();
+
+    /**
+     * Global working-time rules that apply to everyone (from Settings). Injected by
+     * the service before solving and used purely as defaults: a global rule only
+     * takes effect for a metric+op the employee has no personal rule for. Not part
+     * of the employee's persisted state.
+     */
+    @JsonIgnore
+    private List<Rule> globalRules = new ArrayList<>();
 
     public Employee() {}
 
@@ -102,9 +112,24 @@ public class Employee {
 
     // --- Working-time rules (time-varying) ------------------------------
 
-    /** Most restrictive active limit for metric+op at {@code date}, or null if none. */
+    /**
+     * Most restrictive active limit for metric+op at {@code date}, or null if none.
+     *
+     * <p>An employee's own rules take precedence: a global rule (from Settings) only
+     * applies for a metric+op the employee has not defined a personal rule for. Since
+     * personal rules can only be <em>stricter</em> than the global one, "personal
+     * wins" is equivalent to "tightest wins" for hard limits, while still letting a
+     * personal {@code preferred} override the global preference freely.
+     */
     public Integer limit(String metric, String op, LocalDate date) {
+        Integer personal = restrictiveLimit(rules, metric, op, date);
+        if (personal != null) return personal;
+        return restrictiveLimit(globalRules, metric, op, date);
+    }
+
+    private static Integer restrictiveLimit(List<Rule> rules, String metric, String op, LocalDate date) {
         Integer result = null;
+        if (rules == null) return null;
         for (Rule r : rules) {
             Rule.Effective e = r.effectiveAt(date);
             if (!e.active() || !metric.equals(e.metric()) || !op.equals(e.op())) continue;
@@ -147,6 +172,12 @@ public class Employee {
 
     public List<Rule> getRules() { return rules; }
     public void setRules(List<Rule> rules) { this.rules = rules; }
+
+    @JsonIgnore
+    public List<Rule> getGlobalRules() { return globalRules; }
+    public void setGlobalRules(List<Rule> globalRules) {
+        this.globalRules = globalRules == null ? new ArrayList<>() : globalRules;
+    }
 
     @Override
     public boolean equals(Object o) {
