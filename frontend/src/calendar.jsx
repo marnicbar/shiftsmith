@@ -1,10 +1,19 @@
 // calendar.jsx — reusable calendar: day/week/month, drag-to-create, click-to-edit popover, recurrence.
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import React from 'react';
 import { SS } from './data.js';
 import { Ic } from './icons.jsx';
 
 const WD = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+// Vertical zoom = pixels per hour. ZOOM_BASE is "100%"; ZOOM_MAX caps zoom-in.
+// The zoom-out floor is computed per-render from the viewport so the day grid
+// always at least fills the scroll area (see `minZoom` in Calendar) — zooming
+// out further would leave the body shorter than the viewport and make the
+// sticky day-header stretch to fill the gap.
+const ZOOM_BASE = 46;
+const ZOOM_MAX = 160;
+const ZOOM_FLOOR = 18;
 
 function weekdayOf(iso) { return (SS.parseISO(iso).getDay() + 6) % 7; }
 function occursOn(it, d) {
@@ -148,7 +157,7 @@ function packLanes(evs) {
 }
 
 export function Calendar(props) {
-  const { view, anchor, items, kind, zoom = 46, paint, palette,
+  const { view, anchor, items, kind, zoom = 46, onZoom, paint, palette,
           newItem, onCommit, onDelete, onSplit, extraFields, dayStart = 6,
           snap = 15 } = props;
   const scrollRef = useRef(null);
@@ -171,9 +180,90 @@ export function Calendar(props) {
 
   const todayISO = SS.isoOf(new Date());
 
+  // --- vertical zoom (px/hour) ----------------------------------------------
+  // `box` tracks the scroll viewport height and the header's height (the offset
+  // of the first day column inside the grid). From those we derive `minZoom`,
+  // the smallest px/hour at which 24h still fills the area below the header, so
+  // the grid never shrinks past the viewport and stretches the header.
+  const [box, setBox] = useState({ h: 0, head: 0 });
+  const zoomScrollRef = useRef(null);   // desired scrollTop to apply after a zoom relayout
+
+  const measure = useCallback(() => {
+    const sc = scrollRef.current;
+    if (!sc) return;
+    const col = sc.querySelector('[data-daycol]');
+    const h = sc.clientHeight, head = col ? col.offsetTop : 0;
+    setBox((b) => (b.h === h && b.head === head ? b : { h, head }));
+  }, []);
+
+  // Re-measure on every render (catches the all-day row appearing/disappearing,
+  // which changes the header height) and on container resize.
+  useLayoutEffect(() => { if (view !== 'month') measure(); });
+  useEffect(() => {
+    const sc = scrollRef.current;
+    if (!sc || view === 'month' || !window.ResizeObserver) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(sc);
+    return () => ro.disconnect();
+  }, [view, measure]);
+
+  const minZoom = box.h && box.head
+    ? Math.max(ZOOM_FLOOR, (box.h - box.head) / 24)
+    : ZOOM_FLOOR;
+
+  // Apply a new zoom while keeping the time under `anchorY` (px from the top of
+  // the scroll viewport) pinned on screen. Stashes the matching scrollTop for
+  // the [zoom] layout effect, since the grid height only updates after re-render.
+  function applyZoom(rawTarget, anchorY) {
+    const sc = scrollRef.current;
+    if (!sc) return;
+    const nz = Math.max(minZoom, Math.min(ZOOM_MAX, rawTarget));
+    if (Math.abs(nz - zoom) < 0.01) return;
+    const hour = Math.max(0, (sc.scrollTop + anchorY - box.head) / zoom);
+    zoomScrollRef.current = Math.max(0, box.head + hour * nz - anchorY);
+    onZoom(nz);
+  }
+  const viewCenterY = () => box.h / 2;
+
+  // Frame business hours when the view changes (not on every zoom).
   useEffect(() => {
     if (scrollRef.current && view !== 'month') scrollRef.current.scrollTop = dayStart * zoom - 8;
-  }, [view, zoom]);
+  }, [view]);
+  // Re-place scrollLeft/Top after a zoom so the anchored time stays put.
+  useLayoutEffect(() => {
+    if (zoomScrollRef.current == null) return;
+    if (scrollRef.current) scrollRef.current.scrollTop = zoomScrollRef.current;
+    zoomScrollRef.current = null;
+  }, [zoom]);
+  // Window/container grew: nudge zoom back up so the grid keeps filling the area.
+  useEffect(() => {
+    if (view !== 'month' && zoom < minZoom - 0.5) applyZoom(minZoom, viewCenterY());
+  }, [minZoom, zoom, view]);
+
+  // Ctrl/Cmd + wheel zooms the time axis, anchored on the cursor (native, non-
+  // passive so we can preventDefault the browser's page zoom).
+  useEffect(() => {
+    const sc = scrollRef.current;
+    if (!sc || view === 'month') return;
+    function onWheel(e) {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const anchorY = e.clientY - sc.getBoundingClientRect().top;
+      applyZoom(zoom - Math.sign(e.deltaY) * Math.max(1, zoom * 0.12), anchorY);
+    }
+    sc.addEventListener('wheel', onWheel, { passive: false });
+    return () => sc.removeEventListener('wheel', onWheel);
+  }, [view, zoom, minZoom, box.h, box.head]);
+
+  const zoomPct = Math.round(zoom / ZOOM_BASE * 100);
+  const zoomControls = {
+    pct: zoomPct,
+    canOut: zoom > minZoom + 0.5,
+    canIn: zoom < ZOOM_MAX - 0.5,
+    onOut: () => applyZoom(zoom * 0.8, viewCenterY()),
+    onIn: () => applyZoom(zoom * 1.25, viewCenterY()),
+    onReset: () => applyZoom(ZOOM_BASE, viewCenterY()),
+  };
 
   const yToMin = (y) => Math.max(0, Math.min(1440, Math.round((y / zoom * 60) / snap) * snap));
 
@@ -428,7 +518,7 @@ export function Calendar(props) {
 
   return (
     <div className="cal" ref={gridRef}>
-      <Toolbar {...props} onAdd={addNew} />
+      <Toolbar {...props} onAdd={addNew} zoomControls={zoomControls} />
       {view === 'month'
         ? <MonthGrid dayList={dayList} anchor={anchor} items={liveItems} kind={kind} todayISO={todayISO}
             onDayClick={(d, el) => startCreate(newItem({ date: d, start: 9*60, end: 17*60 }))}
@@ -460,7 +550,7 @@ function monthDays(anchor) {
 }
 
 function Toolbar(props) {
-  const { view, onView, anchor, onAnchor, kind, paint, onPaint, zoom, onZoom, onAdd } = props;
+  const { view, onView, anchor, onAnchor, kind, paint, onPaint, onAdd, zoomControls } = props;
   const monthLabel = anchor.toLocaleDateString([], { month: 'long', year: 'numeric' });
   let title = monthLabel, sub = '';
   if (view === 'week') {
@@ -482,10 +572,11 @@ function Toolbar(props) {
         <button className="iconbtn" onClick={() => step(1)}><Ic.chevR/></button>
       </div>
       <div className="cal-title">{title} {sub && <span className="sub">{sub}</span>}</div>
-      {view !== 'month' && (
+      {view !== 'month' && zoomControls && (
         <div className="seg" style={{ marginRight: 6, flexShrink: 0 }}>
-          <button onClick={() => onZoom(Math.max(28, zoom - 10))}><Ic.zoomOut size={14}/></button>
-          <button onClick={() => onZoom(Math.min(96, zoom + 10))}><Ic.zoomIn size={14}/></button>
+          <button onClick={zoomControls.onOut} disabled={!zoomControls.canOut} title="Zoom out"><Ic.zoomOut size={14}/></button>
+          <button className="mono zoom-pct" style={{ minWidth: 48 }} title="Reset zoom" onClick={zoomControls.onReset}>{zoomControls.pct}%</button>
+          <button onClick={zoomControls.onIn} disabled={!zoomControls.canIn} title="Zoom in"><Ic.zoomIn size={14}/></button>
         </div>
       )}
       <div className="seg" style={{ marginRight: 8, flexShrink: 0 }}>

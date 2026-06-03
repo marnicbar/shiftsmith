@@ -259,7 +259,7 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; line-height:
 
 /* Week / day grid */
 .cal-scroll { flex: 1; overflow: auto; position: relative; }
-.weekgrid { display: grid; position: relative; min-height: 100%; }
+.weekgrid { display: grid; position: relative; min-height: 100%; align-content: start; }
 .wg-corner { position: sticky; top: 0; left: 0; z-index: 6; background: var(--surface); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .wg-dayhead {
   position: sticky; top: 0; z-index: 5; background: var(--surface);
