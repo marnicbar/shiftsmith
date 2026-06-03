@@ -30,7 +30,7 @@ import java.util.Optional;
  * and runs Timefold continuously over the configured horizon.
  *
  * <p>The problem is persisted to the database as a JSONB document so it survives
- * restarts; on boot we rehydrate from it (falling back to seeded demo data on a
+ * restarts; on boot we rehydrate from it (starting from an empty problem on a
  * fresh database). Every change — a new best solution from the solver, a problem
  * edit, or a solver start/stop — pushes a tick to {@link ScheduleBroadcaster}, so
  * connected browsers get live updates over SSE instead of polling.

@@ -8,7 +8,7 @@ import java.util.Optional;
 
 /**
  * Persistence gateway for the single problem document. Survives restarts so the
- * in-memory {@code ScheduleService} can rehydrate instead of re-seeding demo data.
+ * in-memory {@code ScheduleService} can rehydrate from it across restarts.
  */
 @ApplicationScoped
 public class ProblemStore {
