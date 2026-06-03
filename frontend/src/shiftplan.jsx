@@ -86,10 +86,14 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   const [editing, setEditing] = useStateSP(null);
   const [freeWin, setFreeWin] = useStateSP(() => ({ start: SS.isoOf(SS.addDays(SS.startOfWeek(new Date()), -7)), days: 35 }));
   const [navSeq, setNavSeq] = useStateSP(0);
+  const [scrollX, setScrollX] = useStateSP(0);
   const scrollRef = useRefSP(null);
   const adjustRef = useRefSP(0);
   const wantRef = useRefSP(SS.isoOf(new Date()));
   const busyRef = useRefSP(false);
+  const zoomScrollRef = useRefSP(null);
+  const alignRef = useRefSP(initialMode === 'free' ? 'left' : null);
+  const rafRef = useRefSP(0);
 
   useEffectSP(() => {
     const el = scrollRef.current; if (!el || !window.ResizeObserver) return;
@@ -115,9 +119,11 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     busyRef.current = true;
     if (mode === 'week') el.scrollLeft = 0;
     else if (wantRef.current) {
-      const idx = dayList.indexOf(wantRef.current);
-      el.scrollLeft = ((idx >= 0 ? idx : 0) * 24 + 6) * effPph - 8;
-      wantRef.current = null;
+      const idx = (i => i >= 0 ? i : 0)(dayList.indexOf(wantRef.current));
+      // alignRef === 'left': pin that day's midnight to the left edge of the track (Today button).
+      // otherwise: land on ~6am with a small inset (default navigation framing).
+      el.scrollLeft = alignRef.current === 'left' ? idx * 24 * effPph : (idx * 24 + 6) * effPph - 8;
+      wantRef.current = null; alignRef.current = null;
     }
     requestAnimationFrame(() => { busyRef.current = false; });
   }, [navSeq, mode, containerW]);
@@ -128,9 +134,25 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     requestAnimationFrame(() => { busyRef.current = false; });
   }, [freeWin]);
 
+  // After a cursor-anchored zoom changes the canvas width, re-place scrollLeft so the
+  // time under the pointer stays under the pointer. Only runs for wheel zoom (the ref is
+  // null for zoom buttons / mode switches), and guards day-loading via busyRef.
+  useLayoutEffectSP(() => {
+    if (zoomScrollRef.current == null) return;
+    const el = scrollRef.current;
+    if (el) { busyRef.current = true; el.scrollLeft = zoomScrollRef.current; }
+    zoomScrollRef.current = null;
+    requestAnimationFrame(() => { busyRef.current = false; });
+  }, [pph]);
+
   function onScroll() {
-    if (mode !== 'free' || busyRef.current) return;
+    if (mode !== 'free') return;
     const el = scrollRef.current; if (!el) return;
+    // Keep the toolbar's visible-range label in sync, throttled to one update per frame.
+    if (!rafRef.current) rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0; if (scrollRef.current) setScrollX(scrollRef.current.scrollLeft);
+    });
+    if (busyRef.current) return;
     const pad = 3 * 24 * effPph;
     if (el.scrollLeft < pad) {
       busyRef.current = true; const add = 21; adjustRef.current = add * 24 * effPph;
@@ -141,11 +163,56 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     }
   }
 
-  function onWheel(e) {
-    if (mode !== 'free' || !(e.ctrlKey || e.metaKey)) return;
-    e.preventDefault();
-    setPph((z) => Math.max(6, Math.min(180, z - Math.sign(e.deltaY) * Math.max(1, z * 0.12))));
+  // Zoom the time axis while keeping the content `anchorOffset` px from the scroll
+  // viewport's left edge pinned on screen. computeNz maps the old pph → new (clamped
+  // to 6..180). The matching scrollLeft is stashed for the [pph] layout effect above.
+  function zoomAround(anchorOffset, computeNz) {
+    const el = scrollRef.current; if (!el) return;
+    const contentX = el.scrollLeft + anchorOffset;
+    setPph((z) => {
+      const nz = Math.max(6, Math.min(180, computeNz(z)));
+      const hour = (contentX - LW_TL) / z;            // time at the anchor (LW_TL = sticky label column)
+      zoomScrollRef.current = LW_TL + hour * nz - anchorOffset;
+      return nz;
+    });
   }
+  // Horizontal center of the visible track, for button/reset zooms.
+  const viewCenter = () => { const el = scrollRef.current; return el ? (LW_TL + el.clientWidth) / 2 : 0; };
+
+  // Timeline wheel behavior (industry-standard, only while the pointer is over the
+  // timeline — elsewhere on the page the browser keeps its defaults, e.g. Ctrl+scroll
+  // page zoom over the logo). Attached natively with { passive: false } so we can
+  // preventDefault; React's synthetic onWheel is passive and can't stop page zoom.
+  //   • plain wheel        → horizontal scroll (time)
+  //   • Shift + wheel      → vertical scroll (tracks/rows)
+  //   • Ctrl/Cmd + wheel   → zoom the time axis (no browser page zoom)
+  useEffectSP(() => {
+    const el = scrollRef.current; if (!el) return;
+    function onWheel(e) {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault(); // stop the browser from zooming the whole page
+        if (mode === 'free') {
+          // Anchor the zoom on the cursor: keep the time under the pointer fixed on screen.
+          const mouseOffset = e.clientX - el.getBoundingClientRect().left; // px from track viewport's left
+          zoomAround(mouseOffset, (z) => z - Math.sign(e.deltaY) * Math.max(1, z * 0.12));
+        }
+        return;
+      }
+      if (mode === 'week') return; // week mode fits the viewport; nothing to scroll
+      if (e.shiftKey) {
+        if (e.deltaY !== 0) { e.preventDefault(); el.scrollTop += e.deltaY; }
+        return;
+      }
+      // Plain wheel: a vertical-only wheel (mouse) drives the time axis horizontally;
+      // a trackpad's native horizontal delta is left untouched.
+      if (e.deltaY !== 0 && e.deltaX === 0) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY;
+      }
+    }
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [mode]);
 
   function goAnchor(next) {
     setAnchor(next); wantRef.current = SS.isoOf(next); setNavSeq((n) => n + 1);
@@ -154,15 +221,48 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   function pickMode(m) {
     setMode(m); wantRef.current = SS.isoOf(anchor); setNavSeq((n) => n + 1);
     if (m === 'day') setPph(58);
-    else if (m === 'free') { setPph(FREE_BASE); setFreeWin({ start: SS.isoOf(SS.addDays(SS.startOfWeek(anchor), -7)), days: 35 }); }
+    else if (m === 'free') {
+      // Initialize the continuous view on today, pinned to the left edge of the track.
+      const today = new Date();
+      setPph(FREE_BASE); setAnchor(today); wantRef.current = SS.isoOf(today); alignRef.current = 'left';
+      setFreeWin({ start: SS.isoOf(SS.addDays(SS.startOfWeek(today), -7)), days: 35 });
+    }
   }
-  const step = (dir) => goAnchor(SS.addDays(anchor, dir * (mode === 'day' ? 1 : 7)));
+  function step(dir) {
+    if (mode === 'free') {                       // continuous: nudge the view by one day
+      const el = scrollRef.current; if (el) el.scrollLeft += dir * 24 * effPph;
+      return;
+    }
+    goAnchor(SS.addDays(anchor, dir * (mode === 'day' ? 1 : 7)));
+  }
+  function goToday() {
+    if (mode !== 'free') { goAnchor(new Date()); return; }
+    const today = new Date();                     // continuous: pin today's column to the left edge
+    setAnchor(today); wantRef.current = SS.isoOf(today); alignRef.current = 'left';
+    setFreeWin({ start: SS.isoOf(SS.addDays(SS.startOfWeek(today), -7)), days: 35 });
+    setNavSeq((n) => n + 1);
+  }
 
+  // Continuous mode: derive the label from the days actually visible in the track viewport
+  // (left edge sits at content x = scrollX + LW_TL; right edge at scrollX + containerW).
+  function freeLabel() {
+    const n = dayList.length; if (!n) return '';
+    const last = n - 1;
+    const i0 = Math.max(0, Math.min(last, Math.floor(scrollX / effPph / 24)));
+    const i1 = Math.max(0, Math.min(last, Math.floor((scrollX + Math.max(0, containerW - LW_TL) - 1) / effPph / 24)));
+    const d0 = SS.parseISO(dayList[i0]);
+    if (i1 <= i0) return d0.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    const d1 = SS.parseISO(dayList[i1]);
+    const left = d0.getFullYear() === d1.getFullYear()
+      ? d0.toLocaleDateString([], { month: 'short', day: 'numeric' })
+      : d0.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    return `${left} – ${d1.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  }
   const stepLabel = mode === 'day'
     ? anchor.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })
     : mode === 'week'
     ? `${SS.parseISO(dayList[0]).toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${SS.parseISO(dayList[6]).toLocaleDateString([], { month: 'short', day: 'numeric' })}`
-    : anchor.toLocaleDateString([], { month: 'long', year: 'numeric' });
+    : freeLabel();
 
   const tickStep = Math.max(1, Math.ceil(46 / effPph));
   const showHourLabels = !boxOnly && effPph >= 10;
@@ -244,7 +344,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
       <div className="tl-toolbar">
         <div className="nav">
           <button className="iconbtn" onClick={() => step(-1)}><Ic.chevL/></button>
-          <button className="btn sm" onClick={() => goAnchor(new Date())}>Today</button>
+          <button className="btn sm" onClick={goToday}>Today</button>
           <button className="iconbtn" onClick={() => step(1)}><Ic.chevR/></button>
         </div>
         <div className="cal-title" style={{ minWidth: 180 }}>{stepLabel}</div>
@@ -258,9 +358,9 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
         </div>
         {(mode === 'free') && (
           <div className="seg">
-            <button onClick={() => setPph((z) => Math.max(6, z * 0.8))}><Ic.zoomOut size={14}/></button>
-            <button style={{ pointerEvents: 'none', minWidth: 48 }} className="mono">{pct}%</button>
-            <button onClick={() => setPph((z) => Math.min(180, z * 1.25))}><Ic.zoomIn size={14}/></button>
+            <button onClick={() => zoomAround(viewCenter(), (z) => z * 0.8)}><Ic.zoomOut size={14}/></button>
+            <button className="mono zoom-pct" style={{ minWidth: 48 }} title="Reset zoom to 100%" onClick={() => zoomAround(viewCenter(), () => FREE_BASE)}>{pct}%</button>
+            <button onClick={() => zoomAround(viewCenter(), (z) => z * 1.25)}><Ic.zoomIn size={14}/></button>
           </div>
         )}
         <div className="seg">
@@ -272,7 +372,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
 
       <SolverBar sched={sched} onSolve={onSolve} onPause={onPause} />
 
-      <div className={`tl-scroll ${boxOnly ? 'no-xscroll' : ''}`} ref={scrollRef} onWheel={onWheel} onScroll={onScroll}>
+      <div className={`tl-scroll ${boxOnly ? 'no-xscroll' : ''}`} ref={scrollRef} onScroll={onScroll}>
         <div className="tl-canvas" style={{ width: LW_TL + trackW }}>
           <div className="tl-head" style={{ height: 44 }}>
             <div className="tl-corner">{mode === 'free' && <span style={{ display:'flex', alignItems:'center', gap:6 }}><Ic.move size={13}/> </span>}Position</div>
