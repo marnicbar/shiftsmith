@@ -197,7 +197,7 @@ export function Calendar(props) {
     const colRect = e.currentTarget.getBoundingClientRect();
     const a = yToMin(e.clientY - colRect.top);
     const tmpl = newItem({ date: dayISO, start: 0, end: 0 }); // one representative for collision checks
-    const st = { dayISO, a, b: a, colRect, invalid: false };
+    const st = { dayISO, a, b: a, colRect, invalid: false, tmpl };
     dragRef.current = st; setDrag(st);
     const move = (ev) => {
       const b = yToMin(ev.clientY - colRect.top);
@@ -415,7 +415,16 @@ export function Calendar(props) {
     const hidden = { ...orig, except: uniqDates([...(orig.except || []), p.occDate]) };
     return items.map((x) => x.id === orig.id ? hidden : x).concat(ghost);
   }
-  const liveItems = preview ? previewItems(preview) : renderItems;
+  // The in-progress create selection, as a preview entry so it lane-packs beside
+  // existing entries (rather than drawing on top of them) — same as a move ghost.
+  function createGhost(dr) {
+    const lo = Math.min(dr.a, dr.b), hi = Math.max(dr.a, dr.b);
+    return { ...dr.tmpl, id: '__ghost', date: dr.dayISO, start: lo, end: hi,
+             repeat: 'none', allDay: false, _preview: true, _invalid: dr.invalid };
+  }
+  const liveItems = preview ? previewItems(preview)
+                  : drag ? [...renderItems, createGhost(drag)]
+                  : renderItems;
 
   return (
     <div className="cal" ref={gridRef}>
@@ -425,7 +434,7 @@ export function Calendar(props) {
             onDayClick={(d, el) => startCreate(newItem({ date: d, start: 9*60, end: 17*60 }))}
             onEvtDown={onEvtDown} />
         : <TimeGrid scrollRef={scrollRef} dayList={dayList} view={view} zoom={zoom} items={liveItems}
-            kind={kind} todayISO={todayISO} drag={drag} onColMouseDown={onColMouseDown}
+            kind={kind} todayISO={todayISO} onColMouseDown={onColMouseDown}
             onEvtDown={onEvtDown} />}
       {editing && (
         <Editor item={editing} kind={kind} palette={palette} isNew={editor.isNew}
@@ -491,7 +500,7 @@ function Toolbar(props) {
   );
 }
 
-function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, drag, onColMouseDown, onEvtDown }) {
+function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onColMouseDown, onEvtDown }) {
   const H = 24 * zoom;
   const occ = expand(items, dayList);
   const now = new Date();
@@ -580,11 +589,6 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, drag,
                   </div>
                 );
               })}
-              {drag && drag.dayISO === d && (() => {
-                const lo = Math.min(drag.a, drag.b), hi = Math.max(drag.a, drag.b);
-                return <div className={`evt ghost tone-shift ${drag.invalid ? 'invalid' : ''}`} style={{ top: lo/60*zoom, height: Math.max(16,(hi-lo)/60*zoom), left: 3, right: 3 }}>
-                  <span className="et mono">{SS.minLabel(lo)}–{SS.minLabel(hi)}</span></div>;
-              })()}
               {isToday && nowMin>0 && <div className="nowline" style={{ top: nowMin/60*zoom }}></div>}
             </div>
           );
