@@ -49,6 +49,14 @@ export function availableFor(emp, shift, date) {
   }
   return merged.some((w) => w[0] <= shift.start && shift.end <= w[1]);
 }
+// Spacing (in whole hours) between hour ticks on the timeline. It must divide 24
+// so the ticks align to every day's midnight and repeat identically per day —
+// otherwise the labels drift day-to-day and bleed past the day boundary. Picks
+// the smallest divisor of 24 that keeps adjacent ticks at least ~46px apart.
+const TICK_DIVISORS = [1, 2, 3, 4, 6, 8, 12, 24];
+export function hourTickStep(pph) {
+  return TICK_DIVISORS.find((s) => s * pph >= 46) ?? 24;
+}
 export function buildPlan(employees, positions, dayList, overrides = {}) {
   const empById = {}; employees.forEach((e) => { empById[e.id] = e; });
   const slots = [];
@@ -98,6 +106,9 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   const zoomScrollRef = useRefSP(null);
   const alignRef = useRefSP(initialMode === 'free' ? 'left' : null);
   const rafRef = useRefSP(0);
+  // Mirror of `pph` that's always current synchronously, so a zoom triggered from
+  // the (mode-scoped) wheel listener never reads a stale closed-over pph.
+  const pphRef = useRefSP(initialMode === 'free' ? FREE_BASE : 58);
 
   useEffectSP(() => {
     const el = scrollRef.current; if (!el || !window.ResizeObserver) return;
@@ -132,12 +143,21 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
       el.scrollLeft = alignRef.current === 'left' ? idx * 24 * effPph : (idx * 24 + 6) * effPph - 8;
       wantRef.current = null; alignRef.current = null;
     }
+    // Sync the label basis to the real scroll position now (before paint) so navigation
+    // in continuous mode doesn't briefly show the wrong range before onScroll samples it.
+    setScrollX(el.scrollLeft);
     requestAnimationFrame(() => { busyRef.current = false; });
   }, [navSeq, mode, containerW]);
 
   useLayoutEffectSP(() => {
     const el = scrollRef.current;
-    if (el && adjustRef.current) { el.scrollLeft += adjustRef.current; adjustRef.current = 0; }
+    if (el && adjustRef.current) {
+      el.scrollLeft += adjustRef.current; adjustRef.current = 0;
+      // Prepending days shifts every day index; sync the label's basis to the real
+      // (post-shift) scroll position now, before paint, so it never renders the wrong
+      // date for a frame while waiting for the async onScroll sampler to catch up.
+      setScrollX(el.scrollLeft);
+    }
     requestAnimationFrame(() => { busyRef.current = false; });
   }, [freeWin]);
 
@@ -145,9 +165,17 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   // time under the pointer stays under the pointer. Only runs for wheel zoom (the ref is
   // null for zoom buttons / mode switches), and guards day-loading via busyRef.
   useLayoutEffectSP(() => {
+    pphRef.current = pph;
     if (zoomScrollRef.current == null) return;
     const el = scrollRef.current;
-    if (el) { busyRef.current = true; el.scrollLeft = zoomScrollRef.current; }
+    if (el) {
+      busyRef.current = true;
+      el.scrollLeft = zoomScrollRef.current;
+      // Read back the real scroll position (the browser may clamp it at the content
+      // edges) and drive the range label from that, synchronously before paint. Using
+      // the predicted target instead would flash the wrong date until onScroll corrects.
+      setScrollX(el.scrollLeft);
+    }
     zoomScrollRef.current = null;
     requestAnimationFrame(() => { busyRef.current = false; });
   }, [pph]);
@@ -175,13 +203,20 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   // to 6..180). The matching scrollLeft is stashed for the [pph] layout effect above.
   function zoomAround(anchorOffset, computeNz) {
     const el = scrollRef.current; if (!el) return;
-    const contentX = el.scrollLeft + anchorOffset;
-    setPph((z) => {
-      const nz = Math.max(6, Math.min(180, computeNz(z)));
-      const hour = (contentX - LW_TL) / z;            // time at the anchor (LW_TL = sticky label column)
-      zoomScrollRef.current = LW_TL + hour * nz - anchorOffset;
-      return nz;
-    });
+    // During a rapid zoom burst the DOM's scrollLeft lags behind the pph we've
+    // already committed (the [pph] effect hasn't applied the previous target yet),
+    // so chain off the pending target when there is one — reading el.scrollLeft
+    // here would mix an old scroll position with the new pph and make the view jump.
+    const z = pphRef.current;
+    const nz = Math.max(6, Math.min(180, computeNz(z)));
+    if (nz === z) return; // already at a clamp limit — nothing to zoom (avoids a stale pending scroll)
+    const baseScroll = zoomScrollRef.current != null ? zoomScrollRef.current : el.scrollLeft;
+    const hour = (baseScroll + anchorOffset - LW_TL) / z; // time at the anchor (LW_TL = sticky label column)
+    zoomScrollRef.current = LW_TL + hour * nz - anchorOffset;
+    pphRef.current = nz;
+    // The [pph] layout effect applies that scroll and syncs the label's basis to the
+    // real, post-clamp position before paint — so the range label can't flicker.
+    setPph(nz);
   }
   // Horizontal center of the visible track, for button/reset zooms.
   const viewCenter = () => { const el = scrollRef.current; return el ? (LW_TL + el.clientWidth) / 2 : 0; };
@@ -271,7 +306,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     ? `${SS.parseISO(dayList[0]).toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${SS.parseISO(dayList[6]).toLocaleDateString([], { month: 'short', day: 'numeric' })}`
     : freeLabel();
 
-  const tickStep = Math.max(1, Math.ceil(46 / effPph));
+  const tickStep = hourTickStep(effPph);
   const showHourLabels = !boxOnly && effPph >= 10;
   const pct = Math.round(pph / FREE_BASE * 100);
 
@@ -296,7 +331,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
 
   // Boxes have a fixed height in every view; only their width varies, and the
   // content is chosen purely from that width (see `bar`).
-  const BOX_H = 62, BOX_TOP = 7;
+  const BOX_H = 68, BOX_TOP = 7;
 
   function bar(p, d, di) {
     return p.shifts.filter((sh) => matchesDay(sh, d)).map((sh) => {
@@ -382,11 +417,13 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
       <div className={`tl-scroll ${fitWidth ? 'no-xscroll' : ''}`} ref={scrollRef} onScroll={onScroll}>
         <div className="tl-canvas" style={{ width: LW_TL + trackW }}>
           <div className="tl-head" style={{ height: 44 }}>
-            <div className="tl-corner">{mode === 'free' && <span style={{ display:'flex', alignItems:'center', gap:6 }}><Ic.move size={13}/> </span>}Position</div>
+            <div className="tl-corner">Position</div>
             <div className="tl-times" style={{ width: trackW, height: 44 }}>
               {dayList.map((d, di) => {
-                const dt = SS.parseISO(d); const we = dt.getDay()===0||dt.getDay()===6;
-                return <div key={d} className={`tl-dayband ${we?'we':''}`} style={{ left: di*24*effPph, width: 24*effPph }}>
+                const dt = SS.parseISO(d);
+                // The header label is never weekend-tinted; only the track content
+                // carries the weekend background (matching the calendar view).
+                return <div key={d} className="tl-dayband" style={{ left: di*24*effPph, width: 24*effPph }}>
                   {effPph*24 > 60 ? dt.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: dayList.length>7?'short':undefined }) : dt.getDate()}
                 </div>;
               })}
@@ -424,7 +461,6 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
                   <div className="avatar sq" style={{ background: `oklch(0.62 0.13 ${p.color})`, width: boxOnly?24:30, height: boxOnly?24:30, flexBasis: boxOnly?24:30 }}><Ic.briefcase size={boxOnly?13:15}/></div>
                   <div style={{ minWidth: 0 }}>
                     <div className="nm">{p.name}</div>
-                    {!boxOnly && <div className="sub">{p.skills.join(' · ') || '—'}</div>}
                   </div>
                 </div>
                 <div className="tl-track" style={{ width: trackW }}>

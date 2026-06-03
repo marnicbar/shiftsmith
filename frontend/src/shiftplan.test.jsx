@@ -3,7 +3,7 @@
 //  - buildPlan:  the frontend's local greedy assignment preview (skills, vacation,
 //                headcount, preferred ordering, overrides, no double-booking)
 import { describe, it, expect } from 'vitest';
-import { matchesDay, buildPlan, availableFor } from './shiftplan.jsx';
+import { matchesDay, buildPlan, availableFor, hourTickStep } from './shiftplan.jsx';
 
 const MON = '2026-06-01'; // Monday
 const TUE = '2026-06-02';
@@ -140,5 +140,30 @@ describe('buildPlan', () => {
       overrides,
     );
     expect(assign['s1@' + MON].map((e) => e.id)).toEqual(['e1']);
+  });
+});
+
+describe('hourTickStep', () => {
+  it('always returns a divisor of 24 so ticks align to every day boundary', () => {
+    // Sweep a realistic range of pixels-per-hour, including the zoom levels that
+    // previously produced a step of 5 (a non-divisor that drifts day-to-day).
+    for (let pph = 2; pph <= 180; pph += 0.5) {
+      expect(24 % hourTickStep(pph)).toBe(0);
+    }
+  });
+
+  it('keeps adjacent ticks at least ~46px apart', () => {
+    for (let pph = 2; pph <= 180; pph += 0.5) {
+      const step = hourTickStep(pph);
+      // Either the spacing clears the 46px threshold, or we are already at the
+      // coarsest divisor (a full day) and cannot space them out further.
+      expect(step * pph >= 46 || step === 24).toBe(true);
+    }
+  });
+
+  it('regression: the ~9-11px zoom band snaps to 6, not 5', () => {
+    // ceil(46/effPph) used to give 5 here, which does not divide 24.
+    expect(hourTickStep(10)).toBe(6);
+    expect(hourTickStep(9.5)).toBe(6);
   });
 });
