@@ -292,7 +292,15 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; line-height:
 .evt .el { font-size: 11px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .evt .rep { position: absolute; top: 5px; right: 6px; opacity: .7; }
 .evt .rep svg { width: 11px; height: 11px; }
-.evt.dragging { opacity: .85; }
+.evt.dragging { opacity: .92; border-style: dashed; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,.18); z-index: 9; }
+.evt.invalid { border-color: var(--rose-solid); background: var(--rose-soft); color: var(--rose-strong); }
+.evt-handle { position: absolute; left: 0; right: 0; height: 7px; cursor: ns-resize; z-index: 6; }
+.evt-handle.n { top: 0; } .evt-handle.s { bottom: 0; }
+.mg-evt.dragging { opacity: .92; outline: 1.5px dashed var(--tone); pointer-events: none; }
+.mg-evt.invalid { background: var(--rose-soft); color: var(--rose-strong); border-left-color: var(--rose-solid); outline-color: var(--rose-solid); }
+body.cal-moving, body.cal-moving * { cursor: grabbing !important; }
+body.cal-resizing, body.cal-resizing * { cursor: ns-resize !important; }
+body.cal-moving, body.cal-resizing { user-select: none; }
 .evt.ghost { opacity: .55; border-style: dashed; pointer-events: none; box-shadow: none; }
 
 /* Month grid */

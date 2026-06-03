@@ -2,7 +2,7 @@
 // calendar entries that occupy the same minute. Vacations / all-day entries are
 // exempt (they span the whole day on purpose).
 import { describe, it, expect } from 'vitest';
-import { entriesOverlap } from './calendar.jsx';
+import { entriesOverlap, buildMove, moveClashes } from './calendar.jsx';
 
 const MON = '2026-06-01'; // Monday
 const TUE = '2026-06-02';
@@ -58,5 +58,62 @@ describe('entriesOverlap', () => {
     // Mon 23:00 → 02:00 overlaps a Tue 01:00 → 03:00 entry
     const overnight = item({ id: 'n', date: MON, start: 1380, end: 120 });
     expect(entriesOverlap(overnight, item({ id: 'b', date: TUE, start: 60, end: 180 }))).toBe(true);
+  });
+});
+
+describe('buildMove', () => {
+  const weekly = (over = {}) => ({ id: 'w', type: 'pref', date: MON, repeat: 'weekly', start: 600, end: 720, ...over });
+  const once = (over = {}) => ({ id: 'o', type: 'pref', date: MON, repeat: 'none', start: 600, end: 720, ...over });
+
+  it('moves a one-off entry as a single replacement commit', () => {
+    const orig = once();
+    const drop = buildMove([orig], orig, { date: TUE, start: 660, end: 780 }, MON, 'all', 'b');
+    expect(drop.kind).toBe('commit');
+    expect(drop.changed[0]).toMatchObject({ id: 'o', date: TUE, start: 660, end: 780, repeat: 'none' });
+    expect(drop.list).toHaveLength(1);
+  });
+
+  it('applies a resize to the whole series (all) without changing the date', () => {
+    const orig = weekly();
+    const drop = buildMove([orig], orig, { date: MON, start: 600, end: 840 }, MON, 'all', 'b');
+    expect(drop.changed[0]).toMatchObject({ id: 'w', date: MON, start: 600, end: 840, repeat: 'weekly' });
+  });
+
+  it('shifts the anchor and the weekday set when the whole series moves days (all)', () => {
+    const orig = weekly({ days: [0, 2] }); // Mon + Wed
+    const drop = buildMove([orig], orig, { date: TUE, start: 600, end: 720 }, MON, 'all', 'b');
+    expect(drop.changed[0].date).toBe(TUE);
+    expect(drop.changed[0].days).toEqual([1, 3]); // Tue + Thu
+  });
+
+  it('splits off a single occurrence (this), exempting the original date', () => {
+    const orig = weekly();
+    const drop = buildMove([orig], orig, { date: TUE, start: 660, end: 780 }, MON, 'this', 'b');
+    expect(drop.kind).toBe('split');
+    expect(drop.restored.except).toContain(MON);
+    expect(drop.added[0]).toMatchObject({ date: TUE, start: 660, end: 780, repeat: 'none' });
+    expect(drop.added[0].id).not.toBe('w');
+    expect(drop.list).toHaveLength(2);
+  });
+
+  it('truncates the original and starts a new series (future)', () => {
+    const orig = weekly();
+    const drop = buildMove([orig], orig, { date: NEXT_MON, start: 660, end: 780 }, NEXT_MON, 'future', 'b');
+    expect(drop.restored.until).toBe('2026-06-07'); // day before the dropped occurrence
+    expect(drop.added[0]).toMatchObject({ date: NEXT_MON, start: 660, end: 780, repeat: 'weekly' });
+  });
+
+  it('moveClashes flags a drop that lands on another entry', () => {
+    const orig = once();
+    const other = once({ id: 'x', date: TUE, start: 700, end: 800 });
+    const drop = buildMove([orig, other], orig, { date: TUE, start: 660, end: 780 }, MON, 'all', 'b');
+    expect(moveClashes(drop)).toBe(true);
+  });
+
+  it('moveClashes passes a clear drop', () => {
+    const orig = once();
+    const other = once({ id: 'x', date: TUE, start: 900, end: 1000 });
+    const drop = buildMove([orig, other], orig, { date: TUE, start: 660, end: 780 }, MON, 'all', 'b');
+    expect(moveClashes(drop)).toBe(false);
   });
 });
