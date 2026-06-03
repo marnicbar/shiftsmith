@@ -74,7 +74,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
   function splitShift(updated, added) { updatePos({ shifts: pos.shifts.map((x) => x.id === updated.id ? updated : x).concat(added) }); }
   const newItem = ({ date, start, end }) => ({ id: SS.uid('s'), name: 'New Shift', date, start, end, skills: pos.skills.length ? pos.skills.slice() : [skills[0]], headcount: 1, repeat: 'none', preferred: [] });
 
-  const weeklySlots = pos.shifts.reduce((a, s) => a + s.headcount * (s.repeat === 'daily' ? 7 : 1), 0);
+  const weeklySlots = pos ? pos.shifts.reduce((a, s) => a + s.headcount * (s.repeat === 'daily' ? 7 : 1), 0) : 0;
 
   const extraFields = (item, patch) => {
     const prefIds = item.preferred || [];
@@ -221,6 +221,17 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
         </div>
       </div>
 
+      {!pos ? (
+        <div className="empty-state">
+          <div className="inner">
+            <Ic.briefcase/>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>No positions yet</div>
+            <div className="muted">Add your first position to start defining shifts.</div>
+            <button className="btn" onClick={addPosition}><Ic.plus size={15}/> Add position</button>
+          </div>
+        </div>
+      ) : (
+      <>
       <Calendar kind="shift" view={view} onView={setView} anchor={anchor} onAnchor={setAnchor}
         zoom={zoom} onZoom={setZoom} palette={[]} items={pos.shifts} snap={snap} newFlow={newFlow}
         newItem={newItem} onCommit={commitShift} onDelete={deleteShift} onSplit={splitShift} extraFields={extraFields} />
@@ -264,6 +275,8 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
           </button>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

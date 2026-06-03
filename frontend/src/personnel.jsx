@@ -61,6 +61,17 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
         </div>
       </div>
 
+      {!emp ? (
+        <div className="empty-state">
+          <div className="inner">
+            <Ic.users/>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>No people yet</div>
+            <div className="muted">Add your first person to start building availability.</div>
+            <button className="btn" onClick={addEmployee}><Ic.plus size={15}/> Add person</button>
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Calendar */}
       <Calendar kind="availability" view={view} onView={setView} anchor={anchor} onAnchor={setAnchor}
         zoom={zoom} onZoom={setZoom} paint={paint} onPaint={setPaint} palette={AVAIL_PALETTE}
@@ -99,6 +110,8 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
           </button>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
