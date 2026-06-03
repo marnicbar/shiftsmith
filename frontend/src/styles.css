@@ -296,7 +296,7 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; line-height:
 .evt.ghost { opacity: .55; border-style: dashed; pointer-events: none; box-shadow: none; }
 
 /* Month grid */
-.monthgrid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr; flex: 1; min-height: 0; }
+.monthgrid { display: grid; grid-template-columns: repeat(7, 1fr); height: 100%; min-height: 0; }
 .mg-dow { text-align: center; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); padding: 8px 0; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); background: var(--surface); }
 .mg-cell { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 6px; display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow: hidden; cursor: pointer; transition: background .12s; }
 .mg-cell:hover { background: var(--surface-2); }

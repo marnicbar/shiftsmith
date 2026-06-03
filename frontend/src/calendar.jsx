@@ -191,8 +191,12 @@ export function Calendar(props) {
 
 function monthDays(anchor) {
   const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const last = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0); // last day of month
   const start = SS.startOfWeek(first);
-  return Array.from({ length: 42 }, (_, i) => SS.isoOf(SS.addDays(start, i)));
+  // Only render whole weeks that actually touch this month — no trailing week
+  // that lies entirely in the next month.
+  const days = Math.round((SS.startOfWeek(last) - start) / SS.DAY) + 7;
+  return Array.from({ length: days }, (_, i) => SS.isoOf(SS.addDays(start, i)));
 }
 
 function Toolbar(props) {
@@ -248,26 +252,39 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, drag,
   occ.forEach((o) => { (o.item.allDay ? allDayByDay : timedByDay)[o.date].push(o); });
   const hasAllDay = Object.values(allDayByDay).some((a) => a.length);
 
+  // Measure the day-header row so the all-day row can stick right below it.
+  const headRef = useRef(null);
+  const [headH, setHeadH] = useState(0);
+  useEffect(() => {
+    const el = headRef.current;
+    if (!el) return;
+    const measure = () => setHeadH(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [dayList.length]);
+
   const gridCols = `56px repeat(${dayList.length}, minmax(0, 1fr))`;
   return (
     <div className="cal-scroll" ref={scrollRef}>
       <div className="weekgrid" style={{ gridTemplateColumns: gridCols, gridTemplateRows: `auto ${hasAllDay ? 'auto' : ''} ${H}px` }}>
-        <div className="wg-corner" style={{ gridRow: 1, gridColumn: 1 }}></div>
+        <div className="wg-corner" ref={headRef} style={{ gridRow: 1, gridColumn: 1, ...(hasAllDay ? { borderBottom: 'none' } : null) }}></div>
         {dayList.map((d, i) => {
           const dt = SS.parseISO(d); const isToday = d === todayISO;
           return (
-            <div key={d} className={`wg-dayhead ${isToday ? 'today' : ''}`} style={{ gridRow: 1, gridColumn: i + 2 }}>
+            <div key={d} className={`wg-dayhead ${isToday ? 'today' : ''}`} style={{ gridRow: 1, gridColumn: i + 2, ...(hasAllDay ? { borderBottom: 'none' } : null) }}>
               <span className="dow">{WD[(dt.getDay()+6)%7]}</span>
               <span className="dnum">{dt.getDate()}</span>
             </div>
           );
         })}
         {hasAllDay && <>
-          <div className="wg-timecol" style={{ gridRow: 2, gridColumn: 1, display:'grid', placeItems:'center' }}>
+          <div className="wg-timecol" style={{ gridRow: 2, gridColumn: 1, display:'grid', placeItems:'center', position:'sticky', top: Math.max(0, headH - 1), zIndex: 6, borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
             <span className="wg-timelabel" style={{ transform:'none', paddingRight: 0 }}>all-day</span>
           </div>
           {dayList.map((d, i) => (
-            <div key={d} className="wg-col" style={{ gridRow: 2, gridColumn: i+2, borderBottom: '1px solid var(--border)', padding: 4, display:'flex', flexDirection:'column', gap: 3, minHeight: 30 }}>
+            <div key={d} className="wg-col" style={{ gridRow: 2, gridColumn: i+2, position:'sticky', top: Math.max(0, headH - 1), zIndex: 5, background:'var(--surface)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', padding: 4, display:'flex', flexDirection:'column', gap: 3, minHeight: 30 }}>
               {allDayByDay[d].map((o) => (
                 <div key={o.key} className={`mg-evt allday tone-${toneCls(o.item, kind)}`} onClick={(e) => onEvtClick(o.item, o.date)} style={{ cursor:'pointer' }}>
                   {kind==='availability' ? <Ic.palm size={11}/> : null}{labelOf(o.item, kind)}
@@ -328,7 +345,7 @@ function MonthGrid({ dayList, anchor, items, kind, todayISO, onDayClick, onEvtCl
   const mon = anchor.getMonth();
   return (
     <div className="cal-scroll">
-      <div className="monthgrid">
+      <div className="monthgrid" style={{ gridTemplateRows: `auto repeat(${dayList.length / 7}, 1fr)` }}>
         {WD.map((w) => <div key={w} className="mg-dow">{w}</div>)}
         {dayList.map((d) => {
           const dt = SS.parseISO(d); const out = dt.getMonth() !== mon; const isToday = d === todayISO;
@@ -536,7 +553,7 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
           <div className="seg full">
             {palette.map((p) => (
               <button key={p.type} className={item.type === p.type ? 'on' : ''}
-                onClick={() => onPatch({ type: p.type, allDay: p.type === 'vac' ? (item.allDay ?? true) : false, ...(p.type !== 'vac' ? { endDate: undefined } : {}) })}>{p.label}</button>
+                onClick={() => onPatch({ type: p.type, allDay: p.type === 'vac', ...(p.type !== 'vac' ? { endDate: undefined } : {}) })}>{p.label}</button>
             ))}
           </div>
         )}
@@ -563,7 +580,7 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
           </div>
         )}
 
-        {!item.allDay && (
+        {!item.allDay && !isVac && (
           <div className="field">
             <label>Time</label>
             <div className="timepair">
@@ -574,13 +591,6 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
             </div>
             {overnight && <div className="hint" style={{ color: 'var(--accent-strong)', display: 'flex', alignItems: 'center', gap: 5 }}><Ic.moon size={12}/> Overnight — ends {nextLabel}</div>}
           </div>
-        )}
-
-        {isVac && (
-          <label className="stat-line" style={{ cursor: 'pointer' }}>
-            <span className="k">All day</span>
-            <input type="checkbox" checked={!!item.allDay} onChange={(e) => onPatch({ allDay: e.target.checked })} />
-          </label>
         )}
 
         {!isVac && (
