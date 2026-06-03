@@ -49,6 +49,14 @@ export function availableFor(emp, shift, date) {
   }
   return merged.some((w) => w[0] <= shift.start && shift.end <= w[1]);
 }
+// Spacing (in whole hours) between hour ticks on the timeline. It must divide 24
+// so the ticks align to every day's midnight and repeat identically per day —
+// otherwise the labels drift day-to-day and bleed past the day boundary. Picks
+// the smallest divisor of 24 that keeps adjacent ticks at least ~46px apart.
+const TICK_DIVISORS = [1, 2, 3, 4, 6, 8, 12, 24];
+export function hourTickStep(pph) {
+  return TICK_DIVISORS.find((s) => s * pph >= 46) ?? 24;
+}
 export function buildPlan(employees, positions, dayList, overrides = {}) {
   const empById = {}; employees.forEach((e) => { empById[e.id] = e; });
   const slots = [];
@@ -271,7 +279,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     ? `${SS.parseISO(dayList[0]).toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${SS.parseISO(dayList[6]).toLocaleDateString([], { month: 'short', day: 'numeric' })}`
     : freeLabel();
 
-  const tickStep = Math.max(1, Math.ceil(46 / effPph));
+  const tickStep = hourTickStep(effPph);
   const showHourLabels = !boxOnly && effPph >= 10;
   const pct = Math.round(pph / FREE_BASE * 100);
 
@@ -296,7 +304,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
 
   // Boxes have a fixed height in every view; only their width varies, and the
   // content is chosen purely from that width (see `bar`).
-  const BOX_H = 62, BOX_TOP = 7;
+  const BOX_H = 68, BOX_TOP = 7;
 
   function bar(p, d, di) {
     return p.shifts.filter((sh) => matchesDay(sh, d)).map((sh) => {
@@ -382,7 +390,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
       <div className={`tl-scroll ${fitWidth ? 'no-xscroll' : ''}`} ref={scrollRef} onScroll={onScroll}>
         <div className="tl-canvas" style={{ width: LW_TL + trackW }}>
           <div className="tl-head" style={{ height: 44 }}>
-            <div className="tl-corner">{mode === 'free' && <span style={{ display:'flex', alignItems:'center', gap:6 }}><Ic.move size={13}/> </span>}Position</div>
+            <div className="tl-corner">Position</div>
             <div className="tl-times" style={{ width: trackW, height: 44 }}>
               {dayList.map((d, di) => {
                 const dt = SS.parseISO(d); const we = dt.getDay()===0||dt.getDay()===6;
@@ -424,7 +432,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
                   <div className="avatar sq" style={{ background: `oklch(0.62 0.13 ${p.color})`, width: boxOnly?24:30, height: boxOnly?24:30, flexBasis: boxOnly?24:30 }}><Ic.briefcase size={boxOnly?13:15}/></div>
                   <div style={{ minWidth: 0 }}>
                     <div className="nm">{p.name}</div>
-                    {!boxOnly && <div className="sub">{p.skills.join(' · ') || '—'}</div>}
+                    {!boxOnly && p.skills.length > 0 && <div className="sub">{p.skills.join(' · ')}</div>}
                   </div>
                 </div>
                 <div className="tl-track" style={{ width: trackW }}>
