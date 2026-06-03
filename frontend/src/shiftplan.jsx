@@ -90,6 +90,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   const adjustRef = useRefSP(0);
   const wantRef = useRefSP(SS.isoOf(new Date()));
   const busyRef = useRefSP(false);
+  const zoomScrollRef = useRefSP(null);
 
   useEffectSP(() => {
     const el = scrollRef.current; if (!el || !window.ResizeObserver) return;
@@ -128,6 +129,17 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     requestAnimationFrame(() => { busyRef.current = false; });
   }, [freeWin]);
 
+  // After a cursor-anchored zoom changes the canvas width, re-place scrollLeft so the
+  // time under the pointer stays under the pointer. Only runs for wheel zoom (the ref is
+  // null for zoom buttons / mode switches), and guards day-loading via busyRef.
+  useLayoutEffectSP(() => {
+    if (zoomScrollRef.current == null) return;
+    const el = scrollRef.current;
+    if (el) { busyRef.current = true; el.scrollLeft = zoomScrollRef.current; }
+    zoomScrollRef.current = null;
+    requestAnimationFrame(() => { busyRef.current = false; });
+  }, [pph]);
+
   function onScroll() {
     if (mode !== 'free' || busyRef.current) return;
     const el = scrollRef.current; if (!el) return;
@@ -154,7 +166,15 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault(); // stop the browser from zooming the whole page
         if (mode === 'free') {
-          setPph((z) => Math.max(6, Math.min(180, z - Math.sign(e.deltaY) * Math.max(1, z * 0.12))));
+          // Anchor the zoom on the cursor: keep the time under the pointer fixed on screen.
+          const mouseOffset = e.clientX - el.getBoundingClientRect().left; // px from track viewport's left
+          const contentX = el.scrollLeft + mouseOffset;                    // px into the canvas
+          setPph((z) => {
+            const nz = Math.max(6, Math.min(180, z - Math.sign(e.deltaY) * Math.max(1, z * 0.12)));
+            const hour = (contentX - LW_TL) / z;            // time the cursor is over (LW_TL = sticky label column)
+            zoomScrollRef.current = LW_TL + hour * nz - mouseOffset; // applied after re-render to re-center it
+            return nz;
+          });
         }
         return;
       }
