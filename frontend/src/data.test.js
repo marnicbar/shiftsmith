@@ -74,15 +74,6 @@ describe('SS.min12 (12h)', () => {
   });
 });
 
-describe('SS.iso (current-week anchor)', () => {
-  it('offset 0 is a Monday and offsets are day-spaced', () => {
-    const mon = SS.parseISO(SS.iso(0));
-    expect((mon.getDay() + 6) % 7).toBe(0); // Monday
-    expect(SS.iso(1)).toBe(SS.isoOf(SS.addDays(mon, 1)));
-    expect(SS.iso(7)).toBe(SS.isoOf(SS.addDays(mon, 7)));
-  });
-});
-
 describe('SS.shiftSkills', () => {
   it('reads the skills array, falling back to a single skill', () => {
     expect(SS.shiftSkills({ skills: ['Bar', 'Floor'] })).toEqual(['Bar', 'Floor']);

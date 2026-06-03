@@ -137,12 +137,12 @@ export default function App() {
   // Skill catalogue lives in settings (managed on the Settings page). Renames and
   // removals cascade into every employee/position/shift that references the skill,
   // so the catalogue and the data never drift apart.
-  const skills = settings.skills ?? SS.SKILLS;
+  const skills = settings.skills ?? [];
   const uniq = (arr) => arr.filter((v, i) => arr.indexOf(v) === i);
   const addSkill = useCallback((raw) => {
     const name = (raw || '').trim();
     setSettings((s) => {
-      const list = s.skills ?? SS.SKILLS;
+      const list = s.skills ?? [];
       if (!name || list.includes(name)) return s;
       return { ...s, skills: [...list, name] };
     });
@@ -151,7 +151,7 @@ export default function App() {
     const name = (raw || '').trim();
     if (!name || name === oldName) return;
     const map = (arr = []) => uniq(arr.map((x) => (x === oldName ? name : x)));
-    setSettings((s) => { const list = s.skills ?? SS.SKILLS; return { ...s, skills: map(list) }; });
+    setSettings((s) => { const list = s.skills ?? []; return { ...s, skills: map(list) }; });
     setEmployees((es) => es.map((e) => ({ ...e, skills: map(e.skills) })));
     setPositions((ps) => ps.map((p) => ({ ...p, skills: map(p.skills), shifts: p.shifts.map((sh) => ({ ...sh, skills: map(sh.skills) })) })));
   }, []);
@@ -182,7 +182,7 @@ export default function App() {
 
   const removeSkill = useCallback((name) => {
     const drop = (arr = []) => arr.filter((x) => x !== name);
-    setSettings((s) => { const list = s.skills ?? SS.SKILLS; return { ...s, skills: drop(list) }; });
+    setSettings((s) => { const list = s.skills ?? []; return { ...s, skills: drop(list) }; });
     setEmployees((es) => es.map((e) => ({ ...e, skills: drop(e.skills) })));
     setPositions((ps) => ps.map((p) => ({ ...p, skills: drop(p.skills), shifts: p.shifts.map((sh) => ({ ...sh, skills: drop(sh.skills) })) })));
   }, []);
