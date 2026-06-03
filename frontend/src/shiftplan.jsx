@@ -106,6 +106,9 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   const zoomScrollRef = useRefSP(null);
   const alignRef = useRefSP(initialMode === 'free' ? 'left' : null);
   const rafRef = useRefSP(0);
+  // Mirror of `pph` that's always current synchronously, so a zoom triggered from
+  // the (mode-scoped) wheel listener never reads a stale closed-over pph.
+  const pphRef = useRefSP(initialMode === 'free' ? FREE_BASE : 58);
 
   useEffectSP(() => {
     const el = scrollRef.current; if (!el || !window.ResizeObserver) return;
@@ -153,6 +156,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   // time under the pointer stays under the pointer. Only runs for wheel zoom (the ref is
   // null for zoom buttons / mode switches), and guards day-loading via busyRef.
   useLayoutEffectSP(() => {
+    pphRef.current = pph;
     if (zoomScrollRef.current == null) return;
     const el = scrollRef.current;
     if (el) { busyRef.current = true; el.scrollLeft = zoomScrollRef.current; }
@@ -183,13 +187,21 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   // to 6..180). The matching scrollLeft is stashed for the [pph] layout effect above.
   function zoomAround(anchorOffset, computeNz) {
     const el = scrollRef.current; if (!el) return;
-    const contentX = el.scrollLeft + anchorOffset;
-    setPph((z) => {
-      const nz = Math.max(6, Math.min(180, computeNz(z)));
-      const hour = (contentX - LW_TL) / z;            // time at the anchor (LW_TL = sticky label column)
-      zoomScrollRef.current = LW_TL + hour * nz - anchorOffset;
-      return nz;
-    });
+    // During a rapid zoom burst the DOM's scrollLeft lags behind the pph we've
+    // already committed (the [pph] effect hasn't applied the previous target yet),
+    // so chain off the pending target when there is one — reading el.scrollLeft
+    // here would mix an old scroll position with the new pph and make the view jump.
+    const z = pphRef.current;
+    const baseScroll = zoomScrollRef.current != null ? zoomScrollRef.current : el.scrollLeft;
+    const nz = Math.max(6, Math.min(180, computeNz(z)));
+    const hour = (baseScroll + anchorOffset - LW_TL) / z; // time at the anchor (LW_TL = sticky label column)
+    const nextScroll = LW_TL + hour * nz - anchorOffset;
+    zoomScrollRef.current = nextScroll;
+    pphRef.current = nz;
+    // Move the range-label's scroll basis in lockstep with pph so it never renders
+    // from a stale (old scrollX, new pph) pair — that mismatch caused the flicker.
+    setScrollX(nextScroll);
+    setPph(nz);
   }
   // Horizontal center of the visible track, for button/reset zooms.
   const viewCenter = () => { const el = scrollRef.current; return el ? (LW_TL + el.clientWidth) / 2 : 0; };
@@ -393,8 +405,10 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
             <div className="tl-corner">Position</div>
             <div className="tl-times" style={{ width: trackW, height: 44 }}>
               {dayList.map((d, di) => {
-                const dt = SS.parseISO(d); const we = dt.getDay()===0||dt.getDay()===6;
-                return <div key={d} className={`tl-dayband ${we?'we':''}`} style={{ left: di*24*effPph, width: 24*effPph }}>
+                const dt = SS.parseISO(d);
+                // The header label is never weekend-tinted; only the track content
+                // carries the weekend background (matching the calendar view).
+                return <div key={d} className="tl-dayband" style={{ left: di*24*effPph, width: 24*effPph }}>
                   {effPph*24 > 60 ? dt.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: dayList.length>7?'short':undefined }) : dt.getDate()}
                 </div>;
               })}
