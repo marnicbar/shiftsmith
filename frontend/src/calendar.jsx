@@ -280,11 +280,11 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, drag,
           );
         })}
         {hasAllDay && <>
-          <div className="wg-timecol" style={{ gridRow: 2, gridColumn: 1, display:'grid', placeItems:'center', position:'sticky', top: headH, zIndex: 6, borderBottom: '1px solid var(--border)' }}>
+          <div className="wg-timecol" style={{ gridRow: 2, gridColumn: 1, display:'grid', placeItems:'center', position:'sticky', top: Math.max(0, headH - 1), zIndex: 6, borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
             <span className="wg-timelabel" style={{ transform:'none', paddingRight: 0 }}>all-day</span>
           </div>
           {dayList.map((d, i) => (
-            <div key={d} className="wg-col" style={{ gridRow: 2, gridColumn: i+2, position:'sticky', top: headH, zIndex: 5, background:'var(--surface)', borderBottom: '1px solid var(--border)', padding: 4, display:'flex', flexDirection:'column', gap: 3, minHeight: 30 }}>
+            <div key={d} className="wg-col" style={{ gridRow: 2, gridColumn: i+2, position:'sticky', top: Math.max(0, headH - 1), zIndex: 5, background:'var(--surface)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', padding: 4, display:'flex', flexDirection:'column', gap: 3, minHeight: 30 }}>
               {allDayByDay[d].map((o) => (
                 <div key={o.key} className={`mg-evt allday tone-${toneCls(o.item, kind)}`} onClick={(e) => onEvtClick(o.item, o.date)} style={{ cursor:'pointer' }}>
                   {kind==='availability' ? <Ic.palm size={11}/> : null}{labelOf(o.item, kind)}
