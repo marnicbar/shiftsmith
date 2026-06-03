@@ -84,6 +84,10 @@ public class ScheduleService {
     // --- problem snapshot ------------------------------------------------
 
     private Schedule buildProblem() {
+        // Global working-time rules apply to everyone as defaults; hand them to each
+        // employee so the constraints fall back to them where there's no personal rule.
+        List<dev.shiftsmith.domain.Rule> global = settings.getGlobalRules();
+        for (Employee e : employees) e.setGlobalRules(global);
         List<ShiftAssignment> assignments = ScheduleExpander.expand(
                 positions, employees, settings, overrides, LocalDate.now());
         // Deep-ish copy of employees is unnecessary: the solver only reads them.

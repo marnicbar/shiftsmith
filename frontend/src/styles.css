@@ -458,7 +458,6 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; line-height:
   border-left: 3px solid var(--border-strong); cursor: pointer;
   transition: border-color .15s, box-shadow .15s, background .15s;
 }
-.rule:hover { border-color: var(--border-strong); }
 .rule.soft { border-left-color: var(--green-solid); }
 .rule.hard { border-left-color: var(--rose-solid); }
 .rule.sel { cursor: default; background: var(--surface); box-shadow: 0 0 0 3px var(--accent-ring); border-color: var(--accent); }
@@ -472,6 +471,16 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; line-height:
   font-size: 10.5px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
 .str-tag.soft { background: var(--green-soft); color: var(--green-strong); }
 .str-tag.hard { background: var(--rose-soft); color: var(--rose-strong); }
+
+/* Global rule surfaced on a person, with its (optional) stricter personal override below. */
+.rule.rule-stacked { cursor: default; }
+.rule-row-global.dim { opacity: .72; }
+.rule-row-global .num-static { font-weight: 600; }
+.rule-row-personal { border-radius: 8px; margin: 0 -4px; padding: 2px 4px; }
+.rule-row-personal.clickable { cursor: pointer; }
+.mini-tag { flex: 0 0 auto; margin-left: 8px; font-size: 10px; font-weight: 700; letter-spacing: .03em;
+  text-transform: uppercase; color: var(--text-3); background: var(--surface-2); padding: 1px 7px; border-radius: 99px; }
+.mini-tag.accent { color: var(--accent-strong); background: var(--accent-soft); }
 
 .rule-bot { display: flex; align-items: center; gap: 8px; }
 .op-static { font-size: 12.5px; color: var(--text-2); font-weight: 500; white-space: nowrap; }
@@ -656,6 +665,11 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; line-height:
 /* ---------- App loading / error ---------- */
 .loading { flex: 1; display: grid; place-items: center; color: var(--text-3); font-size: 14px; }
 .api-error { padding: 10px 20px; background: var(--rose-soft); color: var(--rose-strong); font-size: 13px; border-bottom: 1px solid var(--border); }
+.api-notice { padding: 10px 20px; background: var(--accent-soft); color: var(--accent-strong); font-size: 13px;
+  border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+.notice-x { appearance: none; border: 0; background: none; cursor: pointer; color: inherit; opacity: .7;
+  margin-left: auto; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; flex: 0 0 22px; }
+.notice-x:hover { opacity: 1; background: color-mix(in oklab, var(--accent) 18%, transparent); }
 
 /* ---------- Solver badge ---------- */
 .solver-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500;

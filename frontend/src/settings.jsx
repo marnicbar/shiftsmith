@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Theme } from './theme.js';
 import { SS } from './data.js';
 import { Ic } from './icons.jsx';
+import { RulesEditor } from './rules.jsx';
 
 function Seg({ value, options, onChange }) {
   return (
@@ -89,7 +90,7 @@ function horizonSummary(sched, settings) {
   return { noun, n, range };
 }
 
-export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sched, skills = [], onAddSkill, onRenameSkill, onRemoveSkill }) {
+export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sched, skills = [], onAddSkill, onRenameSkill, onRemoveSkill, globalRules = [], setGlobalRules }) {
   const accents = Object.entries(Theme.ACCENTS);
   const active = sched.solverStatus === 'SOLVING_ACTIVE' || sched.solverStatus === 'SOLVING_SCHEDULED';
   const { noun, n, range } = horizonSummary(sched, settings);
@@ -144,6 +145,16 @@ export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sch
             updates everyone and every shift that uses it.
           </div>
           <SkillsManager skills={skills} onAdd={onAddSkill} onRename={onRenameSkill} onRemove={onRemoveSkill} />
+        </div>
+
+        <div className="card set-card">
+          <h3>Working time rules</h3>
+          <div className="hint" style={{ marginTop: -2, marginBottom: 12 }}>
+            Global limits that apply to everyone. People inherit these unless they set
+            their own rule for the same metric, and a personal rule can only be stricter.
+            Tightening a rule here updates anyone whose personal rule was looser.
+          </div>
+          <RulesEditor rules={globalRules} onChange={setGlobalRules} mode="global" label={null} />
         </div>
 
         <div className="card set-card">

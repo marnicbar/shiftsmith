@@ -77,7 +77,15 @@ client's edits to others live.
 - **Employee** — `skills`, calendar `blocks`, and working-time `rules`
   (`dayHours`/`weekHours`/`monthHours`/`consecDays`/`restHours`, with `preferred`
   = soft and `min`/`max` = hard). Rules carry date-scheduled `changes` resolved
-  per-date by `Rule.effectiveAt`.
+  per-date by `Rule.effectiveAt`. New personnel start with **no** rules.
+  - **Global rules.** `Settings.globalRules` are working-time rules that apply to
+    everyone (empty on a fresh DB). The solver injects them into each `Employee`
+    before solving (`Employee.globalRules`, `@JsonIgnore`); `Employee.limit` uses a
+    global rule only where the person has no personal rule for that metric+op. A
+    personal rule may only be **stricter** than the matching global one (lower
+    `max`, higher `min`; `preferred` is free), enforced in the UI; tightening a
+    global rule auto-tightens any looser personal rule (with a warning). Each
+    metric+op may be defined at most once, per person and globally.
   - **Availability is the calendar.** `pref` and `undes` blocks both define when
     an employee is *available* (an empty calendar = unavailable); a shift may only
     be assigned if it fits entirely within one window. Adjacent/overlapping blocks

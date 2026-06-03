@@ -24,6 +24,14 @@ public class Settings {
     private List<String> skills = new ArrayList<>(List.of(
             "Reception", "Floor", "Bar", "Kitchen", "Cleaning", "Supervisor", "First Aid", "Logistics"));
 
+    /**
+     * Global working-time rules that apply to everyone (managed on the Settings page).
+     * They act as defaults: an employee inherits a global rule unless they define
+     * their own (stricter) rule for the same metric+op. Starts empty on a fresh
+     * database — new installations have no global rules until they are added.
+     */
+    private List<Rule> globalRules = new ArrayList<>();
+
     public Settings() {}
 
     public Settings(String horizonUnit, int horizonCount) {
@@ -57,4 +65,7 @@ public class Settings {
 
     public List<String> getSkills() { return skills; }
     public void setSkills(List<String> skills) { this.skills = skills; }
+
+    public List<Rule> getGlobalRules() { return globalRules; }
+    public void setGlobalRules(List<Rule> globalRules) { this.globalRules = globalRules; }
 }
