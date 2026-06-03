@@ -248,11 +248,24 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, drag,
   occ.forEach((o) => { (o.item.allDay ? allDayByDay : timedByDay)[o.date].push(o); });
   const hasAllDay = Object.values(allDayByDay).some((a) => a.length);
 
+  // Measure the day-header row so the all-day row can stick right below it.
+  const headRef = useRef(null);
+  const [headH, setHeadH] = useState(0);
+  useEffect(() => {
+    const el = headRef.current;
+    if (!el) return;
+    const measure = () => setHeadH(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [dayList.length]);
+
   const gridCols = `56px repeat(${dayList.length}, minmax(0, 1fr))`;
   return (
     <div className="cal-scroll" ref={scrollRef}>
       <div className="weekgrid" style={{ gridTemplateColumns: gridCols, gridTemplateRows: `auto ${hasAllDay ? 'auto' : ''} ${H}px` }}>
-        <div className="wg-corner" style={{ gridRow: 1, gridColumn: 1 }}></div>
+        <div className="wg-corner" ref={headRef} style={{ gridRow: 1, gridColumn: 1 }}></div>
         {dayList.map((d, i) => {
           const dt = SS.parseISO(d); const isToday = d === todayISO;
           return (
@@ -263,11 +276,11 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, drag,
           );
         })}
         {hasAllDay && <>
-          <div className="wg-timecol" style={{ gridRow: 2, gridColumn: 1, display:'grid', placeItems:'center' }}>
+          <div className="wg-timecol" style={{ gridRow: 2, gridColumn: 1, display:'grid', placeItems:'center', position:'sticky', top: headH, zIndex: 6, borderBottom: '1px solid var(--border)' }}>
             <span className="wg-timelabel" style={{ transform:'none', paddingRight: 0 }}>all-day</span>
           </div>
           {dayList.map((d, i) => (
-            <div key={d} className="wg-col" style={{ gridRow: 2, gridColumn: i+2, borderBottom: '1px solid var(--border)', padding: 4, display:'flex', flexDirection:'column', gap: 3, minHeight: 30 }}>
+            <div key={d} className="wg-col" style={{ gridRow: 2, gridColumn: i+2, position:'sticky', top: headH, zIndex: 5, background:'var(--surface)', borderBottom: '1px solid var(--border)', padding: 4, display:'flex', flexDirection:'column', gap: 3, minHeight: 30 }}>
               {allDayByDay[d].map((o) => (
                 <div key={o.key} className={`mg-evt allday tone-${toneCls(o.item, kind)}`} onClick={(e) => onEvtClick(o.item, o.date)} style={{ cursor:'pointer' }}>
                   {kind==='availability' ? <Ic.palm size={11}/> : null}{labelOf(o.item, kind)}
