@@ -57,6 +57,12 @@ function usePrefs() {
 export default function App() {
   const [prefs, setPref] = usePrefs();
   const [tab, setTab] = useState('personnel');
+  // Remember the last non-settings view so the settings button can toggle back to it.
+  const prevTabRef = useRef('personnel');
+  const toggleSettings = () => {
+    if (tab === 'settings') { setTab(prevTabRef.current); }
+    else { prevTabRef.current = tab; setTab('settings'); }
+  };
 
   // Problem state (client-authoritative, synced to the backend).
   const [employees, setEmployees] = useState([]);
@@ -215,7 +221,7 @@ export default function App() {
         </nav>
         <div className="spacer"></div>
         <SolverBadge status={sched.solverStatus} />
-        <button className={`iconbtn ${tab === 'settings' ? 'active' : ''}`} title="Settings" onClick={() => setTab('settings')}>
+        <button className={`iconbtn ${tab === 'settings' ? 'active' : ''}`} title="Settings" onClick={toggleSettings}>
           <Ic.settings/>
         </button>
       </div>

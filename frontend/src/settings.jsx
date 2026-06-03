@@ -38,22 +38,23 @@ function Row({ label, hint, children }) {
 
 function SkillsManager({ skills, onAdd, onRename, onRemove }) {
   const [adding, setAdding] = useState('');
-  const [editing, setEditing] = useState(null); // { idx, value }
+  const [editing, setEditing] = useState(null); // { name, value }
+  const sorted = [...skills].sort((a, b) => a.localeCompare(b));
   const commitAdd = () => { const v = adding.trim(); if (v) onAdd(v); setAdding(''); };
-  const commitEdit = () => { if (editing) onRename(skills[editing.idx], editing.value); setEditing(null); };
+  const commitEdit = () => { if (editing) onRename(editing.name, editing.value); setEditing(null); };
   return (
     <div className="skills-mgr">
-      {skills.length === 0 && <div className="hint">No skills yet — add the first one below.</div>}
+      {sorted.length === 0 && <div className="hint">No skills yet — add the first one below.</div>}
       <div className="skills-list">
-        {skills.map((s, i) => (
+        {sorted.map((s) => (
           <div key={s} className="skill-row">
-            {editing && editing.idx === i ? (
+            {editing && editing.name === s ? (
               <input className="input skill-edit" autoFocus value={editing.value}
-                onChange={(e) => setEditing({ idx: i, value: e.target.value })}
+                onChange={(e) => setEditing({ name: s, value: e.target.value })}
                 onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') setEditing(null); }}
                 onBlur={commitEdit} />
             ) : (
-              <span className="skill-name" onClick={() => setEditing({ idx: i, value: s })}>{s}</span>
+              <span className="skill-name" onClick={() => setEditing({ name: s, value: s })}>{s}</span>
             )}
             <div className="skill-actions">
               <button className="iconbtn sm-ic danger" title="Remove"

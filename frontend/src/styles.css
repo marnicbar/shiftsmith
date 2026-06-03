@@ -724,6 +724,7 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; line-height:
 .iconbtn.sm-ic.danger:hover { background: var(--rose-soft); border-color: var(--rose-solid); }
 .skill-add { display: flex; gap: 8px; }
 .skill-add .input { flex: 1; }
+.skill-add .btn.sm { height: 34px; }
 
 .solver-status { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 .ss-line { display: flex; align-items: center; gap: 12px; font-size: 12.5px; }
