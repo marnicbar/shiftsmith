@@ -143,12 +143,21 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
       el.scrollLeft = alignRef.current === 'left' ? idx * 24 * effPph : (idx * 24 + 6) * effPph - 8;
       wantRef.current = null; alignRef.current = null;
     }
+    // Sync the label basis to the real scroll position now (before paint) so navigation
+    // in continuous mode doesn't briefly show the wrong range before onScroll samples it.
+    setScrollX(el.scrollLeft);
     requestAnimationFrame(() => { busyRef.current = false; });
   }, [navSeq, mode, containerW]);
 
   useLayoutEffectSP(() => {
     const el = scrollRef.current;
-    if (el && adjustRef.current) { el.scrollLeft += adjustRef.current; adjustRef.current = 0; }
+    if (el && adjustRef.current) {
+      el.scrollLeft += adjustRef.current; adjustRef.current = 0;
+      // Prepending days shifts every day index; sync the label's basis to the real
+      // (post-shift) scroll position now, before paint, so it never renders the wrong
+      // date for a frame while waiting for the async onScroll sampler to catch up.
+      setScrollX(el.scrollLeft);
+    }
     requestAnimationFrame(() => { busyRef.current = false; });
   }, [freeWin]);
 
@@ -159,7 +168,14 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     pphRef.current = pph;
     if (zoomScrollRef.current == null) return;
     const el = scrollRef.current;
-    if (el) { busyRef.current = true; el.scrollLeft = zoomScrollRef.current; }
+    if (el) {
+      busyRef.current = true;
+      el.scrollLeft = zoomScrollRef.current;
+      // Read back the real scroll position (the browser may clamp it at the content
+      // edges) and drive the range label from that, synchronously before paint. Using
+      // the predicted target instead would flash the wrong date until onScroll corrects.
+      setScrollX(el.scrollLeft);
+    }
     zoomScrollRef.current = null;
     requestAnimationFrame(() => { busyRef.current = false; });
   }, [pph]);
@@ -192,15 +208,14 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     // so chain off the pending target when there is one — reading el.scrollLeft
     // here would mix an old scroll position with the new pph and make the view jump.
     const z = pphRef.current;
-    const baseScroll = zoomScrollRef.current != null ? zoomScrollRef.current : el.scrollLeft;
     const nz = Math.max(6, Math.min(180, computeNz(z)));
+    if (nz === z) return; // already at a clamp limit — nothing to zoom (avoids a stale pending scroll)
+    const baseScroll = zoomScrollRef.current != null ? zoomScrollRef.current : el.scrollLeft;
     const hour = (baseScroll + anchorOffset - LW_TL) / z; // time at the anchor (LW_TL = sticky label column)
-    const nextScroll = LW_TL + hour * nz - anchorOffset;
-    zoomScrollRef.current = nextScroll;
+    zoomScrollRef.current = LW_TL + hour * nz - anchorOffset;
     pphRef.current = nz;
-    // Move the range-label's scroll basis in lockstep with pph so it never renders
-    // from a stale (old scrollX, new pph) pair — that mismatch caused the flicker.
-    setScrollX(nextScroll);
+    // The [pph] layout effect applies that scroll and syncs the label's basis to the
+    // real, post-clamp position before paint — so the range label can't flicker.
     setPph(nz);
   }
   // Horizontal center of the visible track, for button/reset zooms.
