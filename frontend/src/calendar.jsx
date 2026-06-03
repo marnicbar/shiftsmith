@@ -22,11 +22,90 @@ function occursOn(it, d) {
 }
 function isOvernight(it) { return !it.allDay && it.end < it.start; }
 
+// --- overlap detection -----------------------------------------------------
+// Two calendar entries may not occupy the same minute. Vacations (and any other
+// all-day entry) are exempt: they span the whole day on purpose and are a
+// special case, so they never count as an overlap.
+function isExempt(it) { return it.allDay || it.type === 'vac'; }
+
+const dayNum = (iso) => Math.round(SS.parseISO(iso).getTime() / SS.DAY);
+
+// Concrete occupied time spans for an item across `dayList`, as absolute
+// minutes from a fixed epoch so overnight entries (and their next-day tails)
+// compare correctly. Returns [] for exempt/all-day items.
+function occIntervals(item, dayList) {
+  if (isExempt(item)) return [];
+  const out = [];
+  for (const d of dayList) {
+    if (!occursOn(item, d)) continue;
+    const base = dayNum(d) * 1440;
+    const e = item.end > item.start ? item.end : item.end + 1440; // wrap overnight
+    out.push([base + item.start, base + e]);
+  }
+  return out;
+}
+
+// True when two entries share any minute on any day they both occur. Recurrence
+// repeats with a period of at most a week, so a 9-day window from the later
+// anchor (one day of slack on each side for overnight spillover) is enough to
+// decide it for any none/daily/weekly combination.
+export function entriesOverlap(a, b) {
+  if (isExempt(a) || isExempt(b)) return false;
+  const start = SS.addDays(SS.parseISO(a.date > b.date ? a.date : b.date), -1);
+  const days = Array.from({ length: 9 }, (_, i) => SS.isoOf(SS.addDays(start, i)));
+  const ia = occIntervals(a, days), ib = occIntervals(b, days);
+  return ia.some(([s1, e1]) => ib.some(([s2, e2]) => s1 < e2 && s2 < e1));
+}
+
 // True when applying {scope} to {item} would change or remove an occurrence before today.
 function touchesPast(scope, item, occDate) {
   const today = SS.isoOf(new Date());
   if (scope === 'this' || scope === 'future') return (occDate || item.date) < today;
   return item.date < today; // 'all' — the series starts at its anchor date
+}
+
+// --- drag/resize helpers ---------------------------------------------------
+const addDaysISO = (iso, n) => SS.isoOf(SS.addDays(SS.parseISO(iso), n));
+const uniqDates = (arr) => arr.filter((v, i, a) => a.indexOf(v) === i);
+// Shift a weekly day-of-week set (Mon=0…Sun=6) when a whole series moves by {dDay} days.
+function shiftDays(days, dDay) {
+  if (!days || !days.length || !dDay) return days;
+  return days.map((d) => (((d + dDay) % 7) + 7) % 7).sort((a, b) => a - b);
+}
+
+// Translate a dropped occurrence (its new {geom}) into the concrete edit for the
+// chosen scope, plus the resulting item list so overlaps can be re-checked.
+// 'all'/non-recurring → a single replacement commit; 'this'/'future' → a split
+// that truncates the original series and adds the moved single/series. Mirrors
+// the editor's done() so a dragged edit and a typed edit behave identically.
+export function buildMove(items, orig, geom, occDate, scope, idPfx) {
+  const dDay = dayNum(geom.date) - dayNum(occDate);
+  const recurring = orig.repeat && orig.repeat !== 'none';
+  if (!recurring || scope === 'all') {
+    const updated = { ...orig, start: geom.start, end: geom.end,
+      date: addDaysISO(orig.date, dDay),
+      until: orig.until ? addDaysISO(orig.until, dDay) : orig.until,
+      endDate: orig.endDate ? addDaysISO(orig.endDate, dDay) : orig.endDate,
+      days: shiftDays(orig.days, dDay) };
+    return { kind: 'commit', changed: [updated], list: items.map((x) => x.id === orig.id ? updated : x) };
+  }
+  if (scope === 'this') {
+    const restored = { ...orig, except: uniqDates([...(orig.except || []), occDate]) };
+    const single = { ...orig, id: SS.uid(idPfx), repeat: 'none', date: geom.date, start: geom.start, end: geom.end };
+    delete single.until; delete single.except; delete single.days; delete single.endDate;
+    return { kind: 'split', restored, added: [single], list: items.map((x) => x.id === orig.id ? restored : x).concat(single) };
+  }
+  const restored = { ...orig, until: addDaysISO(occDate, -1) };
+  const series = { ...orig, id: SS.uid(idPfx), date: geom.date, start: geom.start, end: geom.end,
+    except: (orig.except || []).filter((x) => x >= occDate), days: shiftDays(orig.days, dDay) };
+  delete series.until;
+  return { kind: 'split', restored, added: [series], list: items.map((x) => x.id === orig.id ? restored : x).concat(series) };
+}
+
+// Does any entry changed/added by {drop} overlap another entry in the result?
+export function moveClashes(drop) {
+  const changed = drop.kind === 'commit' ? drop.changed : drop.added;
+  return changed.some((c) => drop.list.some((o) => o.id !== c.id && entriesOverlap(c, o)));
 }
 
 function expand(items, dayList) {
@@ -73,8 +152,10 @@ export function Calendar(props) {
           newItem, onCommit, onDelete, onSplit, extraFields, dayStart = 6,
           snap = 15 } = props;
   const scrollRef = useRef(null);
+  const gridRef = useRef(null);
   const [editor, setEditor] = useState(null);
   const [draft, setDraft] = useState(null);   // local working copy; only persisted on confirm
+  const [overlapErr, setOverlapErr] = useState(null);
   const [drag, setDrag] = useState(null);
   const dragRef = useRef(null);
   const idPfx = kind === 'availability' ? 'b' : 's';
@@ -105,18 +186,34 @@ export function Calendar(props) {
     startCreate(newItem({ date, start: 9 * 60, end: 17 * 60 }));
   }
 
+  // Would a new entry spanning [lo,hi) on {dayISO} overlap an existing one?
+  function createClash(tmpl, dayISO, lo, hi) {
+    const cand = { ...tmpl, date: dayISO, start: lo, end: hi };
+    return items.some((o) => o.id !== cand.id && entriesOverlap(cand, o));
+  }
+
   function onColMouseDown(e, dayISO) {
     if (e.button !== 0) return;
     const colRect = e.currentTarget.getBoundingClientRect();
     const a = yToMin(e.clientY - colRect.top);
-    const st = { dayISO, a, b: a, colRect };
+    const tmpl = newItem({ date: dayISO, start: 0, end: 0 }); // one representative for collision checks
+    const st = { dayISO, a, b: a, colRect, invalid: false, tmpl };
     dragRef.current = st; setDrag(st);
-    const move = (ev) => { const b = yToMin(ev.clientY - colRect.top); const s = { ...dragRef.current, b }; dragRef.current = s; setDrag(s); };
+    const move = (ev) => {
+      const b = yToMin(ev.clientY - colRect.top);
+      const lo = Math.min(dragRef.current.a, b), hi = Math.max(dragRef.current.a, b);
+      const s = { ...dragRef.current, b, invalid: hi > lo && createClash(tmpl, dayISO, lo, hi) };
+      dragRef.current = s; setDrag(s);
+    };
     const up = (ev) => {
       window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
       const s = dragRef.current; dragRef.current = null; setDrag(null);
       let lo = Math.min(s.a, s.b), hi = Math.max(s.a, s.b);
+      const wasDrag = hi - lo >= snap;
       if (hi - lo < snap) { hi = Math.min(1440, lo + 120); }
+      // A real drag that lands on another entry is rejected, like a move/resize;
+      // a click falls through to the editor, which validates on save.
+      if (wasDrag && createClash(tmpl, dayISO, lo, hi)) return;
       startCreate(newItem({ date: dayISO, start: lo, end: hi }));
     };
     window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
@@ -129,12 +226,37 @@ export function Calendar(props) {
     ? (editor.isNew ? [...items, draft] : items.map((x) => (x.id === draft.id ? draft : x)))
     : items;
 
-  function patch(p) { setDraft((d) => ({ ...d, ...p })); }
-  function discard() { setDraft(null); setEditor(null); }
+  function patch(p) { setOverlapErr(null); setDraft((d) => ({ ...d, ...p })); }
+  function discard() { setDraft(null); setEditor(null); setOverlapErr(null); }
+
+  // The entry as it will land for a given scope, so the overlap check sees the
+  // real dates: "this" becomes a single occurrence, "future" a series from the
+  // edited occurrence, "all" the draft as-is.
+  function candidateFor(d, scope) {
+    if (editor && !editor.isNew && d.repeat && d.repeat !== 'none' && (scope === 'this' || scope === 'future')) {
+      const occDate = (editor && editor.occDate) || d.date;
+      return scope === 'this' ? { ...d, repeat: 'none', date: occDate } : { ...d, date: occDate };
+    }
+    return d;
+  }
+
+  // Returns an error message if saving the draft (at `scope`) would overlap an
+  // existing entry, else null. The entry being edited is excluded by id.
+  function validate(scope) {
+    if (!draft) return null;
+    const cand = candidateFor(draft, scope);
+    const clash = items.some((o) => o.id !== draft.id && entriesOverlap(cand, o));
+    if (!clash) return null;
+    return kind === 'availability'
+      ? 'This overlaps another availability entry. Entries can’t overlap — except vacation, which spans the whole day.'
+      : 'This overlaps another shift. Shifts can’t overlap.';
+  }
 
   function done(scope = 'all') {
     const d = draft;
     if (!d) { discard(); return; }
+    const err = validate(scope);
+    if (err) { setOverlapErr(err); return; }
     if (editor.isNew) { onCommit(d); discard(); return; }
     const orig = items.find((x) => x.id === d.id);
     const occDate = (editor && editor.occDate) || d.date;
@@ -170,20 +292,158 @@ export function Calendar(props) {
     discard();
   }
 
+  // --- drag to move / resize entries (Gmail-style) --------------------
+  // A live gesture previews the dragged occurrence as a single ghost; on release
+  // a non-recurring entry commits straight away, a recurring one opens the same
+  // this/future/all scope chooser used on editor save. Either way the move is
+  // rejected if it would overlap another entry.
+  const [preview, setPreview] = useState(null); // { id, occDate, geom:{date,start,end}, invalid, asking, error }
+  const previewRef = useRef(null);
+  const setPv = (p) => { previewRef.current = p; setPreview(p); };
+
+  function colAtX(clientX) {
+    const els = gridRef.current ? gridRef.current.querySelectorAll('[data-daycol]') : [];
+    for (const el of els) { const r = el.getBoundingClientRect(); if (clientX >= r.left && clientX < r.right) return { day: el.getAttribute('data-daycol'), rect: r }; }
+    return null;
+  }
+  function colRectFor(dayISO) {
+    const el = gridRef.current && gridRef.current.querySelector(`[data-daycol="${dayISO}"]`);
+    return el ? el.getBoundingClientRect() : null;
+  }
+  function cellAtPoint(x, y) {
+    const els = gridRef.current ? gridRef.current.querySelectorAll('[data-daycell]') : [];
+    for (const el of els) { const r = el.getBoundingClientRect(); if (x >= r.left && x < r.right && y >= r.top && y < r.bottom) return el.getAttribute('data-daycell'); }
+    return null;
+  }
+  const minAt = (clientY, rect) => Math.max(0, Math.min(1440, Math.round((clientY - rect.top) / zoom * 60 / snap) * snap));
+
+  // The dragged occurrence as a standalone single entry (for collision tests + the ghost).
+  function ghostSingle(orig, geom) {
+    const dDay = dayNum(geom.date) - dayNum(orig.date);
+    return { ...orig, repeat: 'none', date: geom.date, start: geom.start, end: geom.end,
+             except: undefined, until: undefined, days: undefined,
+             endDate: orig.endDate ? addDaysISO(orig.endDate, dDay) : undefined };
+  }
+  function clashGhost(orig, geom) {
+    const g = ghostSingle(orig, geom);
+    return items.some((o) => o.id !== orig.id && entriesOverlap(g, o));
+  }
+
+  function computeGeom(ev, mode, orig, occDate, baseRect, startMin, dur) {
+    if (view === 'month' || orig.allDay) {
+      const day = view === 'month' ? (cellAtPoint(ev.clientX, ev.clientY) || occDate)
+                : (colAtX(ev.clientX)?.day || occDate);
+      return { date: day, start: orig.start, end: orig.end };
+    }
+    const cur = baseRect ? minAt(ev.clientY, baseRect) : startMin;
+    const delta = cur - startMin;
+    if (mode === 'move') {
+      const day = view === 'week' ? (colAtX(ev.clientX)?.day || occDate) : occDate;
+      let s = orig.start + delta, e = s + dur;
+      if (s < 0) { s = 0; e = dur; }
+      if (e > 1440) { e = 1440; s = 1440 - dur; }
+      return { date: day, start: s, end: e };
+    }
+    if (mode === 'n') return { date: occDate, start: Math.min(Math.max(0, orig.start + delta), orig.end - snap), end: orig.end };
+    return { date: occDate, start: orig.start, end: Math.max(Math.min(1440, orig.end + delta), orig.start + snap) };
+  }
+
+  function onEvtDown(e, occ, mode) {
+    if (e.button !== 0 || occ.item._preview) return;
+    e.stopPropagation(); e.preventDefault();
+    const orig = items.find((x) => x.id === occ.item.id);
+    if (!orig) return;
+    const occDate = occ.seg === 'tail' ? addDaysISO(occ.date, -1) : occ.date;
+    const startX = e.clientX, startY = e.clientY;
+    const baseRect = view === 'month' ? null : (colRectFor(occDate) || colAtX(startX)?.rect || null);
+    const startMin = baseRect ? minAt(startY, baseRect) : 0;
+    const dur = (orig.end <= orig.start ? orig.end + 1440 : orig.end) - orig.start;
+    let active = false;
+    const move = (ev) => {
+      if (!active) {
+        if (Math.abs(ev.clientX - startX) < 4 && Math.abs(ev.clientY - startY) < 4) return;
+        active = true;
+        document.body.classList.add(mode === 'move' ? 'cal-moving' : 'cal-resizing');
+      }
+      const geom = computeGeom(ev, mode, orig, occDate, baseRect, startMin, dur);
+      setPv({ id: orig.id, occDate, geom, invalid: clashGhost(orig, geom) });
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
+      document.body.classList.remove('cal-moving', 'cal-resizing');
+      if (!active) { setPv(null); openEditor(orig, occDate); return; } // a click, not a drag
+      finalizeDrop();
+    };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+  }
+
+  function finalizeDrop() {
+    const p = previewRef.current;
+    if (!p) return;
+    const orig = items.find((x) => x.id === p.id);
+    if (!orig || p.invalid) { setPv(null); return; } // unchanged target or a collision → revert
+    if (orig.repeat && orig.repeat !== 'none') setPv({ ...p, asking: true });
+    else { performDrop(buildMove(items, orig, p.geom, p.occDate, 'all', idPfx)); setPv(null); }
+  }
+
+  function performDrop(drop) {
+    if (drop.kind === 'commit') drop.changed.forEach(onCommit);
+    else onSplit(drop.restored, drop.added);
+  }
+  function chooseScope(scope) {
+    const p = previewRef.current;
+    if (!p) return;
+    const orig = items.find((x) => x.id === p.id);
+    if (!orig) { setPv(null); return; }
+    const drop = buildMove(items, orig, p.geom, p.occDate, scope, idPfx);
+    if (moveClashes(drop)) {
+      setPv({ ...p, error: kind === 'availability'
+        ? 'That overlaps another availability entry on a different day.'
+        : 'That overlaps another shift on a different day.' });
+      return;
+    }
+    performDrop(drop);
+    setPv(null);
+  }
+
+  // While dragging (or choosing a scope), preview the move: hide the original
+  // occurrence and show a single ghost at the new spot.
+  function previewItems(p) {
+    const orig = items.find((x) => x.id === p.id);
+    if (!orig) return renderItems;
+    const ghost = { ...ghostSingle(orig, p.geom), id: '__ghost', _preview: true, _invalid: p.invalid };
+    const hidden = { ...orig, except: uniqDates([...(orig.except || []), p.occDate]) };
+    return items.map((x) => x.id === orig.id ? hidden : x).concat(ghost);
+  }
+  // The in-progress create selection, as a preview entry so it lane-packs beside
+  // existing entries (rather than drawing on top of them) — same as a move ghost.
+  function createGhost(dr) {
+    const lo = Math.min(dr.a, dr.b), hi = Math.max(dr.a, dr.b);
+    return { ...dr.tmpl, id: '__ghost', date: dr.dayISO, start: lo, end: hi,
+             repeat: 'none', allDay: false, _preview: true, _invalid: dr.invalid };
+  }
+  const liveItems = preview ? previewItems(preview)
+                  : drag ? [...renderItems, createGhost(drag)]
+                  : renderItems;
+
   return (
-    <div className="cal">
+    <div className="cal" ref={gridRef}>
       <Toolbar {...props} onAdd={addNew} />
       {view === 'month'
-        ? <MonthGrid dayList={dayList} anchor={anchor} items={renderItems} kind={kind} todayISO={todayISO}
+        ? <MonthGrid dayList={dayList} anchor={anchor} items={liveItems} kind={kind} todayISO={todayISO}
             onDayClick={(d, el) => startCreate(newItem({ date: d, start: 9*60, end: 17*60 }))}
-            onEvtClick={(it, occDate) => openEditor(it, occDate)} />
-        : <TimeGrid scrollRef={scrollRef} dayList={dayList} view={view} zoom={zoom} items={renderItems}
-            kind={kind} todayISO={todayISO} drag={drag} onColMouseDown={onColMouseDown}
-            onEvtClick={(it, occDate) => openEditor(it, occDate)} />}
+            onEvtDown={onEvtDown} />
+        : <TimeGrid scrollRef={scrollRef} dayList={dayList} view={view} zoom={zoom} items={liveItems}
+            kind={kind} todayISO={todayISO} onColMouseDown={onColMouseDown}
+            onEvtDown={onEvtDown} />}
       {editing && (
         <Editor item={editing} kind={kind} palette={palette} isNew={editor.isNew}
           occDate={editor.occDate} scopable={!!onSplit && !editor.isNew}
-          onPatch={patch} onRemove={remove} onClose={discard} onDone={done} extraFields={extraFields} />
+          onPatch={patch} onRemove={remove} onClose={discard} onDone={done}
+          onValidate={validate} error={overlapErr} extraFields={extraFields} />
+      )}
+      {preview && preview.asking && (
+        <DropScope kind={kind} error={preview.error} onPick={chooseScope} onCancel={() => setPv(null)} />
       )}
     </div>
   );
@@ -240,7 +500,7 @@ function Toolbar(props) {
   );
 }
 
-function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, drag, onColMouseDown, onEvtClick }) {
+function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onColMouseDown, onEvtDown }) {
   const H = 24 * zoom;
   const occ = expand(items, dayList);
   const now = new Date();
@@ -286,7 +546,8 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, drag,
           {dayList.map((d, i) => (
             <div key={d} className="wg-col" style={{ gridRow: 2, gridColumn: i+2, position:'sticky', top: Math.max(0, headH - 1), zIndex: 5, background:'var(--surface)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', padding: 4, display:'flex', flexDirection:'column', gap: 3, minHeight: 30 }}>
               {allDayByDay[d].map((o) => (
-                <div key={o.key} className={`mg-evt allday tone-${toneCls(o.item, kind)}`} onClick={(e) => onEvtClick(o.item, o.date)} style={{ cursor:'pointer' }}>
+                <div key={o.key} className={`mg-evt allday tone-${toneCls(o.item, kind)} ${o.item._preview ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''}`}
+                     onMouseDown={(e) => onEvtDown(e, o, 'move')} onClick={(e) => e.stopPropagation()} style={{ cursor: o.item._preview ? 'default' : 'grab' }}>
                   {kind==='availability' ? <Ic.palm size={11}/> : null}{labelOf(o.item, kind)}
                 </div>
               ))}
@@ -303,7 +564,7 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, drag,
           const evs = packLanes(timedByDay[d]);
           const isToday = d === todayISO;
           return (
-            <div key={d} className={`wg-col ${weekend?'weekend':''}`} style={{ gridRow: hasAllDay ? 3 : 2, gridColumn: i+2, position:'relative' }}
+            <div key={d} data-daycol={d} className={`wg-col ${weekend?'weekend':''}`} style={{ gridRow: hasAllDay ? 3 : 2, gridColumn: i+2, position:'relative' }}
                  onMouseDown={(e) => onColMouseDown(e, d)}>
               {Array.from({ length: 24 }, (_, h) => (<React.Fragment key={h}>
                 <div className="wg-hourline" style={{ top: h * zoom }}></div>
@@ -312,23 +573,22 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, drag,
               {evs.map((o) => {
                 const top = o.s/60*zoom, h = Math.max(16, (o.e - o.s)/60*zoom);
                 const w = 100 / o._lanes, left = o._lane * w;
+                const ghost = o.item._preview;
+                const resizable = !ghost && o.seg === 'full' && !o.item.allDay;
                 return (
-                  <div key={o.key} className={`evt tone-${toneCls(o.item, kind)} ${o.seg !== 'full' ? 'seg-'+o.seg : ''}`} onMouseDown={(e)=>e.stopPropagation()}
-                       onClick={(e) => onEvtClick(o.item, o.seg === 'tail' ? SS.isoOf(SS.addDays(SS.parseISO(o.date), -1)) : o.date)}
-                       style={{ top, height: h, left: `calc(${left}% + 3px)`, width: `calc(${w}% - 6px)` }}>
+                  <div key={o.key} className={`evt tone-${toneCls(o.item, kind)} ${o.seg !== 'full' ? 'seg-'+o.seg : ''} ${ghost ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''}`}
+                       onMouseDown={ghost ? undefined : (e) => onEvtDown(e, o, 'move')}
+                       style={{ top, height: h, left: `calc(${left}% + 3px)`, width: `calc(${w}% - 6px)`, cursor: ghost ? 'default' : 'grab' }}>
+                    {resizable && <div className="evt-handle n" onMouseDown={(e) => onEvtDown(e, o, 'n')}></div>}
                     {o.item.repeat !== 'none' && <span className="rep"><Ic.repeat/></span>}
                     {o.seg === 'tail' && <span className="ovn" title="Continues from previous day"><Ic.chevD size={11} style={{ transform: 'rotate(180deg)' }}/></span>}
                     {o.seg === 'head' && <span className="ovn" title="Continues next day"><Ic.chevD size={11}/></span>}
                     <span className="et mono">{SS.minLabel(o.item.start)}–{SS.minLabel(o.item.end)}</span>
                     <span className="el">{labelOf(o.item, kind)}</span>
+                    {resizable && <div className="evt-handle s" onMouseDown={(e) => onEvtDown(e, o, 's')}></div>}
                   </div>
                 );
               })}
-              {drag && drag.dayISO === d && (() => {
-                const lo = Math.min(drag.a, drag.b), hi = Math.max(drag.a, drag.b);
-                return <div className="evt ghost tone-shift" style={{ top: lo/60*zoom, height: Math.max(16,(hi-lo)/60*zoom), left: 3, right: 3 }}>
-                  <span className="et mono">{SS.minLabel(lo)}–{SS.minLabel(hi)}</span></div>;
-              })()}
               {isToday && nowMin>0 && <div className="nowline" style={{ top: nowMin/60*zoom }}></div>}
             </div>
           );
@@ -338,7 +598,7 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, drag,
   );
 }
 
-function MonthGrid({ dayList, anchor, items, kind, todayISO, onDayClick, onEvtClick }) {
+function MonthGrid({ dayList, anchor, items, kind, todayISO, onDayClick, onEvtDown }) {
   const occ = expand(items, dayList).filter((o) => o.seg !== 'tail');
   const byDay = {}; dayList.forEach((d) => byDay[d] = []);
   occ.forEach((o) => byDay[o.date].push(o));
@@ -352,11 +612,12 @@ function MonthGrid({ dayList, anchor, items, kind, todayISO, onDayClick, onEvtCl
           const evs = byDay[d].sort((a,b)=> (b.item.allDay?1:0)-(a.item.allDay?1:0) || a.item.start-b.item.start);
           const shown = evs.slice(0, 3);
           return (
-            <div key={d} className={`mg-cell ${out?'out':''} ${isToday?'today':''}`} onClick={(e) => onDayClick(d, e.currentTarget)}>
+            <div key={d} data-daycell={d} className={`mg-cell ${out?'out':''} ${isToday?'today':''}`} onClick={(e) => onDayClick(d, e.currentTarget)}>
               <span className="mg-num">{dt.getDate()}</span>
               {shown.map((o) => (
-                <div key={o.key} className={`mg-evt ${o.item.allDay?'allday':''} tone-${toneCls(o.item, kind)}`}
-                     onClick={(e) => { e.stopPropagation(); onEvtClick(o.item, o.date); }}>
+                <div key={o.key} className={`mg-evt ${o.item.allDay?'allday':''} tone-${toneCls(o.item, kind)} ${o.item._preview ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''}`}
+                     onMouseDown={o.item._preview ? undefined : (e) => onEvtDown(e, o, 'move')}
+                     onClick={(e) => e.stopPropagation()} style={{ cursor: o.item._preview ? 'default' : 'grab' }}>
                   {!o.item.allDay && <span className="mono" style={{ fontSize: 10, opacity:.85 }}>{SS.minLabel(o.item.start)}</span>}
                   {labelOf(o.item, kind)}
                 </div>
@@ -510,7 +771,37 @@ function TimeField({ minutes, onChange, isEnd, align }) {
   );
 }
 
-function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemove, onClose, onDone, extraFields }) {
+// Scope chooser shown after dropping a recurring entry — mirrors the editor's
+// "apply to this / this & following / all" menu.
+function DropScope({ kind, error, onPick, onCancel }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onCancel(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const noun = kind === 'availability' ? 'this availability entry' : 'this shift';
+  return (
+    <>
+      <div className="pop-backdrop" style={{ zIndex: 70 }} onClick={onCancel}></div>
+      <div className="pop confirm-pop" style={{ left: '50%', top: 140, transform: 'translateX(-50%)', zIndex: 71 }}>
+        <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Ic.repeat size={15}/> Move {noun}</h4>
+        {error
+          ? <p className="confirm-msg" style={{ color: 'var(--rose-strong)', display: 'flex', alignItems: 'center', gap: 6 }}><Ic.alert size={14}/> {error}</p>
+          : <p className="confirm-msg">This is a repeating entry — apply the change to:</p>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button className="btn sm" style={{ justifyContent: 'flex-start' }} onClick={() => onPick('this')}>This occurrence</button>
+          <button className="btn sm" style={{ justifyContent: 'flex-start' }} onClick={() => onPick('future')}>This &amp; following</button>
+          <button className="btn sm" style={{ justifyContent: 'flex-start' }} onClick={() => onPick('all')}>All occurrences</button>
+        </div>
+        <div className="pop-actions">
+          <button className="btn sm" onClick={onCancel}>Cancel</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemove, onClose, onDone, onValidate, error, extraFields }) {
   const ref = useRef(null);
   const [scopeMenu, setScopeMenu] = useState(false);
   const [delMenu, setDelMenu] = useState(false);
@@ -526,9 +817,11 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
   // Vacation spans a date range instead of recurring; everything else can repeat.
   const recurs = !isVac && item.repeat && item.repeat !== 'none';
 
-  // Run an action, first asking for confirmation when it would alter the past.
+  // Run an action, first blocking overlapping saves, then asking for
+  // confirmation when it would alter the past.
   const run = (kind2, scope) => {
     setScopeMenu(false); setDelMenu(false);
+    if (kind2 === 'save' && onValidate && onValidate(scope)) { onDone(scope); return; } // surfaces the error, no commit
     const fn = kind2 === 'save' ? onDone : onRemove;
     if (!isNew && touchesPast(scope, item, occDate)) setConfirm({ kind: kind2, scope });
     else fn(scope);
@@ -610,6 +903,12 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
               </div>
             )}
             {item.repeat === 'weekly' && <div className="hint">Repeats every week on the selected days.</div>}
+          </div>
+        )}
+
+        {error && (
+          <div className="hint" role="alert" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--rose-strong)' }}>
+            <Ic.alert size={13}/> {error}
           </div>
         )}
 
