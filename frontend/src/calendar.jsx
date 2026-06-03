@@ -22,6 +22,41 @@ function occursOn(it, d) {
 }
 function isOvernight(it) { return !it.allDay && it.end < it.start; }
 
+// --- overlap detection -----------------------------------------------------
+// Two calendar entries may not occupy the same minute. Vacations (and any other
+// all-day entry) are exempt: they span the whole day on purpose and are a
+// special case, so they never count as an overlap.
+function isExempt(it) { return it.allDay || it.type === 'vac'; }
+
+const dayNum = (iso) => Math.round(SS.parseISO(iso).getTime() / SS.DAY);
+
+// Concrete occupied time spans for an item across `dayList`, as absolute
+// minutes from a fixed epoch so overnight entries (and their next-day tails)
+// compare correctly. Returns [] for exempt/all-day items.
+function occIntervals(item, dayList) {
+  if (isExempt(item)) return [];
+  const out = [];
+  for (const d of dayList) {
+    if (!occursOn(item, d)) continue;
+    const base = dayNum(d) * 1440;
+    const e = item.end > item.start ? item.end : item.end + 1440; // wrap overnight
+    out.push([base + item.start, base + e]);
+  }
+  return out;
+}
+
+// True when two entries share any minute on any day they both occur. Recurrence
+// repeats with a period of at most a week, so a 9-day window from the later
+// anchor (one day of slack on each side for overnight spillover) is enough to
+// decide it for any none/daily/weekly combination.
+export function entriesOverlap(a, b) {
+  if (isExempt(a) || isExempt(b)) return false;
+  const start = SS.addDays(SS.parseISO(a.date > b.date ? a.date : b.date), -1);
+  const days = Array.from({ length: 9 }, (_, i) => SS.isoOf(SS.addDays(start, i)));
+  const ia = occIntervals(a, days), ib = occIntervals(b, days);
+  return ia.some(([s1, e1]) => ib.some(([s2, e2]) => s1 < e2 && s2 < e1));
+}
+
 // True when applying {scope} to {item} would change or remove an occurrence before today.
 function touchesPast(scope, item, occDate) {
   const today = SS.isoOf(new Date());
@@ -75,6 +110,7 @@ export function Calendar(props) {
   const scrollRef = useRef(null);
   const [editor, setEditor] = useState(null);
   const [draft, setDraft] = useState(null);   // local working copy; only persisted on confirm
+  const [overlapErr, setOverlapErr] = useState(null);
   const [drag, setDrag] = useState(null);
   const dragRef = useRef(null);
   const idPfx = kind === 'availability' ? 'b' : 's';
@@ -129,12 +165,37 @@ export function Calendar(props) {
     ? (editor.isNew ? [...items, draft] : items.map((x) => (x.id === draft.id ? draft : x)))
     : items;
 
-  function patch(p) { setDraft((d) => ({ ...d, ...p })); }
-  function discard() { setDraft(null); setEditor(null); }
+  function patch(p) { setOverlapErr(null); setDraft((d) => ({ ...d, ...p })); }
+  function discard() { setDraft(null); setEditor(null); setOverlapErr(null); }
+
+  // The entry as it will land for a given scope, so the overlap check sees the
+  // real dates: "this" becomes a single occurrence, "future" a series from the
+  // edited occurrence, "all" the draft as-is.
+  function candidateFor(d, scope) {
+    if (editor && !editor.isNew && d.repeat && d.repeat !== 'none' && (scope === 'this' || scope === 'future')) {
+      const occDate = (editor && editor.occDate) || d.date;
+      return scope === 'this' ? { ...d, repeat: 'none', date: occDate } : { ...d, date: occDate };
+    }
+    return d;
+  }
+
+  // Returns an error message if saving the draft (at `scope`) would overlap an
+  // existing entry, else null. The entry being edited is excluded by id.
+  function validate(scope) {
+    if (!draft) return null;
+    const cand = candidateFor(draft, scope);
+    const clash = items.some((o) => o.id !== draft.id && entriesOverlap(cand, o));
+    if (!clash) return null;
+    return kind === 'availability'
+      ? 'This overlaps another availability entry. Entries can’t overlap — except vacation, which spans the whole day.'
+      : 'This overlaps another shift. Shifts can’t overlap.';
+  }
 
   function done(scope = 'all') {
     const d = draft;
     if (!d) { discard(); return; }
+    const err = validate(scope);
+    if (err) { setOverlapErr(err); return; }
     if (editor.isNew) { onCommit(d); discard(); return; }
     const orig = items.find((x) => x.id === d.id);
     const occDate = (editor && editor.occDate) || d.date;
@@ -183,7 +244,8 @@ export function Calendar(props) {
       {editing && (
         <Editor item={editing} kind={kind} palette={palette} isNew={editor.isNew}
           occDate={editor.occDate} scopable={!!onSplit && !editor.isNew}
-          onPatch={patch} onRemove={remove} onClose={discard} onDone={done} extraFields={extraFields} />
+          onPatch={patch} onRemove={remove} onClose={discard} onDone={done}
+          onValidate={validate} error={overlapErr} extraFields={extraFields} />
       )}
     </div>
   );
@@ -510,7 +572,7 @@ function TimeField({ minutes, onChange, isEnd, align }) {
   );
 }
 
-function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemove, onClose, onDone, extraFields }) {
+function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemove, onClose, onDone, onValidate, error, extraFields }) {
   const ref = useRef(null);
   const [scopeMenu, setScopeMenu] = useState(false);
   const [delMenu, setDelMenu] = useState(false);
@@ -526,9 +588,11 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
   // Vacation spans a date range instead of recurring; everything else can repeat.
   const recurs = !isVac && item.repeat && item.repeat !== 'none';
 
-  // Run an action, first asking for confirmation when it would alter the past.
+  // Run an action, first blocking overlapping saves, then asking for
+  // confirmation when it would alter the past.
   const run = (kind2, scope) => {
     setScopeMenu(false); setDelMenu(false);
+    if (kind2 === 'save' && onValidate && onValidate(scope)) { onDone(scope); return; } // surfaces the error, no commit
     const fn = kind2 === 'save' ? onDone : onRemove;
     if (!isNew && touchesPast(scope, item, occDate)) setConfirm({ kind: kind2, scope });
     else fn(scope);
@@ -610,6 +674,12 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
               </div>
             )}
             {item.repeat === 'weekly' && <div className="hint">Repeats every week on the selected days.</div>}
+          </div>
+        )}
+
+        {error && (
+          <div className="hint" role="alert" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--rose-strong)' }}>
+            <Ic.alert size={13}/> {error}
           </div>
         )}
 
