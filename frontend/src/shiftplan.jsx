@@ -10,7 +10,11 @@ export function matchesDay(item, date) {
   if (item.except && item.except.includes(date)) return false;
   if (item.repeat === 'none') return date === item.date;
   if (item.repeat === 'daily') return date >= item.date;
-  if (item.repeat === 'weekly') return ((SS.parseISO(date).getDay()+6)%7) === ((SS.parseISO(item.date).getDay()+6)%7) && date >= item.date;
+  if (item.repeat === 'weekly') {
+    if (date < item.date) return false;
+    if (item.days && item.days.length) return item.days.includes((SS.parseISO(date).getDay()+6)%7);
+    return ((SS.parseISO(date).getDay()+6)%7) === ((SS.parseISO(item.date).getDay()+6)%7);
+  }
   return false;
 }
 function onVacation(emp, date) {

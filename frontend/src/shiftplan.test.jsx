@@ -26,6 +26,17 @@ describe('matchesDay', () => {
     expect(matchesDay({ repeat: 'weekly', date: MON }, TUE)).toBe(false);
   });
 
+  it('weekly with selected days occurs on each selected weekday (Mon=0 … Sun=6)', () => {
+    // anchored on Monday, repeating Mon + Wed (days 0 and 2)
+    const WED = '2026-06-03';
+    const item = { repeat: 'weekly', date: MON, days: [0, 2] };
+    expect(matchesDay(item, MON)).toBe(true);
+    expect(matchesDay(item, WED)).toBe(true);
+    expect(matchesDay(item, TUE)).toBe(false);
+    // does not fire before the anchor date
+    expect(matchesDay({ repeat: 'weekly', date: NEXT_MON, days: [0, 2] }, MON)).toBe(false);
+  });
+
   it('respects until (inclusive) and except', () => {
     expect(matchesDay({ repeat: 'daily', date: MON, until: TUE }, '2026-06-03')).toBe(false);
     expect(matchesDay({ repeat: 'daily', date: MON, except: [TUE] }, TUE)).toBe(false);
