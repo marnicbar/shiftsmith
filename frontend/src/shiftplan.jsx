@@ -141,11 +141,38 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     }
   }
 
-  function onWheel(e) {
-    if (mode !== 'free' || !(e.ctrlKey || e.metaKey)) return;
-    e.preventDefault();
-    setPph((z) => Math.max(6, Math.min(180, z - Math.sign(e.deltaY) * Math.max(1, z * 0.12))));
-  }
+  // Timeline wheel behavior (industry-standard, only while the pointer is over the
+  // timeline — elsewhere on the page the browser keeps its defaults, e.g. Ctrl+scroll
+  // page zoom over the logo). Attached natively with { passive: false } so we can
+  // preventDefault; React's synthetic onWheel is passive and can't stop page zoom.
+  //   • plain wheel        → horizontal scroll (time)
+  //   • Shift + wheel      → vertical scroll (tracks/rows)
+  //   • Ctrl/Cmd + wheel   → zoom the time axis (no browser page zoom)
+  useEffectSP(() => {
+    const el = scrollRef.current; if (!el) return;
+    function onWheel(e) {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault(); // stop the browser from zooming the whole page
+        if (mode === 'free') {
+          setPph((z) => Math.max(6, Math.min(180, z - Math.sign(e.deltaY) * Math.max(1, z * 0.12))));
+        }
+        return;
+      }
+      if (mode === 'week') return; // week mode fits the viewport; nothing to scroll
+      if (e.shiftKey) {
+        if (e.deltaY !== 0) { e.preventDefault(); el.scrollTop += e.deltaY; }
+        return;
+      }
+      // Plain wheel: a vertical-only wheel (mouse) drives the time axis horizontally;
+      // a trackpad's native horizontal delta is left untouched.
+      if (e.deltaY !== 0 && e.deltaX === 0) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY;
+      }
+    }
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [mode]);
 
   function goAnchor(next) {
     setAnchor(next); wantRef.current = SS.isoOf(next); setNavSeq((n) => n + 1);
@@ -272,7 +299,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
 
       <SolverBar sched={sched} onSolve={onSolve} onPause={onPause} />
 
-      <div className={`tl-scroll ${boxOnly ? 'no-xscroll' : ''}`} ref={scrollRef} onWheel={onWheel} onScroll={onScroll}>
+      <div className={`tl-scroll ${boxOnly ? 'no-xscroll' : ''}`} ref={scrollRef} onScroll={onScroll}>
         <div className="tl-canvas" style={{ width: LW_TL + trackW }}>
           <div className="tl-head" style={{ height: 44 }}>
             <div className="tl-corner">{mode === 'free' && <span style={{ display:'flex', alignItems:'center', gap:6 }}><Ic.move size={13}/> </span>}Position</div>
