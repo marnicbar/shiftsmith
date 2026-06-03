@@ -56,7 +56,6 @@ function SkillsManager({ skills, onAdd, onRename, onRemove }) {
               <span className="skill-name" onClick={() => setEditing({ idx: i, value: s })}>{s}</span>
             )}
             <div className="skill-actions">
-              <button className="iconbtn sm-ic" title="Rename" onClick={() => setEditing({ idx: i, value: s })}><Ic.sliders size={14}/></button>
               <button className="iconbtn sm-ic danger" title="Remove"
                 onClick={() => { if (confirm(`Remove the skill “${s}”? It will be removed from every person and shift that requires it.`)) onRemove(s); }}><Ic.trash size={14}/></button>
             </div>

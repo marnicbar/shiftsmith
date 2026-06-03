@@ -20,9 +20,11 @@ public class Settings {
     private String horizonUnit = "week"; // "day" | "week" | "month"
     private int horizonCount = 1;
 
-    /** The catalogue of skills employees can have and shifts can require (managed on the Settings page). */
-    private List<String> skills = new ArrayList<>(List.of(
-            "Reception", "Floor", "Bar", "Kitchen", "Cleaning", "Supervisor", "First Aid", "Logistics"));
+    /**
+     * The catalogue of skills employees can have and shifts can require (managed on the Settings page).
+     * Starts empty on a fresh database — new installations have no skills until they are added.
+     */
+    private List<String> skills = new ArrayList<>();
 
     /**
      * Global working-time rules that apply to everyone (managed on the Settings page).
