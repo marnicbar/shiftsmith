@@ -86,11 +86,14 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   const [editing, setEditing] = useStateSP(null);
   const [freeWin, setFreeWin] = useStateSP(() => ({ start: SS.isoOf(SS.addDays(SS.startOfWeek(new Date()), -7)), days: 35 }));
   const [navSeq, setNavSeq] = useStateSP(0);
+  const [scrollX, setScrollX] = useStateSP(0);
   const scrollRef = useRefSP(null);
   const adjustRef = useRefSP(0);
   const wantRef = useRefSP(SS.isoOf(new Date()));
   const busyRef = useRefSP(false);
   const zoomScrollRef = useRefSP(null);
+  const alignRef = useRefSP(null);
+  const rafRef = useRefSP(0);
 
   useEffectSP(() => {
     const el = scrollRef.current; if (!el || !window.ResizeObserver) return;
@@ -116,9 +119,11 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     busyRef.current = true;
     if (mode === 'week') el.scrollLeft = 0;
     else if (wantRef.current) {
-      const idx = dayList.indexOf(wantRef.current);
-      el.scrollLeft = ((idx >= 0 ? idx : 0) * 24 + 6) * effPph - 8;
-      wantRef.current = null;
+      const idx = (i => i >= 0 ? i : 0)(dayList.indexOf(wantRef.current));
+      // alignRef === 'left': pin that day's midnight to the left edge of the track (Today button).
+      // otherwise: land on ~6am with a small inset (default navigation framing).
+      el.scrollLeft = alignRef.current === 'left' ? idx * 24 * effPph : (idx * 24 + 6) * effPph - 8;
+      wantRef.current = null; alignRef.current = null;
     }
     requestAnimationFrame(() => { busyRef.current = false; });
   }, [navSeq, mode, containerW]);
@@ -141,8 +146,13 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   }, [pph]);
 
   function onScroll() {
-    if (mode !== 'free' || busyRef.current) return;
+    if (mode !== 'free') return;
     const el = scrollRef.current; if (!el) return;
+    // Keep the toolbar's visible-range label in sync, throttled to one update per frame.
+    if (!rafRef.current) rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0; if (scrollRef.current) setScrollX(scrollRef.current.scrollLeft);
+    });
+    if (busyRef.current) return;
     const pad = 3 * 24 * effPph;
     if (el.scrollLeft < pad) {
       busyRef.current = true; const add = 21; adjustRef.current = add * 24 * effPph;
@@ -213,13 +223,41 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     if (m === 'day') setPph(58);
     else if (m === 'free') { setPph(FREE_BASE); setFreeWin({ start: SS.isoOf(SS.addDays(SS.startOfWeek(anchor), -7)), days: 35 }); }
   }
-  const step = (dir) => goAnchor(SS.addDays(anchor, dir * (mode === 'day' ? 1 : 7)));
+  function step(dir) {
+    if (mode === 'free') {                       // continuous: nudge the view by one day
+      const el = scrollRef.current; if (el) el.scrollLeft += dir * 24 * effPph;
+      return;
+    }
+    goAnchor(SS.addDays(anchor, dir * (mode === 'day' ? 1 : 7)));
+  }
+  function goToday() {
+    if (mode !== 'free') { goAnchor(new Date()); return; }
+    const today = new Date();                     // continuous: pin today's column to the left edge
+    setAnchor(today); wantRef.current = SS.isoOf(today); alignRef.current = 'left';
+    setFreeWin({ start: SS.isoOf(SS.addDays(SS.startOfWeek(today), -7)), days: 35 });
+    setNavSeq((n) => n + 1);
+  }
 
+  // Continuous mode: derive the label from the days actually visible in the track viewport
+  // (left edge sits at content x = scrollX + LW_TL; right edge at scrollX + containerW).
+  function freeLabel() {
+    const n = dayList.length; if (!n) return '';
+    const last = n - 1;
+    const i0 = Math.max(0, Math.min(last, Math.floor(scrollX / effPph / 24)));
+    const i1 = Math.max(0, Math.min(last, Math.floor((scrollX + Math.max(0, containerW - LW_TL) - 1) / effPph / 24)));
+    const d0 = SS.parseISO(dayList[i0]);
+    if (i1 <= i0) return d0.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    const d1 = SS.parseISO(dayList[i1]);
+    const left = d0.getFullYear() === d1.getFullYear()
+      ? d0.toLocaleDateString([], { month: 'short', day: 'numeric' })
+      : d0.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    return `${left} – ${d1.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  }
   const stepLabel = mode === 'day'
     ? anchor.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })
     : mode === 'week'
     ? `${SS.parseISO(dayList[0]).toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${SS.parseISO(dayList[6]).toLocaleDateString([], { month: 'short', day: 'numeric' })}`
-    : anchor.toLocaleDateString([], { month: 'long', year: 'numeric' });
+    : freeLabel();
 
   const tickStep = Math.max(1, Math.ceil(46 / effPph));
   const showHourLabels = !boxOnly && effPph >= 10;
@@ -301,7 +339,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
       <div className="tl-toolbar">
         <div className="nav">
           <button className="iconbtn" onClick={() => step(-1)}><Ic.chevL/></button>
-          <button className="btn sm" onClick={() => goAnchor(new Date())}>Today</button>
+          <button className="btn sm" onClick={goToday}>Today</button>
           <button className="iconbtn" onClick={() => step(1)}><Ic.chevR/></button>
         </div>
         <div className="cal-title" style={{ minWidth: 180 }}>{stepLabel}</div>
