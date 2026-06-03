@@ -116,6 +116,13 @@
         -->
         <artifactId>maven-surefire-plugin</artifactId>
         <version>${version.surefire.plugin}</version>
+        <configuration>
+          <!-- Install JBoss LogManager before any test touches java.util.logging,
+               otherwise solver/Quarkus logging trips a "LogManager accessed before…" warning. -->
+          <systemPropertyVariables>
+            <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+          </systemPropertyVariables>
+        </configuration>
       </plugin>
     </plugins>
   </build>
@@ -139,6 +146,11 @@
           <plugin>
             <artifactId>maven-failsafe-plugin</artifactId>
             <version>${version.surefire.plugin}</version>
+            <configuration>
+              <systemPropertyVariables>
+                <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+              </systemPropertyVariables>
+            </configuration>
             <executions>
               <execution>
                 <goals>
