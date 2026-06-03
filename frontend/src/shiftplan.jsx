@@ -111,17 +111,20 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   else if (mode === 'week') { const s = SS.startOfWeek(anchor); dayList = Array.from({ length: 7 }, (_, i) => SS.isoOf(SS.addDays(s, i))); }
   else dayList = Array.from({ length: freeWin.days }, (_, i) => SS.isoOf(SS.addDays(SS.parseISO(freeWin.start), i)));
 
-  const weekPph = containerW ? Math.max(2, (containerW - LW_TL) / (7 * 24)) : 6;
-  const effPph = mode === 'week' ? weekPph : pph;
-  const boxOnly = mode === 'week';
-  const trackW = mode === 'week' ? Math.max(0, containerW - LW_TL) : dayList.length * 24 * effPph;
   const totalHours = dayList.length * 24;
+  // Day and week both fill the viewport; their pixels-per-hour is derived from the
+  // available track width. Continuous ('free') keeps a fixed, zoomable pph and scrolls.
+  const fitWidth = mode === 'week' || mode === 'day';
+  const fitPph = containerW ? Math.max(2, (containerW - LW_TL) / totalHours) : 6;
+  const effPph = fitWidth ? fitPph : pph;
+  const boxOnly = mode === 'week';
+  const trackW = fitWidth ? Math.max(0, containerW - LW_TL) : totalHours * effPph;
   // `assign` is the solver's best assignment, keyed `${shiftId}@${date}` → [employees].
 
   useLayoutEffectSP(() => {
     const el = scrollRef.current; if (!el) return;
     busyRef.current = true;
-    if (mode === 'week') el.scrollLeft = 0;
+    if (fitWidth) el.scrollLeft = 0;
     else if (wantRef.current) {
       const idx = (i => i >= 0 ? i : 0)(dayList.indexOf(wantRef.current));
       // alignRef === 'left': pin that day's midnight to the left edge of the track (Today button).
@@ -202,7 +205,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
         }
         return;
       }
-      if (mode === 'week') return; // week mode fits the viewport; nothing to scroll
+      if (mode === 'week' || mode === 'day') return; // these views fit the viewport; nothing to scroll
       if (e.shiftKey) {
         if (e.deltaY !== 0) { e.preventDefault(); el.scrollTop += e.deltaY; }
         return;
