@@ -72,7 +72,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
   }
   function deleteShift(id) { updatePos({ shifts: pos.shifts.filter((x) => x.id !== id) }); }
   function splitShift(updated, added) { updatePos({ shifts: pos.shifts.map((x) => x.id === updated.id ? updated : x).concat(added) }); }
-  const newItem = ({ date, start, end }) => ({ id: SS.uid('s'), name: 'New Shift', date, start, end, skills: pos.skills.length ? pos.skills.slice() : [skills[0]], headcount: 1, repeat: 'none', preferred: [] });
+  const newItem = ({ date, start, end }) => ({ id: SS.uid('s'), name: 'New Shift', date, start, end, skills: pos.skills.slice(), headcount: 1, repeat: 'none', preferred: [] });
 
   const weeklySlots = pos ? pos.shifts.reduce((a, s) => a + s.headcount * (s.repeat === 'daily' ? 7 : 1), 0) : 0;
 
