@@ -191,8 +191,12 @@ export function Calendar(props) {
 
 function monthDays(anchor) {
   const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const last = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0); // last day of month
   const start = SS.startOfWeek(first);
-  return Array.from({ length: 42 }, (_, i) => SS.isoOf(SS.addDays(start, i)));
+  // Only render whole weeks that actually touch this month — no trailing week
+  // that lies entirely in the next month.
+  const days = Math.round((SS.startOfWeek(last) - start) / SS.DAY) + 7;
+  return Array.from({ length: days }, (_, i) => SS.isoOf(SS.addDays(start, i)));
 }
 
 function Toolbar(props) {
@@ -341,7 +345,7 @@ function MonthGrid({ dayList, anchor, items, kind, todayISO, onDayClick, onEvtCl
   const mon = anchor.getMonth();
   return (
     <div className="cal-scroll">
-      <div className="monthgrid">
+      <div className="monthgrid" style={{ gridTemplateRows: `auto repeat(${dayList.length / 7}, 1fr)` }}>
         {WD.map((w) => <div key={w} className="mg-dow">{w}</div>)}
         {dayList.map((d) => {
           const dt = SS.parseISO(d); const out = dt.getMonth() !== mon; const isToday = d === todayISO;
@@ -549,7 +553,7 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
           <div className="seg full">
             {palette.map((p) => (
               <button key={p.type} className={item.type === p.type ? 'on' : ''}
-                onClick={() => onPatch({ type: p.type, allDay: p.type === 'vac' ? (item.allDay ?? true) : false, ...(p.type !== 'vac' ? { endDate: undefined } : {}) })}>{p.label}</button>
+                onClick={() => onPatch({ type: p.type, allDay: p.type === 'vac', ...(p.type !== 'vac' ? { endDate: undefined } : {}) })}>{p.label}</button>
             ))}
           </div>
         )}
@@ -576,7 +580,7 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
           </div>
         )}
 
-        {!item.allDay && (
+        {!item.allDay && !isVac && (
           <div className="field">
             <label>Time</label>
             <div className="timepair">
@@ -587,13 +591,6 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
             </div>
             {overnight && <div className="hint" style={{ color: 'var(--accent-strong)', display: 'flex', alignItems: 'center', gap: 5 }}><Ic.moon size={12}/> Overnight — ends {nextLabel}</div>}
           </div>
-        )}
-
-        {isVac && (
-          <label className="stat-line" style={{ cursor: 'pointer' }}>
-            <span className="k">All day</span>
-            <input type="checkbox" checked={!!item.allDay} onChange={(e) => onPatch({ allDay: e.target.checked })} />
-          </label>
         )}
 
         {!isVac && (

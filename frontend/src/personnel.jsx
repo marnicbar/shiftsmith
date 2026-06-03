@@ -29,7 +29,7 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
   }
   function deleteBlock(id) { updateEmp({ blocks: emp.blocks.filter((x) => x.id !== id) }); }
   function splitBlock(updated, added) { updateEmp({ blocks: emp.blocks.map((x) => x.id === updated.id ? updated : x).concat(added) }); }
-  const newItem = ({ date, start, end }) => ({ id: SS.uid('b'), type: paint, date, start, end, allDay: false, repeat: 'none' });
+  const newItem = ({ date, start, end }) => ({ id: SS.uid('b'), type: paint, date, start, end, allDay: paint === 'vac', repeat: 'none' });
 
   const addEmployee = () => {
     const e = { id: SS.uid('e'), name: 'New Person', contract: 38, skills: [], blocks: [], rules: [] };
