@@ -269,11 +269,11 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, drag,
   return (
     <div className="cal-scroll" ref={scrollRef}>
       <div className="weekgrid" style={{ gridTemplateColumns: gridCols, gridTemplateRows: `auto ${hasAllDay ? 'auto' : ''} ${H}px` }}>
-        <div className="wg-corner" ref={headRef} style={{ gridRow: 1, gridColumn: 1 }}></div>
+        <div className="wg-corner" ref={headRef} style={{ gridRow: 1, gridColumn: 1, ...(hasAllDay ? { borderBottom: 'none' } : null) }}></div>
         {dayList.map((d, i) => {
           const dt = SS.parseISO(d); const isToday = d === todayISO;
           return (
-            <div key={d} className={`wg-dayhead ${isToday ? 'today' : ''}`} style={{ gridRow: 1, gridColumn: i + 2 }}>
+            <div key={d} className={`wg-dayhead ${isToday ? 'today' : ''}`} style={{ gridRow: 1, gridColumn: i + 2, ...(hasAllDay ? { borderBottom: 'none' } : null) }}>
               <span className="dow">{WD[(dt.getDay()+6)%7]}</span>
               <span className="dnum">{dt.getDate()}</span>
             </div>
