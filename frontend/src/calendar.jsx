@@ -631,11 +631,11 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onCol
           );
         })}
         {hasAllDay && <>
-          <div className="wg-timecol" style={{ gridRow: 2, gridColumn: 1, display:'grid', placeItems:'center', position:'sticky', top: Math.max(0, headH - 1), zIndex: 6, borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+          <div className="wg-timecol" style={{ gridRow: 2, gridColumn: 1, display:'grid', placeItems:'center', position:'sticky', top: Math.max(0, headH - 1), zIndex: 19, borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
             <span className="wg-timelabel" style={{ transform:'none', paddingRight: 0 }}>all-day</span>
           </div>
           {dayList.map((d, i) => (
-            <div key={d} className="wg-col" style={{ gridRow: 2, gridColumn: i+2, position:'sticky', top: Math.max(0, headH - 1), zIndex: 5, background:'var(--surface)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', padding: 4, display:'flex', flexDirection:'column', gap: 3, minHeight: 30 }}>
+            <div key={d} className="wg-col" style={{ gridRow: 2, gridColumn: i+2, position:'sticky', top: Math.max(0, headH - 1), zIndex: 18, background:'var(--surface)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', padding: 4, display:'flex', flexDirection:'column', gap: 3, minHeight: 30 }}>
               {allDayByDay[d].map((o) => (
                 <div key={o.key} className={`mg-evt allday tone-${toneCls(o.item, kind)} ${o.item._preview ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''}`}
                      onMouseDown={(e) => onEvtDown(e, o, 'move')} onClick={(e) => e.stopPropagation()} style={{ cursor: o.item._preview ? 'default' : 'grab' }}>
