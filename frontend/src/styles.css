@@ -387,7 +387,6 @@ body.cal-moving, body.cal-resizing { user-select: none; }
 .tl-row:hover .tl-label { background: var(--surface-2); }
 .tl-label { position: sticky; left: 0; z-index: 10; flex: 0 0 var(--lw); width: var(--lw); background: var(--surface); border-right: 1px solid var(--border); display: flex; align-items: center; gap: 9px; padding: 0 12px; }
 .tl-label .nm { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tl-label .sub { font-size: 11px; color: var(--text-3); }
 .tl-track { position: relative; flex: 1; }
 .tl-grid { position: absolute; inset: 0; }
 .tl-gline { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--border); }

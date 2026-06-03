@@ -446,7 +446,6 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
                   <div className="avatar sq" style={{ background: `oklch(0.62 0.13 ${p.color})`, width: boxOnly?24:30, height: boxOnly?24:30, flexBasis: boxOnly?24:30 }}><Ic.briefcase size={boxOnly?13:15}/></div>
                   <div style={{ minWidth: 0 }}>
                     <div className="nm">{p.name}</div>
-                    {!boxOnly && p.skills.length > 0 && <div className="sub">{p.skills.join(' · ')}</div>}
                   </div>
                 </div>
                 <div className="tl-track" style={{ width: trackW }}>
