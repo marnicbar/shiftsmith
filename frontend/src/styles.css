@@ -458,7 +458,6 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; line-height:
   border-left: 3px solid var(--border-strong); cursor: pointer;
   transition: border-color .15s, box-shadow .15s, background .15s;
 }
-.rule:hover { border-color: var(--border-strong); }
 .rule.soft { border-left-color: var(--green-solid); }
 .rule.hard { border-left-color: var(--rose-solid); }
 .rule.sel { cursor: default; background: var(--surface); box-shadow: 0 0 0 3px var(--accent-ring); border-color: var(--accent); }
@@ -475,7 +474,6 @@ textarea.input { height: auto; padding: 9px 11px; resize: vertical; line-height:
 
 /* Global rule surfaced on a person, with its (optional) stricter personal override below. */
 .rule.rule-stacked { cursor: default; }
-.rule.rule-stacked:hover { border-color: var(--border); }
 .rule-row-global.dim { opacity: .72; }
 .rule-row-global .num-static { font-weight: 600; }
 .rule-row-personal { border-radius: 8px; margin: 0 -4px; padding: 2px 4px; }
