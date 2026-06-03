@@ -92,7 +92,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   const wantRef = useRefSP(SS.isoOf(new Date()));
   const busyRef = useRefSP(false);
   const zoomScrollRef = useRefSP(null);
-  const alignRef = useRefSP(null);
+  const alignRef = useRefSP(initialMode === 'free' ? 'left' : null);
   const rafRef = useRefSP(0);
 
   useEffectSP(() => {
@@ -221,7 +221,12 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   function pickMode(m) {
     setMode(m); wantRef.current = SS.isoOf(anchor); setNavSeq((n) => n + 1);
     if (m === 'day') setPph(58);
-    else if (m === 'free') { setPph(FREE_BASE); setFreeWin({ start: SS.isoOf(SS.addDays(SS.startOfWeek(anchor), -7)), days: 35 }); }
+    else if (m === 'free') {
+      // Initialize the continuous view on today, pinned to the left edge of the track.
+      const today = new Date();
+      setPph(FREE_BASE); setAnchor(today); wantRef.current = SS.isoOf(today); alignRef.current = 'left';
+      setFreeWin({ start: SS.isoOf(SS.addDays(SS.startOfWeek(today), -7)), days: 35 });
+    }
   }
   function step(dir) {
     if (mode === 'free') {                       // continuous: nudge the view by one day
