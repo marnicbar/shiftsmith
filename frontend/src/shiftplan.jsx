@@ -379,7 +379,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
 
       <SolverBar sched={sched} onSolve={onSolve} onPause={onPause} />
 
-      <div className={`tl-scroll ${boxOnly ? 'no-xscroll' : ''}`} ref={scrollRef} onScroll={onScroll}>
+      <div className={`tl-scroll ${fitWidth ? 'no-xscroll' : ''}`} ref={scrollRef} onScroll={onScroll}>
         <div className="tl-canvas" style={{ width: LW_TL + trackW }}>
           <div className="tl-head" style={{ height: 44 }}>
             <div className="tl-corner">{mode === 'free' && <span style={{ display:'flex', alignItems:'center', gap:6 }}><Ic.move size={13}/> </span>}Position</div>
