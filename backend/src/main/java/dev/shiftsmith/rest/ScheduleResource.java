@@ -1,6 +1,8 @@
 package dev.shiftsmith.rest;
 
+import dev.shiftsmith.domain.CalendarOverlap;
 import dev.shiftsmith.realtime.ScheduleBroadcaster;
+import dev.shiftsmith.rest.dto.ApiError;
 import dev.shiftsmith.rest.dto.ProblemDTO;
 import dev.shiftsmith.rest.dto.ScheduleDTO;
 import dev.shiftsmith.service.ScheduleService;
@@ -13,6 +15,7 @@ import jakarta.ws.rs.core.Response;
 import org.jboss.resteasy.reactive.RestStreamElementType;
 
 import java.time.Duration;
+import java.util.Optional;
 
 @Path("/api")
 @Produces(MediaType.APPLICATION_JSON)
@@ -65,6 +68,12 @@ public class ScheduleResource {
     @PUT
     @Path("/problem")
     public Response replaceProblem(ProblemDTO dto) {
+        Optional<String> conflict = CalendarOverlap.firstConflict(dto.employees, dto.positions);
+        if (conflict.isPresent()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new ApiError(conflict.get()))
+                    .build();
+        }
         service.replaceProblem(dto.employees, dto.positions, dto.settings, dto.overrides);
         return Response.noContent().build();
     }
