@@ -105,6 +105,7 @@ button { font-family: inherit; }
 .seg button svg { width: 14px; height: 14px; }
 .seg button:disabled { opacity: .35; cursor: default; }
 .seg button:disabled:hover { color: var(--text-3); }
+.seg button.zoom-pct:hover { background: var(--surface); }
 /* Compact numeric stepper (e.g. shift staff count) — sized to content, not stretched. */
 .seg.stepper button { padding: 0 9px; }
 

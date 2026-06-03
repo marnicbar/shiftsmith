@@ -153,6 +153,22 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     }
   }
 
+  // Zoom the time axis while keeping the content `anchorOffset` px from the scroll
+  // viewport's left edge pinned on screen. computeNz maps the old pph → new (clamped
+  // to 6..180). The matching scrollLeft is stashed for the [pph] layout effect above.
+  function zoomAround(anchorOffset, computeNz) {
+    const el = scrollRef.current; if (!el) return;
+    const contentX = el.scrollLeft + anchorOffset;
+    setPph((z) => {
+      const nz = Math.max(6, Math.min(180, computeNz(z)));
+      const hour = (contentX - LW_TL) / z;            // time at the anchor (LW_TL = sticky label column)
+      zoomScrollRef.current = LW_TL + hour * nz - anchorOffset;
+      return nz;
+    });
+  }
+  // Horizontal center of the visible track, for button/reset zooms.
+  const viewCenter = () => { const el = scrollRef.current; return el ? (LW_TL + el.clientWidth) / 2 : 0; };
+
   // Timeline wheel behavior (industry-standard, only while the pointer is over the
   // timeline — elsewhere on the page the browser keeps its defaults, e.g. Ctrl+scroll
   // page zoom over the logo). Attached natively with { passive: false } so we can
@@ -168,13 +184,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
         if (mode === 'free') {
           // Anchor the zoom on the cursor: keep the time under the pointer fixed on screen.
           const mouseOffset = e.clientX - el.getBoundingClientRect().left; // px from track viewport's left
-          const contentX = el.scrollLeft + mouseOffset;                    // px into the canvas
-          setPph((z) => {
-            const nz = Math.max(6, Math.min(180, z - Math.sign(e.deltaY) * Math.max(1, z * 0.12)));
-            const hour = (contentX - LW_TL) / z;            // time the cursor is over (LW_TL = sticky label column)
-            zoomScrollRef.current = LW_TL + hour * nz - mouseOffset; // applied after re-render to re-center it
-            return nz;
-          });
+          zoomAround(mouseOffset, (z) => z - Math.sign(e.deltaY) * Math.max(1, z * 0.12));
         }
         return;
       }
@@ -305,9 +315,9 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
         </div>
         {(mode === 'free') && (
           <div className="seg">
-            <button onClick={() => setPph((z) => Math.max(6, z * 0.8))}><Ic.zoomOut size={14}/></button>
-            <button style={{ pointerEvents: 'none', minWidth: 48 }} className="mono">{pct}%</button>
-            <button onClick={() => setPph((z) => Math.min(180, z * 1.25))}><Ic.zoomIn size={14}/></button>
+            <button onClick={() => zoomAround(viewCenter(), (z) => z * 0.8)}><Ic.zoomOut size={14}/></button>
+            <button className="mono zoom-pct" style={{ minWidth: 48 }} title="Reset zoom to 100%" onClick={() => zoomAround(viewCenter(), () => FREE_BASE)}>{pct}%</button>
+            <button onClick={() => zoomAround(viewCenter(), (z) => z * 1.25)}><Ic.zoomIn size={14}/></button>
           </div>
         )}
         <div className="seg">
