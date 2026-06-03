@@ -203,10 +203,19 @@ export function RulesEditor({ rules, onChange, globalRules = [], mode = 'persona
     cancel();
   }
   function applyOn(date) {
-    const r = rules.find((x) => x.id === editing.ruleId);
-    if (!r) return;
     const value = clampValueAt(editing.metric, editing.op, +editing.value, date);
     const ch = { id: SS.uid('c'), date, kind: 'set', metric: editing.metric, op: editing.op, value };
+    if (editing.ruleId == null) {
+      // A not-yet-saved rule scheduled to take effect on `date`: start from the
+      // inherited global value (a no-op before the date) so the change is what bites.
+      const g = globalMatch(editing.metric, editing.op);
+      const baseVal = g ? ruleEffectiveAt(g, todayISO).value : value;
+      onChange([...rules, { id: SS.uid('r'), metric: editing.metric, op: editing.op, value: baseVal, changes: [ch] }]);
+      cancel();
+      return;
+    }
+    const r = rules.find((x) => x.id === editing.ruleId);
+    if (!r) return;
     onChange(rules.map((x) => x.id === r.id
       ? { ...x, changes: [...(x.changes || []).filter((c) => c.date !== date || c.kind !== 'set'), ch].sort((a, b) => a.date.localeCompare(b.date)) }
       : x));
@@ -272,15 +281,11 @@ export function RulesEditor({ rules, onChange, globalRules = [], mode = 'persona
               {menu === 'delete' && <CalPicker kind="delete" period={periodOf(editing.metric)} onPick={deleteOn} onClose={() => setMenu(null)} />}
             </div>
           )}
-          {isNew ? (
-            <button className="btn primary sm" onClick={applyNow}>Apply</button>
-          ) : (
-            <div className="splitbtn primary">
-              <button className="sb-main" onClick={applyNow}>Apply</button>
-              <button className="sb-caret" onClick={() => setMenu(menu === 'apply' ? null : 'apply')}><Ic.chevD size={12}/></button>
-              {menu === 'apply' && <CalPicker kind="apply" period={periodOf(editing.metric)} onPick={applyOn} onClose={() => setMenu(null)} />}
-            </div>
-          )}
+          <div className="splitbtn primary">
+            <button className="sb-main" onClick={applyNow}>Apply</button>
+            <button className="sb-caret" onClick={() => setMenu(menu === 'apply' ? null : 'apply')}><Ic.chevD size={12}/></button>
+            {menu === 'apply' && <CalPicker kind="apply" period={periodOf(editing.metric)} onPick={applyOn} onClose={() => setMenu(null)} />}
+          </div>
         </div>
       </div>
     );

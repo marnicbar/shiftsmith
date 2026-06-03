@@ -51,6 +51,17 @@ describe('RulesEditor — personal mode', () => {
     expect(saved[0]).toMatchObject({ metric: 'dayHours', op: 'max', value: 10 }); // clamped down
   });
 
+  it('offers the scheduling caret when customizing, like a normal edit', async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <RulesEditor rules={[]} onChange={vi.fn()} mode="personal"
+        globalRules={[{ id: 'g1', metric: 'dayHours', op: 'max', value: 10, changes: [] }]} />,
+    );
+    await user.click(screen.getByText('Customize'));
+    expect(screen.getByText('Apply')).toBeInTheDocument();
+    expect(container.querySelector('.splitbtn.primary .sb-caret')).toBeInTheDocument();
+  });
+
   it('renders both the global and the personal row when overridden', () => {
     render(
       <RulesEditor mode="personal" onChange={vi.fn()}
