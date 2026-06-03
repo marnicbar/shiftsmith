@@ -302,6 +302,7 @@ body.cal-moving, body.cal-moving * { cursor: grabbing !important; }
 body.cal-resizing, body.cal-resizing * { cursor: ns-resize !important; }
 body.cal-moving, body.cal-resizing { user-select: none; }
 .evt.ghost { opacity: .55; border-style: dashed; pointer-events: none; box-shadow: none; }
+.evt.ghost.invalid { opacity: .85; }
 
 /* Month grid */
 .monthgrid { display: grid; grid-template-columns: repeat(7, 1fr); height: 100%; min-height: 0; }

@@ -186,18 +186,34 @@ export function Calendar(props) {
     startCreate(newItem({ date, start: 9 * 60, end: 17 * 60 }));
   }
 
+  // Would a new entry spanning [lo,hi) on {dayISO} overlap an existing one?
+  function createClash(tmpl, dayISO, lo, hi) {
+    const cand = { ...tmpl, date: dayISO, start: lo, end: hi };
+    return items.some((o) => o.id !== cand.id && entriesOverlap(cand, o));
+  }
+
   function onColMouseDown(e, dayISO) {
     if (e.button !== 0) return;
     const colRect = e.currentTarget.getBoundingClientRect();
     const a = yToMin(e.clientY - colRect.top);
-    const st = { dayISO, a, b: a, colRect };
+    const tmpl = newItem({ date: dayISO, start: 0, end: 0 }); // one representative for collision checks
+    const st = { dayISO, a, b: a, colRect, invalid: false };
     dragRef.current = st; setDrag(st);
-    const move = (ev) => { const b = yToMin(ev.clientY - colRect.top); const s = { ...dragRef.current, b }; dragRef.current = s; setDrag(s); };
+    const move = (ev) => {
+      const b = yToMin(ev.clientY - colRect.top);
+      const lo = Math.min(dragRef.current.a, b), hi = Math.max(dragRef.current.a, b);
+      const s = { ...dragRef.current, b, invalid: hi > lo && createClash(tmpl, dayISO, lo, hi) };
+      dragRef.current = s; setDrag(s);
+    };
     const up = (ev) => {
       window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
       const s = dragRef.current; dragRef.current = null; setDrag(null);
       let lo = Math.min(s.a, s.b), hi = Math.max(s.a, s.b);
+      const wasDrag = hi - lo >= snap;
       if (hi - lo < snap) { hi = Math.min(1440, lo + 120); }
+      // A real drag that lands on another entry is rejected, like a move/resize;
+      // a click falls through to the editor, which validates on save.
+      if (wasDrag && createClash(tmpl, dayISO, lo, hi)) return;
       startCreate(newItem({ date: dayISO, start: lo, end: hi }));
     };
     window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
@@ -566,7 +582,7 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, drag,
               })}
               {drag && drag.dayISO === d && (() => {
                 const lo = Math.min(drag.a, drag.b), hi = Math.max(drag.a, drag.b);
-                return <div className="evt ghost tone-shift" style={{ top: lo/60*zoom, height: Math.max(16,(hi-lo)/60*zoom), left: 3, right: 3 }}>
+                return <div className={`evt ghost tone-shift ${drag.invalid ? 'invalid' : ''}`} style={{ top: lo/60*zoom, height: Math.max(16,(hi-lo)/60*zoom), left: 3, right: 3 }}>
                   <span className="et mono">{SS.minLabel(lo)}–{SS.minLabel(hi)}</span></div>;
               })()}
               {isToday && nowMin>0 && <div className="nowline" style={{ top: nowMin/60*zoom }}></div>}
