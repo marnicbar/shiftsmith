@@ -10,7 +10,8 @@ import { Personnel } from './personnel.jsx';
 import { Positions } from './positions.jsx';
 import { ShiftPlan } from './shiftplan.jsx';
 import { Dashboard } from './dashboard.jsx';
-import { SettingsView } from './settings.jsx';
+import { SettingsView, AccountView } from './settings.jsx';
+import { Login } from './login.jsx';
 import { tooLooseAgainst } from './rules.jsx';
 import * as api from './lib/api.js';
 
@@ -60,11 +61,13 @@ export default function App() {
   const { t } = useTranslation();
   const [prefs, setPref] = usePrefs();
   const [tab, setTab] = useState('personnel');
-  // Remember the last non-settings view so the settings button can toggle back to it.
+  const [acctMenu, setAcctMenu] = useState(false);
+  // Remember the last primary view so a settings/account panel can toggle back to it.
   const prevTabRef = useRef('personnel');
-  const toggleSettings = () => {
-    if (tab === 'settings') { setTab(prevTabRef.current); }
-    else { prevTabRef.current = tab; setTab('settings'); }
+  const PANELS = ['settings', 'account'];
+  const openPanel = (id) => {
+    if (tab === id) { setTab(prevTabRef.current); }
+    else { if (!PANELS.includes(tab)) prevTabRef.current = tab; setTab(id); }
   };
 
   // Problem state (client-authoritative, synced to the backend).
@@ -82,7 +85,30 @@ export default function App() {
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
 
+  // Auth gate: 'checking' until we know, then 'in' (show the app) or 'out' (show login).
+  const [authState, setAuthState] = useState('checking');
+  const [authUser, setAuthUser] = useState(null);
+
   const lastSyncRef = useRef(null);
+
+  // On startup, validate any stored token. A 401 on any later request (e.g. an
+  // expired token) drops us back to the login screen via the shared handler.
+  useEffect(() => {
+    api.setUnauthorizedHandler(() => { setAuthState('out'); setAuthUser(null); setLoaded(false); });
+    (async () => {
+      const u = await api.me();
+      if (u) { setAuthUser(u); setAuthState('in'); } else { setAuthState('out'); }
+    })();
+    return () => api.setUnauthorizedHandler(null);
+  }, []);
+
+  const onLogin = useCallback((u) => { setAuthUser(u); setAuthState('in'); }, []);
+  const onLogout = useCallback(() => {
+    api.logout();
+    setAuthState('out'); setAuthUser(null); setLoaded(false);
+    setEmployees([]); setPositions([]); setOverrides({}); setSelEmp(null); setSelPos(null);
+    lastSyncRef.current = null;
+  }, []);
 
   useEffect(() => { Theme.applyTheme({ palette: prefs.palette, accent: prefs.accent, dark: prefs.dark }); }, [prefs.palette, prefs.accent, prefs.dark]);
   useEffect(() => { document.documentElement.style.setProperty('--ui-font', FONTS[prefs.font] || FONTS.Geist); }, [prefs.font]);
@@ -94,8 +120,9 @@ export default function App() {
     horizonStart: d.horizonStart, horizonEnd: d.horizonEnd,
   }), []);
 
-  // Initial load from the backend (seeds demo data on a fresh database).
+  // Initial load from the backend, once the session is established.
   useEffect(() => {
+    if (authState !== 'in') return;
     (async () => {
       try {
         const d = await api.getSchedule();
@@ -111,7 +138,7 @@ export default function App() {
         setLoaded(true);
       } catch (e) { setError(e.message); }
     })();
-  }, [setMeta]);
+  }, [authState, setMeta]);
 
   // Live updates: subscribe to the backend's SSE stream once loaded. The solver's
   // progress, our own edits and other clients' edits all arrive here, so the
@@ -209,6 +236,13 @@ export default function App() {
   async function solveNow() { try { await api.startSolving(); } catch (e) { setError(e.message); } }
   async function pauseSolver() { try { await api.stopSolving(); } catch (e) { setError(e.message); } }
 
+  if (authState === 'checking') {
+    return <div className="app"><div className="loading">{t('app.loading')}</div></div>;
+  }
+  if (authState === 'out') {
+    return <Login onSuccess={onLogin} />;
+  }
+
   if (!loaded && !error) {
     return <div className="app"><div className="loading">{t('app.loading')}</div></div>;
   }
@@ -227,9 +261,25 @@ export default function App() {
         </nav>
         <div className="spacer"></div>
         <SolverBadge status={sched.solverStatus} />
-        <button className={`iconbtn ${tab === 'settings' ? 'active' : ''}`} title={t('nav.settings')} onClick={toggleSettings}>
+        <button className={`iconbtn ${tab === 'settings' ? 'active' : ''}`} title={t('nav.settings')} onClick={() => openPanel('settings')}>
           <Ic.settings/>
         </button>
+        <div className="acct-btn-wrap">
+          <button className={`iconbtn ${tab === 'account' || acctMenu ? 'active' : ''}`} title={t('account.title')}
+            aria-haspopup="menu" aria-expanded={acctMenu} onClick={() => setAcctMenu((o) => !o)}>
+            <Ic.user/>
+          </button>
+          {acctMenu && (
+            <>
+              <div className="menu-backdrop" onClick={() => setAcctMenu(false)}></div>
+              <div className="mini-menu" role="menu">
+                <div className="acct-menu-head">{authUser}</div>
+                <button role="menuitem" onClick={() => { setAcctMenu(false); openPanel('account'); }}><Ic.sliders size={15}/> {t('account.menuSettings')}</button>
+                <button role="menuitem" onClick={() => { setAcctMenu(false); onLogout(); }}><Ic.logout size={15}/> {t('account.signOut')}</button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {error && <div className="api-error">{t('app.backendError', { error })}</div>}
@@ -239,7 +289,8 @@ export default function App() {
       {tab === 'personnel' && <Personnel employees={employees} setEmployees={setEmployees} skills={skills} settings={settings} selId={selEmp} setSelId={setSelEmp} snap={snap} newFlow={newFlow} />}
       {tab === 'positions' && <Positions employees={employees} positions={positions} setPositions={setPositions} groupOrder={groupOrder} setGroupOrder={setGroupOrder} skills={skills} selId={selPos} setSelId={setSelPos} snap={snap} newFlow={newFlow} />}
       {tab === 'shiftplan' && <ShiftPlan key={tlDefault} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} assign={assignMap} overrides={overrides} setOverrides={setOverrides} sched={sched} onSolve={solveNow} onPause={pauseSolver} />}
-      {tab === 'settings' && <SettingsView prefs={prefs} setPref={setPref} fonts={FONTS} settings={settings} setSettings={setSettings} sched={sched} skills={skills} onAddSkill={addSkill} onRenameSkill={renameSkill} onRemoveSkill={removeSkill} globalRules={settings.globalRules || []} setGlobalRules={setGlobalRules} />}
+      {tab === 'settings' && <SettingsView settings={settings} setSettings={setSettings} sched={sched} skills={skills} onAddSkill={addSkill} onRenameSkill={renameSkill} onRemoveSkill={removeSkill} globalRules={settings.globalRules || []} setGlobalRules={setGlobalRules} />}
+      {tab === 'account' && <AccountView prefs={prefs} setPref={setPref} fonts={FONTS} authUser={authUser} />}
     </div>
   );
 }

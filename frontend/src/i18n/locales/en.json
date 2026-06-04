@@ -39,6 +39,35 @@
     "tightenedRules": "Tightened personal rules for {{names}} to satisfy the new system limits.",
     "namesMore": "{{names}} +{{count}} more"
   },
+  "auth": {
+    "title": "Sign in",
+    "subtitle": "Sign in to manage your schedule.",
+    "username": "Username",
+    "password": "Password",
+    "remember": "Keep me signed in",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "invalid": "Invalid username or password.",
+    "failed": "Could not sign in. Please try again.",
+    "changed": "Password updated.",
+    "changeFailed": "Could not update password.",
+    "currentIncorrect": "Current password is incorrect.",
+    "tooShort": "New password must be at least 6 characters.",
+    "mismatch": "New passwords do not match."
+  },
+  "account": {
+    "title": "Account",
+    "subtitle": "Your sign-in, appearance and calendar preferences.",
+    "menuSettings": "Account settings",
+    "signOut": "Sign out",
+    "signinTitle": "Sign-in",
+    "signinDesc": "Your username and password.",
+    "signedInAs": "Signed in as",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "updatePassword": "Update password"
+  },
   "dashboard": {
     "title": "Dashboard",
     "weekOf": "Week of {{date}} · live overview",
@@ -130,7 +159,7 @@
   },
   "settings": {
     "title": "Settings",
-    "subtitle": "Appearance, calendar behaviour and the solver window.",
+    "subtitle": "Skills, working-time rules and the solver window.",
     "appearance": "Appearance",
     "darkMode": "Dark mode",
     "darkModeHint": "Switch between light and dark themes.",
