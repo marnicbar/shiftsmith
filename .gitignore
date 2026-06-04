@@ -16,3 +16,6 @@ dist/
 
 # Misc
 .DS_Store
+
+# Local PostgreSQL data dir (docker-compose bind mount)
+/data/

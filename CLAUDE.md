@@ -23,9 +23,22 @@ npm run build  # production build to dist/
 npm test       # Vitest unit + component tests
 ```
 
-### Full stack
+### Production image (UI + API in one container)
 ```bash
-docker compose up --build   # postgres :5432, backend :8080, frontend :5173
+docker compose up -d --build   # app (UI+API) :8080 + postgres
+```
+The root `Dockerfile` is a multi-stage build: it builds the React SPA, bundles
+`dist/` into the Quarkus app's `META-INF/resources/` (served at `/` on the same
+origin as `/api`), and packages the backend. One process, one port (8080), no
+nginx — bring your own PostgreSQL (`docker-compose.yml` wires up a `db` service;
+the database is deliberately not part of the image). Tagged builds (`v*`) are
+published to `ghcr.io/marnicbar/shiftsmith` by `.github/workflows/release.yml`.
+Because the frontend has no client-side router, the SPA is only ever served at
+`/`, so no deep-link fallback is needed.
+
+### Dev full stack (hot reload)
+```bash
+docker compose -f docker-compose.dev.yml up --build   # postgres :5432, backend :8080, frontend :5173
 ```
 
 ### Testing
@@ -39,8 +52,9 @@ and their tests — in lock-step.
 
 ## Architecture
 
-React SPA → Vite/nginx proxy → Quarkus REST → Timefold Solver, with PostgreSQL
-for persistence. `ScheduleService` keeps the working problem in memory (the
+React SPA → Quarkus REST → Timefold Solver, with PostgreSQL for persistence. In
+dev the Vite server proxies `/api/*` to Quarkus; in the production image Quarkus
+serves the built SPA itself (same origin, no proxy). `ScheduleService` keeps the working problem in memory (the
 solver needs it there) but **persists it to Postgres as a single JSONB
 document** so it survives restarts. On boot it rehydrates from the DB; an empty
 database starts with an empty problem (no demo data).

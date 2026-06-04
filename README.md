@@ -38,15 +38,33 @@ skills, availability, hour limits and fair distribution.
 
 ## Running
 
-### Docker Compose
-```bash
-docker compose up --build
-```
-Open **http://localhost:5173**. The backend API runs on :8080 (Swagger UI at
-`/q/swagger-ui`); the Vite dev server proxies `/api/*` to it.
+### Production (single image + your database)
+ShiftSmith ships as **one image** that serves the UI and the API together on
+port 8080. Bring your own PostgreSQL — the database is not part of the image.
 
-### Local development
-Requires Java 21 + Maven and Node 20+.
+```bash
+docker compose up -d --build
+```
+Open **http://localhost:8080** (Swagger UI at `/q/swagger-ui`). The bundled
+`docker-compose.yml` runs the app plus a PostgreSQL container; override
+`POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` (and the image tag) via a
+`.env` file before going to production.
+
+To run a published image instead of building locally, drop the `build:` block in
+`docker-compose.yml` and keep the `image:` line (tagged builds are pushed to
+`ghcr.io/marnicbar/shiftsmith` on every `v*` git tag). Point the app at any
+PostgreSQL with the standard `QUARKUS_DATASOURCE_JDBC_URL`, `POSTGRES_USER` and
+`POSTGRES_PASSWORD` environment variables.
+
+### Development
+Hot-reload stack (separate Vite dev server + backend + db) in Docker:
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+Open **http://localhost:5173**; the Vite dev server proxies `/api/*` to the
+backend on :8080.
+
+Or run the toolchains directly (requires Java 21 + Maven and Node 20+):
 ```bash
 cd backend && mvn quarkus:dev      # :8080
 cd frontend && npm install && npm run dev   # :5173 (proxies /api → :8080)
