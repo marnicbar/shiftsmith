@@ -25,7 +25,10 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-shiftsmith}
       - POSTGRES_DB=${POSTGRES_DB:-shiftsmith}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # Database files live in a host directory (default ./data/postgres) so they
+      # are easy to back up and survive `docker compose down -v`. Override the
+      # location with POSTGRES_DATA_DIR. The directory is created on first run.
+      - ${POSTGRES_DATA_DIR:-./data/postgres}:/var/lib/postgresql/data
     # Not published to the host: only the app needs to reach the database, over
     # the internal compose network. Add a `ports:` mapping if you need direct
     # access for backups/inspection.
@@ -50,6 +53,3 @@ services:
       db:
         condition: service_healthy
     restart: unless-stopped
-
-volumes:
-  pgdata:
