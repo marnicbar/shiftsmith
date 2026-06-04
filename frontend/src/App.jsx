@@ -275,7 +275,7 @@ export default function App() {
               <div className="mini-menu" role="menu">
                 <div className="acct-menu-head">{authUser}</div>
                 <button role="menuitem" onClick={() => { setAcctMenu(false); openPanel('account'); }}><Ic.sliders size={15}/> {t('account.menuSettings')}</button>
-                <button role="menuitem" onClick={() => { setAcctMenu(false); onLogout(); }}><Ic.x size={15}/> {t('account.signOut')}</button>
+                <button role="menuitem" onClick={() => { setAcctMenu(false); onLogout(); }}><Ic.logout size={15}/> {t('account.signOut')}</button>
               </div>
             </>
           )}

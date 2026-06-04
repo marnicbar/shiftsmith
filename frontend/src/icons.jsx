@@ -32,6 +32,7 @@ mkIcon('calendar', <><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path 
 mkIcon('check', <path d="M5 12.5l4.5 4.5L19 7"/>);
 mkIcon('alert', <><path d="M12 3l9 16H3l9-16Z"/><path d="M12 10v4M12 17.5v.01"/></>);
 mkIcon('user', <><circle cx="12" cy="8" r="4"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></>);
+mkIcon('logout', <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></>);
 mkIcon('sliders', <><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h7M15 18h5"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="13" cy="18" r="2"/></>);
 mkIcon('star', <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 17l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9Z"/>);
 mkIcon('ban', <><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></>);
