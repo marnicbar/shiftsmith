@@ -1,0 +1,14 @@
+# Keep the build context small and the image reproducible: never ship local
+# build output, dependencies or VCS metadata into the image.
+.git
+.github
+**/node_modules
+**/target
+**/dist
+**/.quarkus
+**/*.iml
+.idea
+.vscode
+**/.DS_Store
+docker-compose*.yml
+*.md
