@@ -1,9 +1,12 @@
 // dashboard.jsx — general overview (placeholder data per spec).
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { SS } from './data.js';
+import { dateLocale } from './i18n/index.js';
 import { Ic } from './icons.jsx';
 
 export function Dashboard({ employees, positions, sched = {}, onGo }) {
+  const { t } = useTranslation();
   // Real coverage from the solver over the configured horizon; fall back to a
   // rough per-week estimate before the first solve completes.
   let shiftSlots = sched.total || 0;
@@ -18,20 +21,23 @@ export function Dashboard({ employees, positions, sched = {}, onGo }) {
   const coverage = shiftSlots ? Math.round((assigned / shiftSlots) * 100) : 0;
 
   const kpis = [
-    { ic: 'alert', cls: 'undes', val: unassigned, lbl: 'Unassigned shifts', delta: 'this week', deltaCls: 'muted' },
-    { ic: 'check', cls: 'pref', val: coverage + '%', lbl: 'Coverage', delta: '+4% vs last week', deltaCls: 'tone-pref' },
-    { ic: 'users', cls: 'shift', val: employees.length, lbl: 'Active people', delta: positions.length + ' positions', deltaCls: 'muted' },
-    { ic: 'ban', cls: 'vac', val: 3, lbl: 'On vacation', delta: 'hard constraint', deltaCls: 'muted' },
+    { ic: 'alert', cls: 'undes', val: unassigned, lbl: t('dashboard.kpi.unassigned'), delta: t('dashboard.kpi.thisWeek'), deltaCls: 'muted' },
+    { ic: 'check', cls: 'pref', val: coverage + '%', lbl: t('dashboard.kpi.coverage'), delta: t('dashboard.kpi.vsLastWeek'), deltaCls: 'tone-pref' },
+    { ic: 'users', cls: 'shift', val: employees.length, lbl: t('dashboard.kpi.activePeople'), delta: t('dashboard.kpi.positionsCount', { count: positions.length }), deltaCls: 'muted' },
+    { ic: 'ban', cls: 'vac', val: 3, lbl: t('dashboard.kpi.onVacation'), delta: t('dashboard.kpi.hardConstraint'), deltaCls: 'muted' },
   ];
+
+  const attnCls = ['undes', 'undes', 'vac', 'undes'];
+  const attention = t('dashboard.attention', { returnObjects: true }).map((r, i) => ({ ...r, cls: attnCls[i] }));
 
   return (
     <div className="dash">
       <div className="dash-head">
         <div>
-          <h1>Dashboard</h1>
-          <p>Week of {SS.startOfWeek(new Date()).toLocaleDateString([], { month: 'long', day: 'numeric' })} · live overview</p>
+          <h1>{t('dashboard.title')}</h1>
+          <p>{t('dashboard.weekOf', { date: SS.startOfWeek(new Date()).toLocaleDateString(dateLocale(), { month: 'long', day: 'numeric' }) })}</p>
         </div>
-        <button className="btn primary" onClick={() => onGo('shiftplan')}><Ic.sparkles size={15}/> Solve schedule</button>
+        <button className="btn primary" onClick={() => onGo('shiftplan')}><Ic.sparkles size={15}/> {t('dashboard.solveSchedule')}</button>
       </div>
 
       <div className="kpi-grid">
@@ -49,18 +55,13 @@ export function Dashboard({ employees, positions, sched = {}, onGo }) {
 
       <div className="dash-cols">
         <div className="card">
-          <h3>Coverage by position</h3>
-          <div className="ph" style={{ height: 240 }}>chart placeholder — coverage per position over the week</div>
+          <h3>{t('dashboard.coverageByPosition')}</h3>
+          <div className="ph" style={{ height: 240 }}>{t('dashboard.chartPlaceholder')}</div>
         </div>
         <div className="card">
-          <h3>Needs attention</h3>
+          <h3>{t('dashboard.needsAttention')}</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[
-              { t: 'Bar · Fri evening', s: '2 slots unfilled', cls: 'undes' },
-              { t: 'Kitchen Line · Sat', s: '1 slot unfilled', cls: 'undes' },
-              { t: 'Mei Tanaka', s: 'on vacation Sat–Sun', cls: 'vac' },
-              { t: 'Night Supervisor', s: 'no eligible staff free', cls: 'undes' },
-            ].map((r, i) => (
+            {attention.map((r, i) => (
               <div key={i} className={`tone-${r.cls}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 10, background: 'var(--tone-soft)' }}>
                 <span style={{ width: 8, height: 8, borderRadius: 99, background: 'var(--tone)', flex: '0 0 8px' }}></span>
                 <div style={{ flex: 1, minWidth: 0 }}>

@@ -1,7 +1,9 @@
 // shiftplan.jsx — timeline: positions (rows) × time (columns). Day / week / continuous zoom.
 import { useState as useStateSP, useRef as useRefSP, useEffect as useEffectSP, useLayoutEffect as useLayoutEffectSP } from 'react';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { SS } from './data.js';
+import { dateLocale } from './i18n/index.js';
 import { Ic } from './icons.jsx';
 import { Theme } from './theme.js';
 
@@ -90,6 +92,7 @@ const LW_TL = 168;
 const FREE_BASE = 18;
 
 export function ShiftPlan({ employees, positions, groupOrder = [], initialMode = 'week', assign = {}, overrides = {}, setOverrides, sched = {}, onSolve, onPause }) {
+  const { t } = useTranslation();
   const [mode, setMode] = useStateSP(initialMode);
   const [anchor, setAnchor] = useStateSP(new Date());
   const [pph, setPph] = useStateSP(initialMode === 'free' ? FREE_BASE : 58);
@@ -293,17 +296,17 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     const i0 = Math.max(0, Math.min(last, Math.floor(scrollX / effPph / 24)));
     const i1 = Math.max(0, Math.min(last, Math.floor((scrollX + Math.max(0, containerW - LW_TL) - 1) / effPph / 24)));
     const d0 = SS.parseISO(dayList[i0]);
-    if (i1 <= i0) return d0.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    if (i1 <= i0) return d0.toLocaleDateString(dateLocale(), { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
     const d1 = SS.parseISO(dayList[i1]);
     const left = d0.getFullYear() === d1.getFullYear()
-      ? d0.toLocaleDateString([], { month: 'short', day: 'numeric' })
-      : d0.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-    return `${left} – ${d1.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      ? d0.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' })
+      : d0.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
+    return `${left} – ${d1.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric', year: 'numeric' })}`;
   }
   const stepLabel = mode === 'day'
-    ? anchor.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })
+    ? anchor.toLocaleDateString(dateLocale(), { weekday: 'long', month: 'short', day: 'numeric' })
     : mode === 'week'
-    ? `${SS.parseISO(dayList[0]).toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${SS.parseISO(dayList[6]).toLocaleDateString([], { month: 'short', day: 'numeric' })}`
+    ? `${SS.parseISO(dayList[0]).toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' })} – ${SS.parseISO(dayList[6]).toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' })}`
     : freeLabel();
 
   const tickStep = hourTickStep(effPph);
@@ -341,7 +344,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
       const x = (di*24 + sh.start/60) * effPph;
       const w = Math.max(4, (sh.end - sh.start)/60 * effPph);
       const full = crew.length >= sh.headcount;
-      const title = `${sh.name} · ${SS.minLabel(sh.start)}–${SS.minLabel(sh.end)} · ${SS.shiftSkills(sh).join(' · ') || '—'} · ${crew.length}/${sh.headcount}${edited ? ' · manually set' : ''}`;
+      const title = `${sh.name} · ${SS.minLabel(sh.start)}–${SS.minLabel(sh.end)} · ${SS.shiftSkills(sh).join(' · ') || '—'} · ${crew.length}/${sh.headcount}${edited ? ` · ${t('shiftplan.manuallySetLower')}` : ''}`;
       const cls = `bar ${full?'full':'under'} ${edited?'edited':''}`;
       const style = { left: x+1, width: Math.max(3, w-2), top: BOX_TOP, height: BOX_H };
 
@@ -363,14 +366,14 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
       let shown = circles;
       if (circles.length > fit) {
         shown = circles.slice(0, fit - 1);
-        shown.push(<span key="more" className="av more" title={`${crew.length}/${sh.headcount} staffed`}>+{circles.length - (fit - 1)}</span>);
+        shown.push(<span key="more" className="av more" title={t('shiftplan.staffedCount', { filled: crew.length, total: sh.headcount })}>+{circles.length - (fit - 1)}</span>);
       }
 
       return (
         <div key={key} className={cls} title={title} onClick={(e) => openEditor(e, sh, p, d, key)} style={style}>
           <div className="bhead">
             <span className="bt">{sh.name}</span>
-            {edited && <span className="bedit" title="Manually set"><Ic.user size={9}/></span>}
+            {edited && <span className="bedit" title={t('shiftplan.manuallySet')}><Ic.user size={9}/></span>}
           </div>
           <span className="btime mono">{SS.minLabel(sh.start)}–{SS.minLabel(sh.end)}</span>
           <div className="crew">{shown}</div>
@@ -386,27 +389,27 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
       <div className="tl-toolbar">
         <div className="nav">
           <button className="iconbtn" onClick={() => step(-1)}><Ic.chevL/></button>
-          <button className="btn sm" onClick={goToday}>Today</button>
+          <button className="btn sm" onClick={goToday}>{t('common.today')}</button>
           <button className="iconbtn" onClick={() => step(1)}><Ic.chevR/></button>
         </div>
         <div className="cal-title" style={{ minWidth: 180 }}>{stepLabel}</div>
         <div style={{ flex: 1 }}></div>
         <div className="legend" style={{ display: 'flex', gap: 12, marginRight: 4 }}>
-          {[['full','Fully staffed','green'],['under','Understaffed','amber']].map(([c,l,t]) => (
+          {[['full', t('shiftplan.fullyStaffed'), 'green'], ['under', t('shiftplan.understaffed'), 'amber']].map(([c, l, tone]) => (
             <span key={c} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-3)' }}>
-              <span style={{ width: 10, height: 10, borderRadius: 3, background: `var(--${t}-solid)` }}></span>{l}
+              <span style={{ width: 10, height: 10, borderRadius: 3, background: `var(--${tone}-solid)` }}></span>{l}
             </span>
           ))}
         </div>
         {(mode === 'free') && (
           <div className="seg">
             <button onClick={() => zoomAround(viewCenter(), (z) => z * 0.8)}><Ic.zoomOut size={14}/></button>
-            <button className="mono zoom-pct" style={{ minWidth: 48 }} title="Reset zoom to 100%" onClick={() => zoomAround(viewCenter(), () => FREE_BASE)}>{pct}%</button>
+            <button className="mono zoom-pct" style={{ minWidth: 48 }} title={t('shiftplan.resetZoom')} onClick={() => zoomAround(viewCenter(), () => FREE_BASE)}>{pct}%</button>
             <button onClick={() => zoomAround(viewCenter(), (z) => z * 1.25)}><Ic.zoomIn size={14}/></button>
           </div>
         )}
         <div className="seg">
-          {[['day','Day'],['week','Week'],['free','Continuous']].map(([v,l]) => (
+          {[['day', t('shiftplan.view.day')], ['week', t('shiftplan.view.week')], ['free', t('shiftplan.view.free')]].map(([v, l]) => (
             <button key={v} className={mode === v ? 'on' : ''} onClick={() => pickMode(v)}>{l}</button>
           ))}
         </div>
@@ -417,14 +420,14 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
       <div className={`tl-scroll ${fitWidth ? 'no-xscroll' : ''}`} ref={scrollRef} onScroll={onScroll}>
         <div className="tl-canvas" style={{ width: LW_TL + trackW }}>
           <div className="tl-head" style={{ height: 44 }}>
-            <div className="tl-corner">Position</div>
+            <div className="tl-corner">{t('shiftplan.positionCol')}</div>
             <div className="tl-times" style={{ width: trackW, height: 44 }}>
               {dayList.map((d, di) => {
                 const dt = SS.parseISO(d);
                 // The header label is never weekend-tinted; only the track content
                 // carries the weekend background (matching the calendar view).
                 return <div key={d} className="tl-dayband" style={{ left: di*24*effPph, width: 24*effPph }}>
-                  {effPph*24 > 60 ? dt.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: dayList.length>7?'short':undefined }) : dt.getDate()}
+                  {effPph*24 > 60 ? dt.toLocaleDateString(dateLocale(), { weekday: 'short', day: 'numeric', month: dayList.length>7?'short':undefined }) : dt.getDate()}
                 </div>;
               })}
               {Array.from({ length: totalHours+1 }, (_, h) => {
@@ -446,7 +449,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
                 <div key={'g:'+k} className="tl-grouprow">
                   <button className="tl-glabel" onClick={() => setCollapsed({ ...collapsed, [k]: !col })}>
                     <Ic.chevD size={13} style={{ transform: col ? 'rotate(-90deg)' : 'none', transition: 'transform .12s' }}/>
-                    <span className="gname">{row.g || 'Ungrouped'}</span>
+                    <span className="gname">{row.g || t('positions.ungrouped')}</span>
                     <span className="gcount">{gCount[k]}</span>
                   </button>
                   <div className="tl-gfill" style={{ width: trackW }}></div>
@@ -480,7 +483,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
         </div>
       </div>
       {mode === 'free' && <div style={{ padding: '6px 18px', fontSize: 11.5, color: 'var(--text-3)', borderTop: '1px solid var(--border)', background: 'var(--surface)' }}>
-        Scroll sideways to load more days · <span className="kbd">⌘</span>/<span className="kbd">Ctrl</span> + scroll to zoom
+        {t('shiftplan.scrollLoad')} · <span className="kbd">⌘</span>/<span className="kbd">Ctrl</span> + {t('shiftplan.scrollZoom')}
       </div>}
       {editing && <AssignEditor ctx={editing} employees={employees} assign={assign}
         overrides={overrides} setOverrides={setOverrides} onClose={() => setEditing(null)} />}
@@ -489,24 +492,26 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
 }
 
 function SolverBar({ sched = {}, onSolve, onPause }) {
+  const { t } = useTranslation();
   const active = sched.solverStatus === 'SOLVING_ACTIVE' || sched.solverStatus === 'SOLVING_SCHEDULED';
   const total = sched.total ?? 0;
   return (
     <div className="tl-substat">
-      <span className={`solver-badge ${active ? 'on' : ''}`} title={active ? 'Solver running' : 'Solver idle (steady state)'}>
-        <span className="dot"></span>{active ? 'Solving…' : 'Steady'}
+      <span className={`solver-badge ${active ? 'on' : ''}`} title={active ? t('solver.running') : t('solver.idle')}>
+        <span className="dot"></span>{active ? t('solver.solving') : t('solver.steady')}
       </span>
-      <span className="sb-stat"><b>{sched.staffed ?? 0}/{total}</b> staffed</span>
-      <span className="sb-stat"><b>{sched.unassigned ?? 0}</b> unassigned</span>
-      {sched.score && <span className="sb-stat mono" title="hard / medium / soft">{sched.score.hard}/{sched.score.medium}/{sched.score.soft}</span>}
+      <span className="sb-stat"><b>{sched.staffed ?? 0}/{total}</b> {t('shiftplan.staffed')}</span>
+      <span className="sb-stat"><b>{sched.unassigned ?? 0}</b> {t('shiftplan.unassigned')}</span>
+      {sched.score && <span className="sb-stat mono" title={t('shiftplan.scoreTitle')}>{sched.score.hard}/{sched.score.medium}/{sched.score.soft}</span>}
       <div style={{ flex: 1 }}></div>
-      <button className="btn sm primary" onClick={onSolve} disabled={active}><Ic.play size={13}/> Solve now</button>
-      <button className="btn sm" onClick={onPause} disabled={!active}><Ic.pause size={13}/> Pause</button>
+      <button className="btn sm primary" onClick={onSolve} disabled={active}><Ic.play size={13}/> {t('shiftplan.solveNow')}</button>
+      <button className="btn sm" onClick={onPause} disabled={!active}><Ic.pause size={13}/> {t('solver.pause')}</button>
     </div>
   );
 }
 
 function AssignEditor({ ctx, employees, assign, overrides, setOverrides, onClose }) {
+  const { t } = useTranslation();
   const { key, sh, pos, date } = ctx;
   const popRef = useRefSP(null);
   const [place, setPlace] = useStateSP({ left: ctx.x, top: ctx.y, ready: false });
@@ -558,7 +563,7 @@ function AssignEditor({ ctx, employees, assign, overrides, setOverrides, onClose
     (chosen.has(b.e.id) - chosen.has(a.e.id)) || (b.pref - a.pref) || (b.skill - a.skill) || (b.avail - a.avail) || (a.leave - b.leave) || a.e.name.localeCompare(b.e.name)
   );
 
-  const dateLabel = SS.parseISO(date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  const dateLabel = SS.parseISO(date).toLocaleDateString(dateLocale(), { weekday: 'short', month: 'short', day: 'numeric' });
   const isOverride = !!overrides[key];
 
   return (
@@ -573,9 +578,9 @@ function AssignEditor({ ctx, employees, assign, overrides, setOverrides, onClose
           <button className="iconbtn" onClick={onClose} style={{ width: 26, height: 26, flex: '0 0 26px' }}><Ic.x size={15}/></button>
         </div>
         <div className="ae-meta">
-          <span className={`ae-count ${eff.length >= sh.headcount ? 'ok' : 'low'}`}>{eff.length}/{sh.headcount} staffed</span>
-          {isOverride && <span className="ae-badge"><Ic.user size={11}/> Manual</span>}
-          {reqSkills.length > 0 && <span className="ae-req">Needs {reqSkills.join(', ')}</span>}
+          <span className={`ae-count ${eff.length >= sh.headcount ? 'ok' : 'low'}`}>{t('shiftplan.staffedCount', { filled: eff.length, total: sh.headcount })}</span>
+          {isOverride && <span className="ae-badge"><Ic.user size={11}/> {t('shiftplan.manual')}</span>}
+          {reqSkills.length > 0 && <span className="ae-req">{t('shiftplan.needs', { skills: reqSkills.join(', ') })}</span>}
         </div>
         <div className="ae-list">
           {ranked.map(({ e, skill, avail, leave, pref, elsewhere }) => {
@@ -589,10 +594,10 @@ function AssignEditor({ ctx, employees, assign, overrides, setOverrides, onClose
                 <span className="ae-who">
                   <span className="ae-name">{e.name}{pref && <Ic.star size={11} className="ae-star"/>}</span>
                   <span className="ae-tags">
-                    {!skill && <span className="ae-tag warn"><Ic.alert size={10}/> Missing skill</span>}
-                    {!avail && <span className="ae-tag warn"><Ic.clock size={10}/> Unavailable</span>}
-                    {leave && <span className="ae-tag warn"><Ic.palm size={10}/> On leave</span>}
-                    {elsewhere && <span className="ae-tag">Booked elsewhere</span>}
+                    {!skill && <span className="ae-tag warn"><Ic.alert size={10}/> {t('shiftplan.tag.missingSkill')}</span>}
+                    {!avail && <span className="ae-tag warn"><Ic.clock size={10}/> {t('shiftplan.tag.unavailable')}</span>}
+                    {leave && <span className="ae-tag warn"><Ic.palm size={10}/> {t('shiftplan.tag.onLeave')}</span>}
+                    {elsewhere && <span className="ae-tag">{t('shiftplan.tag.bookedElsewhere')}</span>}
                     {skill && avail && !leave && !elsewhere && e.skills.length > 0 && <span className="ae-tag muted">{e.skills.join(', ')}</span>}
                   </span>
                 </span>
@@ -601,8 +606,8 @@ function AssignEditor({ ctx, employees, assign, overrides, setOverrides, onClose
           })}
         </div>
         <div className="ae-foot">
-          <button className="btn sm" onClick={resetAuto} disabled={!isOverride}><Ic.sparkles size={13}/> Reset to auto</button>
-          <button className="btn sm primary" onClick={onClose}>Done</button>
+          <button className="btn sm" onClick={resetAuto} disabled={!isOverride}><Ic.sparkles size={13}/> {t('shiftplan.resetAuto')}</button>
+          <button className="btn sm primary" onClick={onClose}>{t('common.done')}</button>
         </div>
       </div>
     </>

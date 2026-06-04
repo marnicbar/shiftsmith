@@ -122,3 +122,15 @@ preferred weekly hours, workload balance. Constraint names must be alphanumeric 
 - Appearance/interaction prefs persist in `localStorage`; solver settings live in the backend.
 - `ShiftPlan` renders the solver's assignment map; the `AssignEditor` writes manual
   overrides which sync back as pins.
+
+### Internationalization (`i18n/`)
+- UI strings live in `i18n/locales/{en,de}.json` (one `translation` namespace, nested by
+  feature); English is the fallback. Components read them via `useTranslation()`'s `t()`.
+  Add a key to **both** locale files — `i18n.test.jsx` fails if the EN/DE key sets diverge.
+- The selected language is a UI pref (`prefs.lang` in the `localStorage` bag, set on the
+  Settings → Appearance page). `i18n/index.js` seeds i18next from it; `App.jsx` calls
+  `i18n.changeLanguage` when it changes.
+- Date/number formatting uses `dateLocale()` (→ `en-US`/`de-DE`) and `is24h()` from
+  `i18n/index.js`, not a hardcoded locale. Pass these to `Intl`/`toLocaleDateString`.
+- Tests init i18next via `test/setup.js` (defaults to English), so `t()` resolves without
+  a provider. Keep test-asserted English strings byte-identical to the EN resource values.
