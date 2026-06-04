@@ -1,7 +1,9 @@
 // settings.jsx — full-page settings: Appearance, Calendar, Skills, Shift plan and Solver.
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Theme } from './theme.js';
 import { SS } from './data.js';
+import { dateLocale, LANGUAGES } from './i18n/index.js';
 import { Ic } from './icons.jsx';
 import { RulesEditor } from './rules.jsx';
 
@@ -37,6 +39,7 @@ function Row({ label, hint, children }) {
 }
 
 function SkillsManager({ skills, onAdd, onRename, onRemove }) {
+  const { t } = useTranslation();
   const [adding, setAdding] = useState('');
   const [editing, setEditing] = useState(null); // { name, value }
   const sorted = [...skills].sort((a, b) => a.localeCompare(b));
@@ -44,7 +47,7 @@ function SkillsManager({ skills, onAdd, onRename, onRemove }) {
   const commitEdit = () => { if (editing) onRename(editing.name, editing.value); setEditing(null); };
   return (
     <div className="skills-mgr">
-      {sorted.length === 0 && <div className="hint">No skills yet — add the first one below.</div>}
+      {sorted.length === 0 && <div className="hint">{t('settings.skills.empty')}</div>}
       <div className="skills-list">
         {sorted.map((s) => (
           <div key={s} className="skill-row">
@@ -57,59 +60,58 @@ function SkillsManager({ skills, onAdd, onRename, onRemove }) {
               <span className="skill-name" onClick={() => setEditing({ name: s, value: s })}>{s}</span>
             )}
             <div className="skill-actions">
-              <button className="iconbtn sm-ic danger" title="Remove"
-                onClick={() => { if (confirm(`Remove the skill “${s}”? It will be removed from every person and shift that requires it.`)) onRemove(s); }}><Ic.trash size={14}/></button>
+              <button className="iconbtn sm-ic danger" title={t('common.remove')}
+                onClick={() => { if (confirm(t('settings.skills.confirmRemove', { name: s }))) onRemove(s); }}><Ic.trash size={14}/></button>
             </div>
           </div>
         ))}
       </div>
       <div className="skill-add">
-        <input className="input" placeholder="Add a skill…" value={adding}
+        <input className="input" placeholder={t('settings.skills.addPlaceholder')} value={adding}
           onChange={(e) => setAdding(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') commitAdd(); }} />
-        <button className="btn sm" disabled={!adding.trim()} onClick={commitAdd}><Ic.plus size={14}/> Add</button>
+        <button className="btn sm" disabled={!adding.trim()} onClick={commitAdd}><Ic.plus size={14}/> {t('common.add')}</button>
       </div>
     </div>
   );
 }
 
-const UNIT_LABEL = { day: 'day', week: 'week', month: 'month' };
-
-function horizonSummary(sched, settings) {
+function horizonSummary(t, sched, settings) {
   const n = Math.max(1, settings.horizonCount || 1);
   const unit = settings.horizonUnit || 'week';
-  const noun = UNIT_LABEL[unit] + (n === 1 ? '' : 's');
+  const noun = t(`settings.unit_${unit}`, { count: n });
   let range = '';
   if (sched.horizonStart && sched.horizonEnd) {
     const start = SS.parseISO(sched.horizonStart);
     const last = SS.addDays(SS.parseISO(sched.horizonEnd), -1); // end is exclusive
     const days = Math.round((SS.parseISO(sched.horizonEnd) - SS.parseISO(sched.horizonStart)) / SS.DAY);
-    const fmt = (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    range = `${fmt(start)} – ${fmt(last)} · ${days} days`;
+    const fmt = (d) => d.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' });
+    range = `${fmt(start)} – ${fmt(last)} · ${t('settings.daysCount', { count: days })}`;
   }
   return { noun, n, range };
 }
 
 export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sched, skills = [], onAddSkill, onRenameSkill, onRemoveSkill, globalRules = [], setGlobalRules }) {
+  const { t } = useTranslation();
   const accents = Object.entries(Theme.ACCENTS);
   const active = sched.solverStatus === 'SOLVING_ACTIVE' || sched.solverStatus === 'SOLVING_SCHEDULED';
-  const { noun, n, range } = horizonSummary(sched, settings);
+  const { noun, n, range } = horizonSummary(t, sched, settings);
   const setSetting = (patch) => setSettings({ ...settings, ...patch });
 
   return (
     <div className="settings">
       <div className="settings-inner">
-        <div className="dash-head"><div><h1>Settings</h1><p>Appearance, calendar behaviour and the solver window.</p></div></div>
+        <div className="dash-head"><div><h1>{t('settings.title')}</h1><p>{t('settings.subtitle')}</p></div></div>
 
         <div className="card set-card">
-          <h3>Appearance</h3>
-          <Row label="Dark mode" hint="Switch between light and dark themes.">
+          <h3>{t('settings.appearance')}</h3>
+          <Row label={t('settings.darkMode')} hint={t('settings.darkModeHint')}>
             <Toggle value={prefs.dark} onChange={(v) => setPref('dark', v)} />
           </Row>
-          <Row label="Palette" hint="Neutral tone of the interface.">
+          <Row label={t('settings.palette')} hint={t('settings.paletteHint')}>
             <Seg value={prefs.palette} options={['slate', 'stone', 'mono']} onChange={(v) => setPref('palette', v)} />
           </Row>
-          <Row label="Accent" hint="Highlight colour for active elements.">
+          <Row label={t('settings.accent')} hint={t('settings.accentHint')}>
             <div className="accent-row">
               {accents.map(([key, a]) => (
                 <button key={key} title={a.label} onClick={() => setPref('accent', key)}
@@ -118,70 +120,71 @@ export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sch
               ))}
             </div>
           </Row>
-          <Row label="UI font">
+          <Row label={t('settings.uiFont')}>
             <select className="input set-select" value={prefs.font} onChange={(e) => setPref('font', e.target.value)}>
               {Object.keys(fonts).map((f) => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </Row>
+          <Row label={t('settings.language')} hint={t('settings.languageHint')}>
+            <select className="input set-select" value={prefs.lang} onChange={(e) => setPref('lang', e.target.value)}>
+              {LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
             </select>
           </Row>
         </div>
 
         <div className="card set-card">
-          <h3>Calendar</h3>
-          <Row label="Time snap" hint="Granularity when drawing or dragging blocks.">
-            <Seg value={prefs.snapLabel} options={['15 min', '30 min', '60 min']} onChange={(v) => setPref('snapLabel', v)} />
+          <h3>{t('settings.calendar')}</h3>
+          <Row label={t('settings.timeSnap')} hint={t('settings.timeSnapHint')}>
+            <Seg value={prefs.snapLabel} options={[{ value: '15 min', label: t('settings.snap.15') }, { value: '30 min', label: t('settings.snap.30') }, { value: '60 min', label: t('settings.snap.60') }]} onChange={(v) => setPref('snapLabel', v)} />
           </Row>
-          <Row label="New block" hint="What happens when you create a calendar block.">
-            <Seg value={prefs.newFlowLabel} options={['Paint, then tweak', 'Open a form']} onChange={(v) => setPref('newFlowLabel', v)} />
+          <Row label={t('settings.newBlock')} hint={t('settings.newBlockHint')}>
+            <Seg value={prefs.newFlowLabel} options={[{ value: 'Paint, then tweak', label: t('settings.flow.paint') }, { value: 'Open a form', label: t('settings.flow.form') }]} onChange={(v) => setPref('newFlowLabel', v)} />
           </Row>
-          <Row label="Shift plan default view">
-            <Seg value={prefs.tlDefaultLabel} options={['Day', 'Week', 'Continuous']} onChange={(v) => setPref('tlDefaultLabel', v)} />
+          <Row label={t('settings.defaultView')}>
+            <Seg value={prefs.tlDefaultLabel} options={[{ value: 'Day', label: t('settings.view.day') }, { value: 'Week', label: t('settings.view.week') }, { value: 'Continuous', label: t('settings.view.continuous') }]} onChange={(v) => setPref('tlDefaultLabel', v)} />
           </Row>
         </div>
 
         <div className="card set-card">
-          <h3>Skills</h3>
+          <h3>{t('settings.skillsTitle')}</h3>
           <div className="hint" style={{ marginTop: -2, marginBottom: 12 }}>
-            The skills people can have and shifts can require. Renaming or removing a skill
-            updates everyone and every shift that uses it.
+            {t('settings.skillsDesc')}
           </div>
           <SkillsManager skills={skills} onAdd={onAddSkill} onRename={onRenameSkill} onRemove={onRemoveSkill} />
         </div>
 
         <div className="card set-card">
-          <h3>Working time rules</h3>
+          <h3>{t('settings.rulesTitle')}</h3>
           <div className="hint" style={{ marginTop: -2, marginBottom: 12 }}>
-            Global limits that apply to everyone. People inherit these unless they set
-            their own rule for the same metric, and a personal rule can only be stricter.
-            Tightening a rule here updates anyone whose personal rule was looser.
+            {t('settings.rulesDesc')}
           </div>
           <RulesEditor rules={globalRules} onChange={setGlobalRules} mode="global" label={null} />
         </div>
 
         <div className="card set-card">
-          <h3>Solver</h3>
+          <h3>{t('settings.solver')}</h3>
           <div className="hint" style={{ marginTop: -2, marginBottom: 12 }}>
-            The solver runs continuously over this window and pauses automatically once the
-            schedule is steady. Changing any setting re-solves from the new state.
+            {t('settings.solverDesc')}
           </div>
 
-          <Row label="Time range" hint="Counted from the beginning of the next full day, week or month. One week means this week and the next.">
+          <Row label={t('settings.timeRange')} hint={t('settings.timeRangeHint')}>
             <div className="horizon-ctl">
               <input className="input mono horizon-num" type="number" min="1" max="52"
                 value={settings.horizonCount}
                 onChange={(e) => setSetting({ horizonCount: Math.max(1, Number(e.target.value) || 1) })} />
               <Seg value={settings.horizonUnit}
-                options={[{ value: 'day', label: 'Days' }, { value: 'week', label: 'Weeks' }, { value: 'month', label: 'Months' }]}
+                options={[{ value: 'day', label: t('settings.unitPlural.day') }, { value: 'week', label: t('settings.unitPlural.week') }, { value: 'month', label: t('settings.unitPlural.month') }]}
                 onChange={(v) => setSetting({ horizonUnit: v })} />
             </div>
           </Row>
 
           <div className="solver-status">
             <div className="ss-line">
-              <span className={`solver-badge ${active ? 'on' : ''}`}><span className="dot"></span>{active ? 'Solving…' : 'Steady'}</span>
-              <span className="muted">Solving {n} {noun} ahead{range ? ` · ${range}` : ''}</span>
+              <span className={`solver-badge ${active ? 'on' : ''}`}><span className="dot"></span>{active ? t('solver.solving') : t('solver.steady')}</span>
+              <span className="muted">{t('settings.solvingAhead', { count: n, noun })}{range ? ` · ${range}` : ''}</span>
             </div>
             <div className="hint" style={{ marginTop: 8 }}>
-              Live coverage and the Solve / Pause controls are on the Shift Plan view.
+              {t('settings.coverageHint')}
             </div>
           </div>
         </div>

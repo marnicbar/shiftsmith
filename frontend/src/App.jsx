@@ -1,9 +1,11 @@
 // App.jsx — shell: top tab bar, settings, view routing, backend sync + solver polling.
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Theme } from './theme.js';
 import { Ic } from './icons.jsx';
 import { SS } from './data.js';
+import i18n from './i18n/index.js';
 import { Personnel } from './personnel.jsx';
 import { Positions } from './positions.jsx';
 import { ShiftPlan } from './shiftplan.jsx';
@@ -13,10 +15,10 @@ import { tooLooseAgainst } from './rules.jsx';
 import * as api from './lib/api.js';
 
 const TABS = [
-  { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
-  { id: 'personnel', label: 'Personnel', icon: 'users' },
-  { id: 'positions', label: 'Positions', icon: 'briefcase' },
-  { id: 'shiftplan', label: 'Shift Plan', icon: 'timeline' },
+  { id: 'dashboard', labelKey: 'nav.dashboard', icon: 'grid' },
+  { id: 'personnel', labelKey: 'nav.personnel', icon: 'users' },
+  { id: 'positions', labelKey: 'nav.positions', icon: 'briefcase' },
+  { id: 'shiftplan', labelKey: 'nav.shiftPlan', icon: 'timeline' },
 ];
 
 export const FONTS = {
@@ -26,7 +28,7 @@ export const FONTS = {
 };
 
 const PREF_DEFAULTS = {
-  dark: false, palette: 'slate', accent: 'indigo', font: 'Geist',
+  dark: false, palette: 'slate', accent: 'indigo', font: 'Geist', lang: 'en',
   snapLabel: '15 min', newFlowLabel: 'Paint, then tweak', tlDefaultLabel: 'Week',
 };
 
@@ -55,6 +57,7 @@ function usePrefs() {
 }
 
 export default function App() {
+  const { t } = useTranslation();
   const [prefs, setPref] = usePrefs();
   const [tab, setTab] = useState('personnel');
   // Remember the last non-settings view so the settings button can toggle back to it.
@@ -83,6 +86,7 @@ export default function App() {
 
   useEffect(() => { Theme.applyTheme({ palette: prefs.palette, accent: prefs.accent, dark: prefs.dark }); }, [prefs.palette, prefs.accent, prefs.dark]);
   useEffect(() => { document.documentElement.style.setProperty('--ui-font', FONTS[prefs.font] || FONTS.Geist); }, [prefs.font]);
+  useEffect(() => { if (prefs.lang && i18n.language !== prefs.lang) i18n.changeLanguage(prefs.lang); }, [prefs.lang]);
 
   const setMeta = useCallback((d) => setSched({
     assignments: d.assignments || [], solverStatus: d.solverStatus, score: d.score,
@@ -175,10 +179,12 @@ export default function App() {
     });
     if (touched.length) {
       setEmployees(next);
-      const names = touched.length > 3 ? `${touched.slice(0, 3).join(', ')} +${touched.length - 3} more` : touched.join(', ');
-      setNotice(`Tightened personal rules for ${names} to satisfy the new system limits.`);
+      const names = touched.length > 3
+        ? t('app.namesMore', { names: touched.slice(0, 3).join(', '), count: touched.length - 3 })
+        : touched.join(', ');
+      setNotice(t('app.tightenedRules', { names }));
     }
-  }, [employees]);
+  }, [employees, t]);
 
   const removeSkill = useCallback((name) => {
     const drop = (arr = []) => arr.filter((x) => x !== name);
@@ -204,7 +210,7 @@ export default function App() {
   async function pauseSolver() { try { await api.stopSolving(); } catch (e) { setError(e.message); } }
 
   if (!loaded && !error) {
-    return <div className="app"><div className="loading">Loading schedule…</div></div>;
+    return <div className="app"><div className="loading">{t('app.loading')}</div></div>;
   }
 
   return (
@@ -214,20 +220,20 @@ export default function App() {
         <nav className="tabs">
           {TABS.map((x) => (
             <button key={x.id} className={`tab ${tab === x.id ? 'active' : ''}`} onClick={() => setTab(x.id)}>
-              {React.createElement(Ic[x.icon], { size: 16 })}{x.label}
+              {React.createElement(Ic[x.icon], { size: 16 })}{t(x.labelKey)}
               {x.id === 'shiftplan' && sched.unassigned > 0 && <span className="pill">{sched.unassigned}</span>}
             </button>
           ))}
         </nav>
         <div className="spacer"></div>
         <SolverBadge status={sched.solverStatus} />
-        <button className={`iconbtn ${tab === 'settings' ? 'active' : ''}`} title="Settings" onClick={toggleSettings}>
+        <button className={`iconbtn ${tab === 'settings' ? 'active' : ''}`} title={t('nav.settings')} onClick={toggleSettings}>
           <Ic.settings/>
         </button>
       </div>
 
-      {error && <div className="api-error">Backend error: {error}. Is the backend running on :8080?</div>}
-      {notice && <div className="api-notice">{notice}<button className="notice-x" onClick={() => setNotice(null)} title="Dismiss"><Ic.x size={14}/></button></div>}
+      {error && <div className="api-error">{t('app.backendError', { error })}</div>}
+      {notice && <div className="api-notice">{notice}<button className="notice-x" onClick={() => setNotice(null)} title={t('common.dismiss')}><Ic.x size={14}/></button></div>}
 
       {tab === 'dashboard' && <Dashboard employees={employees} positions={positions} sched={sched} onGo={setTab} />}
       {tab === 'personnel' && <Personnel employees={employees} setEmployees={setEmployees} skills={skills} settings={settings} selId={selEmp} setSelId={setSelEmp} snap={snap} newFlow={newFlow} />}
@@ -239,10 +245,11 @@ export default function App() {
 }
 
 function SolverBadge({ status }) {
+  const { t } = useTranslation();
   const active = status === 'SOLVING_ACTIVE' || status === 'SOLVING_SCHEDULED';
   return (
-    <span className={`solver-badge ${active ? 'on' : ''}`} title={active ? 'Solver running' : 'Solver idle (steady state)'}>
-      <span className="dot"></span>{active ? 'Solving…' : 'Steady'}
+    <span className={`solver-badge ${active ? 'on' : ''}`} title={active ? t('solver.running') : t('solver.idle')}>
+      <span className="dot"></span>{active ? t('solver.solving') : t('solver.steady')}
     </span>
   );
 }

@@ -4,17 +4,23 @@
 // personal mode the global rules are surfaced read-only and a person can only add
 // a stricter override on top of them.
 import React, { useState as useStateR } from 'react';
+import { useTranslation } from 'react-i18next';
 import { SS } from './data.js';
+import { dateLocale } from './i18n/index.js';
 import { Ic } from './icons.jsx';
 
+// Metric/op catalogues. The display labels live in the i18n resources; here we
+// keep only the language-agnostic bits (unit, icon) and the canonical key order.
 export const METRICS = {
-  dayHours:   { label: 'Daily hours',         short: 'daily hours',      unit: 'h', icon: 'clock' },
-  weekHours:  { label: 'Weekly hours',        short: 'weekly hours',     unit: 'h', icon: 'calendar' },
-  monthHours: { label: 'Monthly hours',       short: 'monthly hours',    unit: 'h', icon: 'grid' },
-  consecDays: { label: 'Consecutive days',    short: 'consecutive days', unit: 'd', icon: 'repeat' },
-  restHours:  { label: 'Rest between shifts', short: 'rest',             unit: 'h', icon: 'moon' },
+  dayHours:   { unit: 'h', icon: 'clock' },
+  weekHours:  { unit: 'h', icon: 'calendar' },
+  monthHours: { unit: 'h', icon: 'grid' },
+  consecDays: { unit: 'd', icon: 'repeat' },
+  restHours:  { unit: 'h', icon: 'moon' },
 };
-export const OPS = { preferred: 'Preferred', min: 'At least', max: 'At most' };
+export const OP_KEYS = ['preferred', 'min', 'max'];
+export const metricLabel = (t, key) => t(`rules.metric.${key}.label`);
+export const opLabel = (t, op) => t(`rules.op.${op}`);
 export const isHard = (op) => op !== 'preferred';
 export const ruleKey = (r) => `${r.metric}:${r.op}`;
 
@@ -42,19 +48,20 @@ export function ruleEffectiveAt(rule, iso) {
   return { active, metric, op, value };
 }
 
-const dLabel = (iso) => SS.parseISO(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: SS.parseISO(iso).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+const dLabel = (iso) => SS.parseISO(iso).toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric', year: SS.parseISO(iso).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
 
 function periodOf(metric) {
   if (metric === 'weekHours') return 'week';
   if (metric === 'monthHours') return 'month';
   return 'day';
 }
-const CP_WD = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
 function CalPicker({ period, kind, onPick, onClose }) {
-  const [vm, setVm] = useStateR(() => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), 1); });
+  const { t } = useTranslation();
+  const CP_WD = t('common.weekdays2', { returnObjects: true });
+  const [vm, setVm] = useStateR(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const todayISO = SS.isoOf(new Date());
-  const head = kind === 'apply' ? 'Apply change starting' : 'Remove rule starting';
+  const head = kind === 'apply' ? t('rules.applyChangeStarting') : t('rules.removeRuleStarting');
 
   if (period === 'month') {
     const yr = vm.getFullYear();
@@ -72,11 +79,11 @@ function CalPicker({ period, kind, onPick, onClose }) {
           <div className="cp-months">
             {Array.from({ length: 12 }, (_, i) => (
               <button key={i} className={`cp-mo ${i === thisM ? 'today' : ''}`} onClick={() => onPick(SS.isoOf(new Date(yr, i, 1)))}>
-                {new Date(yr, i, 1).toLocaleDateString([], { month: 'short' })}
+                {new Date(yr, i, 1).toLocaleDateString(dateLocale(), { month: 'short' })}
               </button>
             ))}
           </div>
-          <div className="cp-hint">Starts on the 1st</div>
+          <div className="cp-hint">{t('rules.startsFirst')}</div>
         </div>
       </>
     );
@@ -94,7 +101,7 @@ function CalPicker({ period, kind, onPick, onClose }) {
         <div className="dm-head">{head}</div>
         <div className="cp-nav">
           <button className="cp-arrow" onClick={() => step(-1)}><Ic.chevL size={14}/></button>
-          <span className="cp-month">{vm.toLocaleDateString([], { month: 'long', year: 'numeric' })}</span>
+          <span className="cp-month">{vm.toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' })}</span>
           <button className="cp-arrow" onClick={() => step(1)}><Ic.chevR size={14}/></button>
         </div>
         <div className="cp-dow">{CP_WD.map((w) => <span key={w}>{w}</span>)}</div>
@@ -111,7 +118,7 @@ function CalPicker({ period, kind, onPick, onClose }) {
             </div>
           ))}
         </div>
-        <div className="cp-hint">{period === 'week' ? 'Pick a week — starts Monday' : 'Pick any date'}</div>
+        <div className="cp-hint">{period === 'week' ? t('rules.pickWeek') : t('rules.pickDate')}</div>
       </div>
     </>
   );
@@ -123,7 +130,9 @@ const stop = (e) => e.stopPropagation();
  * Shared rules editor.
  * @param mode 'personal' (rules sit on top of read-only `globalRules`) or 'global'.
  */
-export function RulesEditor({ rules, onChange, globalRules = [], mode = 'personal', label = 'Working time rules', hint }) {
+export function RulesEditor({ rules, onChange, globalRules = [], mode = 'personal', label, hint }) {
+  const { t } = useTranslation();
+  if (label === undefined) label = t('rules.title');
   // editing: a staged draft. { ruleId, metric, op, value, locked } — ruleId null = new.
   const [editing, setEditing] = useStateR(null);
   const [menu, setMenu] = useStateR(null); // 'apply' | 'delete'
@@ -137,7 +146,7 @@ export function RulesEditor({ rules, onChange, globalRules = [], mode = 'persona
   const usedKeys = new Set([...rules.map(ruleKey), ...(isPersonal ? Object.keys(gByKey) : [])]);
 
   const comboFree = (metric, op, selfKey) => `${metric}:${op}` === selfKey || !usedKeys.has(`${metric}:${op}`);
-  const availOps = (metric, selfKey) => Object.keys(OPS).filter((op) => comboFree(metric, op, selfKey));
+  const availOps = (metric, selfKey) => OP_KEYS.filter((op) => comboFree(metric, op, selfKey));
   const availMetrics = (selfKey) => Object.keys(METRICS).filter((m) => availOps(m, selfKey).length > 0);
 
   const globalMatch = (metric, op) => (isPersonal ? gByKey[`${metric}:${op}`] : null);
@@ -260,10 +269,10 @@ export function RulesEditor({ rules, onChange, globalRules = [], mode = 'persona
           <div key={c.id} className="change">
             <Ic.clock size={11}/>
             <span className="ch-txt">
-              {c.kind === 'remove' ? <>Remove rule</> : <>→ {OPS[c.op]} {c.value}{METRICS[c.metric].unit}</>}
-              <span className="ch-date"> · from {dLabel(c.date)}</span>
+              {c.kind === 'remove' ? <>{t('rules.removeRuleChange')}</> : <>→ {opLabel(t, c.op)} {c.value}{METRICS[c.metric].unit}</>}
+              <span className="ch-date"> · {t('rules.fromDate', { date: dLabel(c.date) })}</span>
             </span>
-            <button className="rule-x" onClick={(e) => { e.stopPropagation(); removeChange(rule.id, c.id); }} title="Cancel scheduled change"><Ic.trash size={12}/></button>
+            <button className="rule-x" onClick={(e) => { e.stopPropagation(); removeChange(rule.id, c.id); }} title={t('rules.cancelScheduled')}><Ic.trash size={12}/></button>
           </div>
         ))}
       </div>
@@ -272,7 +281,7 @@ export function RulesEditor({ rules, onChange, globalRules = [], mode = 'persona
   function actionsEl(isNew) {
     return (
       <div className="rule-actions" onClick={stop}>
-        <button className="btn ghost sm" onClick={cancel}>Cancel</button>
+        <button className="btn ghost sm" onClick={cancel}>{t('common.cancel')}</button>
         <div className="ra-right">
           {!isNew && (
             <div className="splitbtn danger">
@@ -282,7 +291,7 @@ export function RulesEditor({ rules, onChange, globalRules = [], mode = 'persona
             </div>
           )}
           <div className="splitbtn primary">
-            <button className="sb-main" onClick={applyNow}>Apply</button>
+            <button className="sb-main" onClick={applyNow}>{t('common.apply')}</button>
             <button className="sb-caret" onClick={() => setMenu(menu === 'apply' ? null : 'apply')}><Ic.chevD size={12}/></button>
             {menu === 'apply' && <CalPicker kind="apply" period={periodOf(editing.metric)} onPick={applyOn} onClose={() => setMenu(null)} />}
           </div>
@@ -306,17 +315,17 @@ export function RulesEditor({ rules, onChange, globalRules = [], mode = 'persona
           <span className="rule-ic">{React.createElement(Ic[m.icon] || Ic.clock, { size: 14 })}</span>
           {sel
             ? <select className="bare-select rule-name" value={editing.metric} onClick={stop} onChange={(e) => setMetric(e.target.value)}>
-                {availMetrics(selfKey).map((k) => <option key={k} value={k}>{METRICS[k].label}</option>)}
+                {availMetrics(selfKey).map((k) => <option key={k} value={k}>{metricLabel(t, k)}</option>)}
               </select>
-            : <span className="rule-name">{m.label}</span>}
-          <span className={`str-tag ${hard ? 'hard' : 'soft'}`}>{hard ? 'Hard' : 'Soft'}</span>
+            : <span className="rule-name">{metricLabel(t, view.metric)}</span>}
+          <span className={`str-tag ${hard ? 'hard' : 'soft'}`}>{hard ? t('rules.hard') : t('rules.soft')}</span>
         </div>
         <div className="rule-bot">
           {sel
             ? <select className="bare-select op" value={editing.op} onClick={stop} onChange={(e) => setOp(e.target.value)}>
-                {availOps(editing.metric, selfKey).map((op) => <option key={op} value={op}>{OPS[op]}</option>)}
+                {availOps(editing.metric, selfKey).map((op) => <option key={op} value={op}>{opLabel(t, op)}</option>)}
               </select>
-            : <span className="op-static">{OPS[view.op]}</span>}
+            : <span className="op-static">{opLabel(t, view.op)}</span>}
           {sel ? valueInput() : <div className="num"><span className="num-static mono">{view.value}</span><span className="unit">{m.unit}</span></div>}
         </div>
         {!isNew && changesEl(rule)}
@@ -338,30 +347,30 @@ export function RulesEditor({ rules, onChange, globalRules = [], mode = 'persona
       <div key={`g-${key}`} className={`rule rule-stacked ${hard ? 'hard' : 'soft'} ${editingThis ? 'sel' : ''}`}>
         <div className="rule-top">
           <span className="rule-ic">{React.createElement(Ic[m.icon] || Ic.clock, { size: 14 })}</span>
-          <span className="rule-name">{m.label}</span>
-          <span className={`str-tag ${hard ? 'hard' : 'soft'}`}>{hard ? 'Hard' : 'Soft'}</span>
+          <span className="rule-name">{metricLabel(t, g.metric)}</span>
+          <span className={`str-tag ${hard ? 'hard' : 'soft'}`}>{hard ? t('rules.hard') : t('rules.soft')}</span>
         </div>
         <div className={`rule-bot rule-row-global ${hasPersonalRow ? 'dim' : ''}`}>
-          <span className="op-static">{OPS[g.op]}</span>
+          <span className="op-static">{opLabel(t, g.op)}</span>
           <div className="num"><span className="num-static mono">{gEff.active ? gEff.value : g.value}</span><span className="unit">{m.unit}</span></div>
-          <span className={`mini-tag ${hasPersonalRow ? '' : 'accent'}`}>Global</span>
+          <span className={`mini-tag ${hasPersonalRow ? '' : 'accent'}`}>{t('rules.global')}</span>
         </div>
         {hasPersonalRow ? (
           <>
             <div className={`rule-bot rule-row-personal ${editingThis ? '' : 'clickable'}`}
               onClick={() => { if (!editingThis && personal) startEdit(personal); }}>
-              <span className="op-static">{OPS[g.op]}</span>
+              <span className="op-static">{opLabel(t, g.op)}</span>
               {editingThis ? valueInput() : <div className="num"><span className="num-static mono">{personal.value}</span><span className="unit">{m.unit}</span></div>}
-              <span className="mini-tag accent">Personal</span>
+              <span className="mini-tag accent">{t('rules.personal')}</span>
             </div>
             {personal && changesEl(personal)}
             {editingThis && actionsEl(isOverrideDraft)}
           </>
         ) : (
           <div className="rule-actions" onClick={stop}>
-            <span className="hint" style={{ margin: 0 }}>Applies to everyone</span>
+            <span className="hint" style={{ margin: 0 }}>{t('rules.appliesEveryone')}</span>
             <div className="ra-right">
-              <button className="btn ghost sm" onClick={() => startOverride(g)}>Customize</button>
+              <button className="btn ghost sm" onClick={() => startOverride(g)}>{t('rules.customize')}</button>
             </div>
           </div>
         )}
@@ -377,7 +386,7 @@ export function RulesEditor({ rules, onChange, globalRules = [], mode = 'persona
     <div className="field">
       <div className="row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         {label ? <label style={{ margin: 0, whiteSpace: 'nowrap' }}>{label}</label> : <span/>}
-        {canAdd && <button className="iconbtn" style={{ width: 26, height: 26, flex: '0 0 26px' }} onClick={startNew} title="Add rule"><Ic.plus size={15}/></button>}
+        {canAdd && <button className="iconbtn" style={{ width: 26, height: 26, flex: '0 0 26px' }} onClick={startNew} title={t('rules.addRule')}><Ic.plus size={15}/></button>}
       </div>
       {hint && <div className="hint" style={{ marginTop: 2 }}>{hint}</div>}
 
@@ -385,20 +394,21 @@ export function RulesEditor({ rules, onChange, globalRules = [], mode = 'persona
         {isPersonal && (globalRules || []).map((g) => globalCard(g))}
         {customRules.map((r) => normalCard(r))}
         {isNewDraft && normalCard(null)}
-        {empty && <div className="hint">{isPersonal ? "No rules yet — add one to constrain this person's hours, or set system-wide rules in Settings." : 'No global rules yet — add one to apply it to everyone.'}</div>}
+        {empty && <div className="hint">{isPersonal ? t('rules.emptyPersonal') : t('rules.emptyGlobal')}</div>}
       </div>
     </div>
   );
 }
 
 export function WorkingTimeRules({ emp, onChange, globalRules = [] }) {
+  const { t } = useTranslation();
   return (
     <RulesEditor
       rules={emp.rules || []}
       onChange={(next) => onChange({ rules: next })}
       globalRules={globalRules}
       mode="personal"
-      hint='Preferred rules are soft goals; "at least" / "at most" are hard limits. Global rules apply to everyone and can only be tightened.'
+      hint={t('rules.personalHint')}
     />
   );
 }

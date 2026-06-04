@@ -1,10 +1,10 @@
 // calendar.jsx — reusable calendar: day/week/month, drag-to-create, click-to-edit popover, recurrence.
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { SS } from './data.js';
+import { dateLocale, is24h } from './i18n/index.js';
 import { Ic } from './icons.jsx';
-
-const WD = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
 // Vertical zoom = pixels per hour. ZOOM_BASE is "100%"; ZOOM_MAX caps zoom-in.
 // The zoom-out floor is computed per-render from the viewport so the day grid
@@ -157,6 +157,7 @@ function packLanes(evs) {
 }
 
 export function Calendar(props) {
+  const { t } = useTranslation();
   const { view, anchor, items, kind, zoom = 46, onZoom, paint, palette,
           newItem, onCommit, onDelete, onSplit, extraFields, dayStart = 6,
           snap = 15 } = props;
@@ -337,9 +338,7 @@ export function Calendar(props) {
     const cand = candidateFor(draft, scope);
     const clash = items.some((o) => o.id !== draft.id && entriesOverlap(cand, o));
     if (!clash) return null;
-    return kind === 'availability'
-      ? 'This overlaps another availability entry. Entries can’t overlap — except vacation, which spans the whole day.'
-      : 'This overlaps another shift. Shifts can’t overlap.';
+    return kind === 'availability' ? t('calendar.overlapAvail') : t('calendar.overlapShift');
   }
 
   function done(scope = 'all') {
@@ -488,8 +487,8 @@ export function Calendar(props) {
     const drop = buildMove(items, orig, p.geom, p.occDate, scope, idPfx);
     if (moveClashes(drop)) {
       setPv({ ...p, error: kind === 'availability'
-        ? 'That overlaps another availability entry on a different day.'
-        : 'That overlaps another shift on a different day.' });
+        ? t('calendar.overlapAvailOtherDay')
+        : t('calendar.overlapShiftOtherDay') });
       return;
     }
     performDrop(drop);
@@ -550,15 +549,16 @@ function monthDays(anchor) {
 }
 
 function Toolbar(props) {
+  const { t } = useTranslation();
   const { view, onView, anchor, onAnchor, kind, paint, onPaint, onAdd, zoomControls } = props;
-  const monthLabel = anchor.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  const monthLabel = anchor.toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' });
   let title = monthLabel, sub = '';
   if (view === 'week') {
     const ws = SS.startOfWeek(anchor), we = SS.addDays(ws, 6);
-    title = `${ws.toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${we.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
+    title = `${ws.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' })} – ${we.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' })}`;
     sub = String(ws.getFullYear());
   } else if (view === 'day') {
-    title = anchor.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+    title = anchor.toLocaleDateString(dateLocale(), { weekday: 'long', month: 'short', day: 'numeric' });
   }
   const step = (dir) => {
     if (view === 'month') onAnchor(new Date(anchor.getFullYear(), anchor.getMonth() + dir, 1));
@@ -568,30 +568,32 @@ function Toolbar(props) {
     <div className="cal-toolbar">
       <div className="nav">
         <button className="iconbtn" onClick={() => step(-1)}><Ic.chevL/></button>
-        <button className="btn sm" onClick={() => onAnchor(new Date())}>Today</button>
+        <button className="btn sm" onClick={() => onAnchor(new Date())}>{t('common.today')}</button>
         <button className="iconbtn" onClick={() => step(1)}><Ic.chevR/></button>
       </div>
       <div className="cal-title">{title} {sub && <span className="sub">{sub}</span>}</div>
       {view !== 'month' && zoomControls && (
         <div className="seg" style={{ marginRight: 6, flexShrink: 0 }}>
-          <button onClick={zoomControls.onOut} disabled={!zoomControls.canOut} title="Zoom out"><Ic.zoomOut size={14}/></button>
-          <button className="mono zoom-pct" style={{ minWidth: 48 }} title="Reset zoom" onClick={zoomControls.onReset}>{zoomControls.pct}%</button>
-          <button onClick={zoomControls.onIn} disabled={!zoomControls.canIn} title="Zoom in"><Ic.zoomIn size={14}/></button>
+          <button onClick={zoomControls.onOut} disabled={!zoomControls.canOut} title={t('calendar.zoomOut')}><Ic.zoomOut size={14}/></button>
+          <button className="mono zoom-pct" style={{ minWidth: 48 }} title={t('calendar.zoomReset')} onClick={zoomControls.onReset}>{zoomControls.pct}%</button>
+          <button onClick={zoomControls.onIn} disabled={!zoomControls.canIn} title={t('calendar.zoomIn')}><Ic.zoomIn size={14}/></button>
         </div>
       )}
       <div className="seg" style={{ marginRight: 8, flexShrink: 0 }}>
         {['day','week','month'].map((v) => (
-          <button key={v} className={view === v ? 'on' : ''} onClick={() => onView(v)}>{v[0].toUpperCase()+v.slice(1)}</button>
+          <button key={v} className={view === v ? 'on' : ''} onClick={() => onView(v)}>{t(`calendar.view.${v}`)}</button>
         ))}
       </div>
-      <button className="btn primary sm" style={{ flexShrink: 0 }} onClick={onAdd} title={kind === 'availability' ? 'Add availability' : 'Add shift'}>
-        <Ic.plus size={14}/> Add
+      <button className="btn primary sm" style={{ flexShrink: 0 }} onClick={onAdd} title={kind === 'availability' ? t('calendar.addAvailability') : t('calendar.addShift')}>
+        <Ic.plus size={14}/> {t('common.add')}
       </button>
     </div>
   );
 }
 
 function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onColMouseDown, onEvtDown }) {
+  const { t } = useTranslation();
+  const WD = t('common.weekdays3', { returnObjects: true });
   const H = 24 * zoom;
   const occ = expand(items, dayList);
   const now = new Date();
@@ -632,14 +634,14 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onCol
         })}
         {hasAllDay && <>
           <div className="wg-timecol" style={{ gridRow: 2, gridColumn: 1, display:'grid', placeItems:'center', position:'sticky', top: Math.max(0, headH - 1), zIndex: 19, borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
-            <span className="wg-timelabel" style={{ transform:'none', paddingRight: 0 }}>all-day</span>
+            <span className="wg-timelabel" style={{ transform:'none', paddingRight: 0 }}>{t('calendar.allDay')}</span>
           </div>
           {dayList.map((d, i) => (
             <div key={d} className="wg-col" style={{ gridRow: 2, gridColumn: i+2, position:'sticky', top: Math.max(0, headH - 1), zIndex: 18, background:'var(--surface)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', padding: 4, display:'flex', flexDirection:'column', gap: 3, minHeight: 30 }}>
               {allDayByDay[d].map((o) => (
                 <div key={o.key} className={`mg-evt allday tone-${toneCls(o.item, kind)} ${o.item._preview ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''}`}
                      onMouseDown={(e) => onEvtDown(e, o, 'move')} onClick={(e) => e.stopPropagation()} style={{ cursor: o.item._preview ? 'default' : 'grab' }}>
-                  {kind==='availability' ? <Ic.palm size={11}/> : null}{labelOf(o.item, kind)}
+                  {kind==='availability' ? <Ic.palm size={11}/> : null}{labelOf(o.item, kind, t)}
                 </div>
               ))}
             </div>
@@ -672,10 +674,10 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onCol
                        style={{ top, height: h, left: `calc(${left}% + 3px)`, width: `calc(${w}% - 6px)`, cursor: ghost ? 'default' : 'grab' }}>
                     {resizable && <div className="evt-handle n" onMouseDown={(e) => onEvtDown(e, o, 'n')}></div>}
                     {o.item.repeat !== 'none' && <span className="rep"><Ic.repeat/></span>}
-                    {o.seg === 'tail' && <span className="ovn" title="Continues from previous day"><Ic.chevD size={11} style={{ transform: 'rotate(180deg)' }}/></span>}
-                    {o.seg === 'head' && <span className="ovn" title="Continues next day"><Ic.chevD size={11}/></span>}
+                    {o.seg === 'tail' && <span className="ovn" title={t('calendar.continuesPrev')}><Ic.chevD size={11} style={{ transform: 'rotate(180deg)' }}/></span>}
+                    {o.seg === 'head' && <span className="ovn" title={t('calendar.continuesNext')}><Ic.chevD size={11}/></span>}
                     <span className="et mono">{SS.minLabel(o.item.start)}–{SS.minLabel(o.item.end)}</span>
-                    <span className="el">{labelOf(o.item, kind)}</span>
+                    <span className="el">{labelOf(o.item, kind, t)}</span>
                     {resizable && <div className="evt-handle s" onMouseDown={(e) => onEvtDown(e, o, 's')}></div>}
                   </div>
                 );
@@ -690,6 +692,8 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onCol
 }
 
 function MonthGrid({ dayList, anchor, items, kind, todayISO, onDayClick, onEvtDown }) {
+  const { t } = useTranslation();
+  const WD = t('common.weekdays3', { returnObjects: true });
   const occ = expand(items, dayList).filter((o) => o.seg !== 'tail');
   const byDay = {}; dayList.forEach((d) => byDay[d] = []);
   occ.forEach((o) => byDay[o.date].push(o));
@@ -710,10 +714,10 @@ function MonthGrid({ dayList, anchor, items, kind, todayISO, onDayClick, onEvtDo
                      onMouseDown={o.item._preview ? undefined : (e) => onEvtDown(e, o, 'move')}
                      onClick={(e) => e.stopPropagation()} style={{ cursor: o.item._preview ? 'default' : 'grab' }}>
                   {!o.item.allDay && <span className="mono" style={{ fontSize: 10, opacity:.85 }}>{SS.minLabel(o.item.start)}</span>}
-                  {labelOf(o.item, kind)}
+                  {labelOf(o.item, kind, t)}
                 </div>
               ))}
-              {evs.length > 3 && <span className="mg-more">+{evs.length - 3} more</span>}
+              {evs.length > 3 && <span className="mg-more">{t('calendar.moreCount', { count: evs.length - 3 })}</span>}
             </div>
           );
         })}
@@ -726,9 +730,9 @@ function toneCls(item, kind) {
   if (kind === 'availability') return item.type === 'pref' ? 'pref' : item.type === 'undes' ? 'undes' : 'vac';
   return 'shift';
 }
-function labelOf(item, kind) {
-  if (kind === 'availability') return item.type === 'pref' ? 'Preferred' : item.type === 'undes' ? 'Undesired' : 'Vacation';
-  return item.name || 'Shift';
+function labelOf(item, kind, t) {
+  if (kind === 'availability') return item.type === 'pref' ? t('avail.pref') : item.type === 'undes' ? t('avail.undes') : t('avail.vac');
+  return item.name || t('common.shift');
 }
 
 function useClickAway(ref, onAway, active) {
@@ -740,8 +744,9 @@ function useClickAway(ref, onAway, active) {
   }, [active]);
 }
 
-const CAL_WD = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 function DateField({ value, onChange }) {
+  const { t } = useTranslation();
+  const CAL_WD = t('common.weekdays2', { returnObjects: true });
   const [open, setOpen] = useState(false);
   const wrap = useRef(null);
   useClickAway(wrap, () => setOpen(false), open);
@@ -753,7 +758,7 @@ function DateField({ value, onChange }) {
   const weeks = Array.from({ length: 6 }, (_, w) => Array.from({ length: 7 }, (_, i) => SS.addDays(gridStart, w * 7 + i)));
   const mon = vm.getMonth();
   const step = (n) => setVm(new Date(vm.getFullYear(), vm.getMonth() + n, 1));
-  const label = value ? SS.parseISO(value).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Pick a date';
+  const label = value ? SS.parseISO(value).toLocaleDateString(dateLocale(), { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : t('calendar.pickDate');
   return (
     <div className="picker-wrap" ref={wrap}>
       <button type="button" className={`input picker-trigger ${open ? 'open' : ''}`} onClick={() => setOpen((o) => !o)}>
@@ -765,7 +770,7 @@ function DateField({ value, onChange }) {
         <div className="picker-pop cal-pop">
           <div className="cp-nav">
             <button type="button" className="cp-arrow" onClick={() => step(-1)}><Ic.chevL size={14}/></button>
-            <span className="cp-month">{vm.toLocaleDateString([], { month: 'long', year: 'numeric' })}</span>
+            <span className="cp-month">{vm.toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' })}</span>
             <button type="button" className="cp-arrow" onClick={() => step(1)}><Ic.chevR size={14}/></button>
           </div>
           <div className="cp-dow">{CAL_WD.map((w) => <span key={w}>{w}</span>)}</div>
@@ -813,14 +818,17 @@ function parseTimeText(raw, isEnd) {
 }
 
 function TimeField({ minutes, onChange, isEnd, align }) {
+  const { t } = useTranslation();
+  const h24 = is24h();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const wrap = useRef(null);
   const listRef = useRef(null);
   const inputRef = useRef(null);
   const opts = Array.from({ length: isEnd ? 97 : 96 }, (_, i) => i * 15);
-  const optLabel = (m) => m >= 1440 ? 'Midnight' : SS.min12(m);
-  const label = minutes >= 1440 ? 'Midnight' : SS.min12(minutes);
+  const fmtTime = (m) => (h24 ? SS.minLabel(m) : SS.min12(m));
+  const optLabel = (m) => m >= 1440 ? t('calendar.midnight') : fmtTime(m);
+  const label = minutes >= 1440 ? t('calendar.midnight') : fmtTime(minutes);
   const commit = (m) => { onChange(m); setOpen(false); if (inputRef.current) inputRef.current.blur(); };
   const tryCommitText = () => {
     const m = text.trim() ? parseTimeText(text, isEnd) : null;
@@ -865,27 +873,28 @@ function TimeField({ minutes, onChange, isEnd, align }) {
 // Scope chooser shown after dropping a recurring entry — mirrors the editor's
 // "apply to this / this & following / all" menu.
 function DropScope({ kind, error, onPick, onCancel }) {
+  const { t } = useTranslation();
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onCancel(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
-  const noun = kind === 'availability' ? 'this availability entry' : 'this shift';
+  const noun = kind === 'availability' ? t('calendar.entryNounAvail') : t('calendar.entryNounShift');
   return (
     <>
       <div className="pop-backdrop" style={{ zIndex: 70 }} onClick={onCancel}></div>
       <div className="pop confirm-pop" style={{ left: '50%', top: 140, transform: 'translateX(-50%)', zIndex: 71 }}>
-        <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Ic.repeat size={15}/> Move {noun}</h4>
+        <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Ic.repeat size={15}/> {t('calendar.move', { noun })}</h4>
         {error
           ? <p className="confirm-msg" style={{ color: 'var(--rose-strong)', display: 'flex', alignItems: 'center', gap: 6 }}><Ic.alert size={14}/> {error}</p>
-          : <p className="confirm-msg">This is a repeating entry — apply the change to:</p>}
+          : <p className="confirm-msg">{t('calendar.repeatingApply')}</p>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <button className="btn sm" style={{ justifyContent: 'flex-start' }} onClick={() => onPick('this')}>This occurrence</button>
-          <button className="btn sm" style={{ justifyContent: 'flex-start' }} onClick={() => onPick('future')}>This &amp; following</button>
-          <button className="btn sm" style={{ justifyContent: 'flex-start' }} onClick={() => onPick('all')}>All occurrences</button>
+          <button className="btn sm" style={{ justifyContent: 'flex-start' }} onClick={() => onPick('this')}>{t('calendar.scope.this')}</button>
+          <button className="btn sm" style={{ justifyContent: 'flex-start' }} onClick={() => onPick('future')}>{t('calendar.scope.future')}</button>
+          <button className="btn sm" style={{ justifyContent: 'flex-start' }} onClick={() => onPick('all')}>{t('calendar.scope.all')}</button>
         </div>
         <div className="pop-actions">
-          <button className="btn sm" onClick={onCancel}>Cancel</button>
+          <button className="btn sm" onClick={onCancel}>{t('common.cancel')}</button>
         </div>
       </div>
     </>
@@ -893,6 +902,8 @@ function DropScope({ kind, error, onPick, onCancel }) {
 }
 
 function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemove, onClose, onDone, onValidate, error, extraFields }) {
+  const { t } = useTranslation();
+  const WD = t('common.weekdays3', { returnObjects: true });
   const ref = useRef(null);
   const [scopeMenu, setScopeMenu] = useState(false);
   const [delMenu, setDelMenu] = useState(false);
@@ -903,7 +914,7 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
   }, [confirm]);
   const overnight = !item.allDay && item.end < item.start;
   const nextDate = item.date ? SS.parseISO(item.date) : null;
-  const nextLabel = nextDate ? SS.addDays(nextDate, 1).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+  const nextLabel = nextDate ? SS.addDays(nextDate, 1).toLocaleDateString(dateLocale(), { weekday: 'short', month: 'short', day: 'numeric' }) : '';
   const isVac = kind === 'availability' && item.type === 'vac';
   // Vacation spans a date range instead of recurring; everything else can repeat.
   const recurs = !isVac && item.repeat && item.repeat !== 'none';
@@ -929,7 +940,9 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
       <div className="pop-backdrop" onClick={onClose}></div>
       <div className="pop" ref={ref} style={{ left: '50%', top: 96, transform: 'translateX(-50%)' }}>
         <h4>
-          {isNew ? 'New ' : 'Edit '}{kind === 'availability' ? 'availability' : 'shift'}
+          {isNew
+            ? (kind === 'availability' ? t('calendar.newAvailability') : t('calendar.newShift'))
+            : (kind === 'availability' ? t('calendar.editAvailability') : t('calendar.editShift'))}
           <span className="iconbtn" style={{ width: 26, height: 26, border: 0, background: 'transparent' }} onClick={onClose}><Ic.x size={15}/></span>
         </h4>
 
@@ -945,43 +958,43 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
         {extraFields && extraFields(item, onPatch)}
 
         <div className="field">
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Ic.calendar size={13}/> {isVac ? 'Start date' : 'Date'}</label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Ic.calendar size={13}/> {isVac ? t('calendar.startDate') : t('calendar.date')}</label>
           <DateField value={item.date} onChange={(iso) => onPatch({ date: iso, ...(item.endDate && item.endDate < iso ? { endDate: undefined } : {}) })} />
         </div>
 
         {isVac && (
           <div className="field">
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Ic.calendar size={13}/> End date <span className="muted" style={{ fontWeight: 400 }}>· optional</span></label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Ic.calendar size={13}/> {t('calendar.endDate')} <span className="muted" style={{ fontWeight: 400 }}>· {t('common.optional')}</span></label>
             {item.endDate ? (
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <div style={{ flex: 1, minWidth: 0 }}><DateField value={item.endDate} onChange={(iso) => onPatch({ endDate: iso >= item.date ? iso : item.date })} /></div>
-                <button className="iconbtn" style={{ width: 30, height: 30, flex: '0 0 30px' }} title="Single day" onClick={() => onPatch({ endDate: undefined })}><Ic.x size={14}/></button>
+                <button className="iconbtn" style={{ width: 30, height: 30, flex: '0 0 30px' }} title={t('calendar.singleDay')} onClick={() => onPatch({ endDate: undefined })}><Ic.x size={14}/></button>
               </div>
             ) : (
-              <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => onPatch({ endDate: SS.isoOf(SS.addDays(SS.parseISO(item.date), 1)) })}><Ic.plus size={13}/> Add end date</button>
+              <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => onPatch({ endDate: SS.isoOf(SS.addDays(SS.parseISO(item.date), 1)) })}><Ic.plus size={13}/> {t('calendar.addEndDate')}</button>
             )}
-            <div className="hint">Leave empty for a single day, or set an end date to cover several days.</div>
+            <div className="hint">{t('calendar.endDateHint')}</div>
           </div>
         )}
 
         {!item.allDay && !isVac && (
           <div className="field">
-            <label>Time</label>
+            <label>{t('calendar.time')}</label>
             <div className="timepair">
               <TimeField minutes={item.start} onChange={(m) => onPatch({ start: m })} />
               <span className="muted">→</span>
               <TimeField minutes={item.end} isEnd align="right" onChange={(m) => onPatch({ end: m === 0 ? 1440 : m })} />
-              {overnight && <span className="chip accent ovn-pill" title={`Ends ${nextLabel}`}>+1d</span>}
+              {overnight && <span className="chip accent ovn-pill" title={t('calendar.endsOn', { date: nextLabel })}>{t('calendar.plusDay')}</span>}
             </div>
-            {overnight && <div className="hint" style={{ color: 'var(--accent-strong)', display: 'flex', alignItems: 'center', gap: 5 }}><Ic.moon size={12}/> Overnight — ends {nextLabel}</div>}
+            {overnight && <div className="hint" style={{ color: 'var(--accent-strong)', display: 'flex', alignItems: 'center', gap: 5 }}><Ic.moon size={12}/> {t('calendar.overnight', { date: nextLabel })}</div>}
           </div>
         )}
 
         {!isVac && (
           <div className="field">
-            <label style={{ display:'flex', alignItems:'center', gap:6 }}><Ic.repeat size={13}/> Repeat</label>
+            <label style={{ display:'flex', alignItems:'center', gap:6 }}><Ic.repeat size={13}/> {t('calendar.repeat')}</label>
             <div className="seg full">
-              {[['none','Once'],['daily','Daily'],['weekly','Weekly']].map(([v,l]) => (
+              {[['none', t('calendar.repeatOnce')], ['daily', t('calendar.repeatDaily')], ['weekly', t('calendar.repeatWeekly')]].map(([v,l]) => (
                 <button key={v} className={(item.repeat || 'none') === v ? 'on' : ''}
                   onClick={() => onPatch({ repeat: v, days: v === 'weekly' ? (item.days && item.days.length ? item.days : [weekdayOf(item.date)]) : undefined })}>{l}</button>
               ))}
@@ -993,7 +1006,7 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
                 ))}
               </div>
             )}
-            {item.repeat === 'weekly' && <div className="hint">Repeats every week on the selected days.</div>}
+            {item.repeat === 'weekly' && <div className="hint">{t('calendar.weeklyHint')}</div>}
           </div>
         )}
 
@@ -1006,45 +1019,45 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
         <div className="pop-actions">
           {scopable && recurs ? (
             <div className="splitbtn danger">
-              <button className="sb-main" onClick={() => run('delete', 'all')}><Ic.trash size={13}/> Delete all</button>
+              <button className="sb-main" onClick={() => run('delete', 'all')}><Ic.trash size={13}/> {t('calendar.deleteAll')}</button>
               <button className="sb-caret" onClick={() => setDelMenu((o) => !o)}><Ic.chevD size={12}/></button>
               {delMenu && (
                 <>
                   <div className="menu-backdrop" onClick={() => setDelMenu(false)}></div>
                   <div className="scope-menu" onClick={(e) => e.stopPropagation()}>
-                    <div className="dm-head">Delete</div>
-                    <button onClick={() => run('delete', 'this')}><span className="sm-t">This occurrence</span><span className="sm-s">Only {SS.parseISO(occDate || item.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</span></button>
-                    <button onClick={() => run('delete', 'future')}><span className="sm-t">This &amp; following</span><span className="sm-s">{SS.parseISO(occDate || item.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} onward</span></button>
-                    <button onClick={() => run('delete', 'all')}><span className="sm-t">All occurrences</span></button>
+                    <div className="dm-head">{t('calendar.deleteHead')}</div>
+                    <button onClick={() => run('delete', 'this')}><span className="sm-t">{t('calendar.scope.this')}</span><span className="sm-s">{t('calendar.onlyDate', { date: SS.parseISO(occDate || item.date).toLocaleDateString(dateLocale(), { weekday: 'short', month: 'short', day: 'numeric' }) })}</span></button>
+                    <button onClick={() => run('delete', 'future')}><span className="sm-t">{t('calendar.scope.future')}</span><span className="sm-s">{t('calendar.dateOnward', { date: SS.parseISO(occDate || item.date).toLocaleDateString(dateLocale(), { weekday: 'short', month: 'short', day: 'numeric' }) })}</span></button>
+                    <button onClick={() => run('delete', 'all')}><span className="sm-t">{t('calendar.scope.all')}</span></button>
                   </div>
                 </>
               )}
             </div>
           ) : (
-            <button className="btn danger sm" onClick={() => run('delete', 'all')}><Ic.trash size={14}/> Delete</button>
+            <button className="btn danger sm" onClick={() => run('delete', 'all')}><Ic.trash size={14}/> {t('common.delete')}</button>
           )}
           {scopable && recurs ? (() => {
-            const occLabel = SS.parseISO(occDate || item.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-            const everyWord = item.repeat === 'daily' ? 'day' : 'week';
+            const occLabel = SS.parseISO(occDate || item.date).toLocaleDateString(dateLocale(), { weekday: 'short', month: 'short', day: 'numeric' });
+            const everyLabel = item.repeat === 'daily' ? t('calendar.everyDay') : t('calendar.everyWeek');
             return (
               <div className="splitbtn primary">
-                <button className="sb-main" onClick={() => run('save', 'all')}><Ic.check size={13}/> Save all</button>
+                <button className="sb-main" onClick={() => run('save', 'all')}><Ic.check size={13}/> {t('calendar.saveAll')}</button>
                 <button className="sb-caret" onClick={() => setScopeMenu((o) => !o)}><Ic.chevD size={12}/></button>
                 {scopeMenu && (
                   <>
                     <div className="menu-backdrop" onClick={() => setScopeMenu(false)}></div>
                     <div className="scope-menu" onClick={(e) => e.stopPropagation()}>
-                      <div className="dm-head">Apply changes to</div>
-                      <button onClick={() => run('save', 'this')}><span className="sm-t">This occurrence</span><span className="sm-s">Only {occLabel}</span></button>
-                      <button onClick={() => run('save', 'future')}><span className="sm-t">This &amp; following</span><span className="sm-s">{occLabel} onward</span></button>
-                      <button onClick={() => run('save', 'all')}><span className="sm-t">All occurrences</span><span className="sm-s">Every {everyWord}</span></button>
+                      <div className="dm-head">{t('calendar.applyChangesTo')}</div>
+                      <button onClick={() => run('save', 'this')}><span className="sm-t">{t('calendar.scope.this')}</span><span className="sm-s">{t('calendar.onlyDate', { date: occLabel })}</span></button>
+                      <button onClick={() => run('save', 'future')}><span className="sm-t">{t('calendar.scope.future')}</span><span className="sm-s">{t('calendar.dateOnward', { date: occLabel })}</span></button>
+                      <button onClick={() => run('save', 'all')}><span className="sm-t">{t('calendar.scope.all')}</span><span className="sm-s">{everyLabel}</span></button>
                     </div>
                   </>
                 )}
               </div>
             );
           })() : (
-            <button className="btn primary sm" onClick={() => run('save', 'all')}><Ic.check size={14}/> Done</button>
+            <button className="btn primary sm" onClick={() => run('save', 'all')}><Ic.check size={14}/> {t('common.done')}</button>
           )}
         </div>
       </div>
@@ -1053,15 +1066,18 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
         <>
           <div className="pop-backdrop" style={{ zIndex: 70 }} onClick={() => setConfirm(null)}></div>
           <div className="pop confirm-pop" style={{ left: '50%', top: 140, transform: 'translateX(-50%)', zIndex: 71 }}>
-            <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Ic.alert size={16}/> Affects the past</h4>
+            <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Ic.alert size={16}/> {t('calendar.affectsPastTitle')}</h4>
             <p className="confirm-msg">
-              This {confirm.kind === 'delete' ? 'deletion' : 'change'} affects {confirm.scope === 'this' ? 'a date' : 'dates'} before today. Are you sure?
+              {t('calendar.affectsPastBody', {
+                action: confirm.kind === 'delete' ? t('calendar.actionDeletion') : t('calendar.actionChange'),
+                when: confirm.scope === 'this' ? t('calendar.whenDate') : t('calendar.whenDates'),
+              })}
             </p>
             <div className="pop-actions">
-              <button className="btn sm" onClick={() => setConfirm(null)}>Cancel</button>
+              <button className="btn sm" onClick={() => setConfirm(null)}>{t('common.cancel')}</button>
               <button className={`btn sm ${confirm.kind === 'delete' ? 'danger' : 'primary'}`}
                 onClick={() => { (confirm.kind === 'save' ? onDone : onRemove)(confirm.scope); setConfirm(null); }}>
-                {confirm.kind === 'delete' ? 'Delete anyway' : 'Save anyway'}
+                {confirm.kind === 'delete' ? t('calendar.deleteAnyway') : t('calendar.saveAnyway')}
               </button>
             </div>
           </div>
