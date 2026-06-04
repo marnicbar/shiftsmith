@@ -763,9 +763,14 @@ body.cal-moving, body.cal-resizing { user-select: none; }
 .login-submit { width: 100%; justify-content: center; height: 38px; margin-top: 2px; }
 .login-submit:disabled { opacity: .55; cursor: not-allowed; }
 
-/* ---------- Settings: account ---------- */
-.acct-user { display: flex; align-items: center; gap: 12px; }
-.acct-user .acct-name { font-weight: 600; font-size: 13.5px; }
+/* ---------- Account button + menu (topbar) ---------- */
+.acct-btn-wrap { position: relative; }
+.acct-menu-head { padding: 4px 9px 6px; font-size: 12px; font-weight: 600; color: var(--text-3);
+  letter-spacing: -0.01em; border-bottom: 1px solid var(--border); margin-bottom: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- Account settings ---------- */
+.acct-name { font-weight: 600; font-size: 13.5px; }
 .acct-pw { display: flex; flex-direction: column; gap: 12px; margin-top: 14px;
   max-width: 320px; }
 .acct-msg { font-size: 12.5px; border-radius: 9px; padding: 8px 11px; }

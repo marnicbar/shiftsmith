@@ -55,6 +55,19 @@
     "tooShort": "Das neue Passwort muss mindestens 6 Zeichen lang sein.",
     "mismatch": "Die neuen Passwörter stimmen nicht überein."
   },
+  "account": {
+    "title": "Konto",
+    "subtitle": "Deine Anmeldung, Darstellung und Kalendereinstellungen.",
+    "menuSettings": "Kontoeinstellungen",
+    "signOut": "Abmelden",
+    "signinTitle": "Anmeldung",
+    "signinDesc": "Dein Benutzername und dein Passwort.",
+    "signedInAs": "Angemeldet als",
+    "currentPassword": "Aktuelles Passwort",
+    "newPassword": "Neues Passwort",
+    "confirmPassword": "Neues Passwort bestätigen",
+    "updatePassword": "Passwort aktualisieren"
+  },
   "dashboard": {
     "title": "Dashboard",
     "weekOf": "Woche vom {{date}} · Live-Überblick",
@@ -146,15 +159,7 @@
   },
   "settings": {
     "title": "Einstellungen",
-    "subtitle": "Darstellung, Kalenderverhalten und das Solver-Fenster.",
-    "account": "Konto",
-    "accountDesc": "Deine Anmeldung und dein Passwort.",
-    "signedInAs": "Angemeldet als",
-    "currentPassword": "Aktuelles Passwort",
-    "newPassword": "Neues Passwort",
-    "confirmPassword": "Neues Passwort bestätigen",
-    "updatePassword": "Passwort aktualisieren",
-    "logout": "Abmelden",
+    "subtitle": "Fähigkeiten, Arbeitszeitregeln und das Solver-Fenster.",
     "appearance": "Darstellung",
     "darkMode": "Dunkler Modus",
     "darkModeHint": "Zwischen hellem und dunklem Design wechseln.",

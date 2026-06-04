@@ -1,4 +1,6 @@
-// settings.jsx — full-page settings: Appearance, Calendar, Skills, Shift plan and Solver.
+// settings.jsx — two pages:
+//   AccountView  (account button → Account settings): sign-in, appearance, calendar.
+//   SettingsView (gear → System settings): skills, working-time rules, solver.
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Theme } from './theme.js';
@@ -77,7 +79,7 @@ function SkillsManager({ skills, onAdd, onRename, onRemove }) {
   );
 }
 
-function AccountSection({ username, onLogout }) {
+function SigninSection({ username }) {
   const { t } = useTranslation();
   const [cur, setCur] = useState('');
   const [next, setNext] = useState('');
@@ -103,35 +105,85 @@ function AccountSection({ username, onLogout }) {
 
   return (
     <div className="card set-card">
-      <h3>{t('settings.account')}</h3>
-      <div className="hint" style={{ marginTop: -2, marginBottom: 12 }}>{t('settings.accountDesc')}</div>
-      <Row label={t('settings.signedInAs')}>
-        <div className="acct-user">
-          <span className="acct-name">{username || '—'}</span>
-          <button type="button" className="btn sm" onClick={onLogout}><Ic.x size={14}/> {t('settings.logout')}</button>
-        </div>
+      <h3>{t('account.signinTitle')}</h3>
+      <div className="hint" style={{ marginTop: -2, marginBottom: 12 }}>{t('account.signinDesc')}</div>
+      <Row label={t('account.signedInAs')}>
+        <span className="acct-name">{username || '—'}</span>
       </Row>
       <form className="acct-pw" onSubmit={submit}>
         <div className="field">
-          <label htmlFor="pw-cur">{t('settings.currentPassword')}</label>
+          <label htmlFor="pw-cur">{t('account.currentPassword')}</label>
           <input id="pw-cur" className="input" type="password" autoComplete="current-password"
             value={cur} onChange={(e) => setCur(e.target.value)} />
         </div>
         <div className="field">
-          <label htmlFor="pw-new">{t('settings.newPassword')}</label>
+          <label htmlFor="pw-new">{t('account.newPassword')}</label>
           <input id="pw-new" className="input" type="password" autoComplete="new-password"
             value={next} onChange={(e) => setNext(e.target.value)} />
         </div>
         <div className="field">
-          <label htmlFor="pw-confirm">{t('settings.confirmPassword')}</label>
+          <label htmlFor="pw-confirm">{t('account.confirmPassword')}</label>
           <input id="pw-confirm" className="input" type="password" autoComplete="new-password"
             value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </div>
         {msg && <div className={msg.ok ? 'acct-msg ok' : 'acct-msg err'}>{msg.text}</div>}
         <button type="submit" className="btn primary acct-submit" disabled={busy || !cur || !next || !confirm}>
-          {t('settings.updatePassword')}
+          {t('account.updatePassword')}
         </button>
       </form>
+    </div>
+  );
+}
+
+function AppearanceCard({ prefs, setPref, fonts }) {
+  const { t } = useTranslation();
+  const accents = Object.entries(Theme.ACCENTS);
+  return (
+    <div className="card set-card">
+      <h3>{t('settings.appearance')}</h3>
+      <Row label={t('settings.darkMode')} hint={t('settings.darkModeHint')}>
+        <Toggle value={prefs.dark} onChange={(v) => setPref('dark', v)} />
+      </Row>
+      <Row label={t('settings.palette')} hint={t('settings.paletteHint')}>
+        <Seg value={prefs.palette} options={['slate', 'stone', 'mono']} onChange={(v) => setPref('palette', v)} />
+      </Row>
+      <Row label={t('settings.accent')} hint={t('settings.accentHint')}>
+        <div className="accent-row">
+          {accents.map(([key, a]) => (
+            <button key={key} title={a.label} onClick={() => setPref('accent', key)}
+              className={`accent-swatch ${prefs.accent === key ? 'on' : ''}`}
+              style={{ background: `oklch(0.6 ${a.c} ${a.hue})` }} />
+          ))}
+        </div>
+      </Row>
+      <Row label={t('settings.uiFont')}>
+        <select className="input set-select" value={prefs.font} onChange={(e) => setPref('font', e.target.value)}>
+          {Object.keys(fonts).map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+      </Row>
+      <Row label={t('settings.language')} hint={t('settings.languageHint')}>
+        <select className="input set-select" value={prefs.lang} onChange={(e) => setPref('lang', e.target.value)}>
+          {LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+        </select>
+      </Row>
+    </div>
+  );
+}
+
+function CalendarCard({ prefs, setPref }) {
+  const { t } = useTranslation();
+  return (
+    <div className="card set-card">
+      <h3>{t('settings.calendar')}</h3>
+      <Row label={t('settings.timeSnap')} hint={t('settings.timeSnapHint')}>
+        <Seg value={prefs.snapLabel} options={[{ value: '15 min', label: t('settings.snap.15') }, { value: '30 min', label: t('settings.snap.30') }, { value: '60 min', label: t('settings.snap.60') }]} onChange={(v) => setPref('snapLabel', v)} />
+      </Row>
+      <Row label={t('settings.newBlock')} hint={t('settings.newBlockHint')}>
+        <Seg value={prefs.newFlowLabel} options={[{ value: 'Paint, then tweak', label: t('settings.flow.paint') }, { value: 'Open a form', label: t('settings.flow.form') }]} onChange={(v) => setPref('newFlowLabel', v)} />
+      </Row>
+      <Row label={t('settings.defaultView')}>
+        <Seg value={prefs.tlDefaultLabel} options={[{ value: 'Day', label: t('settings.view.day') }, { value: 'Week', label: t('settings.view.week') }, { value: 'Continuous', label: t('settings.view.continuous') }]} onChange={(v) => setPref('tlDefaultLabel', v)} />
+      </Row>
     </div>
   );
 }
@@ -151,9 +203,24 @@ function horizonSummary(t, sched, settings) {
   return { noun, n, range };
 }
 
-export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sched, skills = [], onAddSkill, onRenameSkill, onRemoveSkill, globalRules = [], setGlobalRules, authUser, onLogout }) {
+/** Account settings: sign-in, appearance and calendar — personal to the user. */
+export function AccountView({ prefs, setPref, fonts, authUser }) {
   const { t } = useTranslation();
-  const accents = Object.entries(Theme.ACCENTS);
+  return (
+    <div className="settings">
+      <div className="settings-inner">
+        <div className="dash-head"><div><h1>{t('account.title')}</h1><p>{t('account.subtitle')}</p></div></div>
+        <SigninSection username={authUser} />
+        <AppearanceCard prefs={prefs} setPref={setPref} fonts={fonts} />
+        <CalendarCard prefs={prefs} setPref={setPref} />
+      </div>
+    </div>
+  );
+}
+
+/** System settings: skills, working-time rules and the solver — shared, server-side config. */
+export function SettingsView({ settings, setSettings, sched, skills = [], onAddSkill, onRenameSkill, onRemoveSkill, globalRules = [], setGlobalRules }) {
+  const { t } = useTranslation();
   const active = sched.solverStatus === 'SOLVING_ACTIVE' || sched.solverStatus === 'SOLVING_SCHEDULED';
   const { noun, n, range } = horizonSummary(t, sched, settings);
   const setSetting = (patch) => setSettings({ ...settings, ...patch });
@@ -162,50 +229,6 @@ export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sch
     <div className="settings">
       <div className="settings-inner">
         <div className="dash-head"><div><h1>{t('settings.title')}</h1><p>{t('settings.subtitle')}</p></div></div>
-
-        <AccountSection username={authUser} onLogout={onLogout} />
-
-        <div className="card set-card">
-          <h3>{t('settings.appearance')}</h3>
-          <Row label={t('settings.darkMode')} hint={t('settings.darkModeHint')}>
-            <Toggle value={prefs.dark} onChange={(v) => setPref('dark', v)} />
-          </Row>
-          <Row label={t('settings.palette')} hint={t('settings.paletteHint')}>
-            <Seg value={prefs.palette} options={['slate', 'stone', 'mono']} onChange={(v) => setPref('palette', v)} />
-          </Row>
-          <Row label={t('settings.accent')} hint={t('settings.accentHint')}>
-            <div className="accent-row">
-              {accents.map(([key, a]) => (
-                <button key={key} title={a.label} onClick={() => setPref('accent', key)}
-                  className={`accent-swatch ${prefs.accent === key ? 'on' : ''}`}
-                  style={{ background: `oklch(0.6 ${a.c} ${a.hue})` }} />
-              ))}
-            </div>
-          </Row>
-          <Row label={t('settings.uiFont')}>
-            <select className="input set-select" value={prefs.font} onChange={(e) => setPref('font', e.target.value)}>
-              {Object.keys(fonts).map((f) => <option key={f} value={f}>{f}</option>)}
-            </select>
-          </Row>
-          <Row label={t('settings.language')} hint={t('settings.languageHint')}>
-            <select className="input set-select" value={prefs.lang} onChange={(e) => setPref('lang', e.target.value)}>
-              {LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-            </select>
-          </Row>
-        </div>
-
-        <div className="card set-card">
-          <h3>{t('settings.calendar')}</h3>
-          <Row label={t('settings.timeSnap')} hint={t('settings.timeSnapHint')}>
-            <Seg value={prefs.snapLabel} options={[{ value: '15 min', label: t('settings.snap.15') }, { value: '30 min', label: t('settings.snap.30') }, { value: '60 min', label: t('settings.snap.60') }]} onChange={(v) => setPref('snapLabel', v)} />
-          </Row>
-          <Row label={t('settings.newBlock')} hint={t('settings.newBlockHint')}>
-            <Seg value={prefs.newFlowLabel} options={[{ value: 'Paint, then tweak', label: t('settings.flow.paint') }, { value: 'Open a form', label: t('settings.flow.form') }]} onChange={(v) => setPref('newFlowLabel', v)} />
-          </Row>
-          <Row label={t('settings.defaultView')}>
-            <Seg value={prefs.tlDefaultLabel} options={[{ value: 'Day', label: t('settings.view.day') }, { value: 'Week', label: t('settings.view.week') }, { value: 'Continuous', label: t('settings.view.continuous') }]} onChange={(v) => setPref('tlDefaultLabel', v)} />
-          </Row>
-        </div>
 
         <div className="card set-card">
           <h3>{t('settings.skillsTitle')}</h3>
