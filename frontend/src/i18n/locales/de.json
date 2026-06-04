@@ -39,6 +39,22 @@
     "tightenedRules": "Persönliche Regeln für {{names}} verschärft, um die neuen Systemgrenzen einzuhalten.",
     "namesMore": "{{names}} +{{count}} weitere"
   },
+  "auth": {
+    "title": "Anmelden",
+    "subtitle": "Melde dich an, um deinen Dienstplan zu verwalten.",
+    "username": "Benutzername",
+    "password": "Passwort",
+    "remember": "Angemeldet bleiben",
+    "signIn": "Anmelden",
+    "signingIn": "Anmelden…",
+    "invalid": "Ungültiger Benutzername oder Passwort.",
+    "failed": "Anmeldung fehlgeschlagen. Bitte versuche es erneut.",
+    "changed": "Passwort aktualisiert.",
+    "changeFailed": "Passwort konnte nicht aktualisiert werden.",
+    "currentIncorrect": "Aktuelles Passwort ist falsch.",
+    "tooShort": "Das neue Passwort muss mindestens 6 Zeichen lang sein.",
+    "mismatch": "Die neuen Passwörter stimmen nicht überein."
+  },
   "dashboard": {
     "title": "Dashboard",
     "weekOf": "Woche vom {{date}} · Live-Überblick",
@@ -131,6 +147,14 @@
   "settings": {
     "title": "Einstellungen",
     "subtitle": "Darstellung, Kalenderverhalten und das Solver-Fenster.",
+    "account": "Konto",
+    "accountDesc": "Deine Anmeldung und dein Passwort.",
+    "signedInAs": "Angemeldet als",
+    "currentPassword": "Aktuelles Passwort",
+    "newPassword": "Neues Passwort",
+    "confirmPassword": "Neues Passwort bestätigen",
+    "updatePassword": "Passwort aktualisieren",
+    "logout": "Abmelden",
     "appearance": "Darstellung",
     "darkMode": "Dunkler Modus",
     "darkModeHint": "Zwischen hellem und dunklem Design wechseln.",

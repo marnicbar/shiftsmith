@@ -23,7 +23,6 @@ import static dev.shiftsmith.support.Fixtures.employee;
 import static dev.shiftsmith.support.Fixtures.position;
 import static dev.shiftsmith.support.Fixtures.template;
 import static io.restassured.RestAssured.given;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
@@ -48,6 +47,15 @@ class ScheduleResourceIT {
     /** Anchor the template to the real "today" so it lands inside the live solve window. */
     private final LocalDate today = LocalDate.now();
 
+    /** Log in with the seeded default account and return a request spec carrying the token. */
+    private io.restassured.specification.RequestSpecification authed() {
+        String token = given().contentType(ContentType.JSON)
+                .body(Map.of("username", "admin", "password", "shiftsmith", "remember", false))
+                .when().post("/api/auth/login")
+                .then().statusCode(200).extract().path("token");
+        return given().header("Authorization", "Bearer " + token);
+    }
+
     private String trivialProblemJson() throws Exception {
         ShiftTemplate bar = template("bar", today, 1020, 1440, 1, "Bar"); // 17:00–24:00 today
         Position p = position("p", "Bar");
@@ -65,12 +73,12 @@ class ScheduleResourceIT {
     @Test
     void problemRoundTripsAndIsSolvedToFullCoverage() throws Exception {
         // Push the problem.
-        given().contentType(ContentType.JSON).body(trivialProblemJson())
+        authed().contentType(ContentType.JSON).body(trivialProblemJson())
                 .when().put("/api/problem")
                 .then().statusCode(204);
 
         // It comes back with the expanded slot and the persisted employee/position.
-        given().when().get("/api/schedule")
+        authed().when().get("/api/schedule")
                 .then().statusCode(200)
                 .body("employees.size()", is(1))
                 .body("positions.size()", is(1))
@@ -80,7 +88,7 @@ class ScheduleResourceIT {
 
         // The single feasible slot should get staffed by the only qualified employee.
         await().atMost(Duration.ofSeconds(20)).pollInterval(Duration.ofMillis(250)).untilAsserted(() ->
-                given().when().get("/api/schedule")
+                authed().when().get("/api/schedule")
                         .then().statusCode(200)
                         .body("staffed", is(1))
                         .body("assignments[0].employeeId", is("alice")));
@@ -90,7 +98,12 @@ class ScheduleResourceIT {
     void solverLifecycleEndpointsAreReachable() {
         // The resource consumes JSON; declare it so RestAssured doesn't default to a
         // form content type on these bodyless calls (which would be rejected as 415).
-        given().contentType(ContentType.JSON).when().post("/api/solve").then().statusCode(204);
-        given().contentType(ContentType.JSON).when().delete("/api/solve").then().statusCode(204);
+        authed().contentType(ContentType.JSON).when().post("/api/solve").then().statusCode(204);
+        authed().contentType(ContentType.JSON).when().delete("/api/solve").then().statusCode(204);
+    }
+
+    @Test
+    void apiRequiresAuthentication() {
+        given().when().get("/api/schedule").then().statusCode(401);
     }
 }

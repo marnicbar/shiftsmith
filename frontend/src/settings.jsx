@@ -6,6 +6,7 @@ import { SS } from './data.js';
 import { dateLocale, LANGUAGES } from './i18n/index.js';
 import { Ic } from './icons.jsx';
 import { RulesEditor } from './rules.jsx';
+import * as api from './lib/api.js';
 
 function Seg({ value, options, onChange }) {
   return (
@@ -76,6 +77,65 @@ function SkillsManager({ skills, onAdd, onRename, onRemove }) {
   );
 }
 
+function AccountSection({ username, onLogout }) {
+  const { t } = useTranslation();
+  const [cur, setCur] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [msg, setMsg] = useState(null); // { ok: boolean, text }
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setMsg(null);
+    if (next.length < 6) { setMsg({ ok: false, text: t('auth.tooShort') }); return; }
+    if (next !== confirm) { setMsg({ ok: false, text: t('auth.mismatch') }); return; }
+    setBusy(true);
+    try {
+      await api.changePassword(cur, next);
+      setMsg({ ok: true, text: t('auth.changed') });
+      setCur(''); setNext(''); setConfirm('');
+    } catch (err) {
+      const wrongCurrent = String(err.message || '').includes('403');
+      setMsg({ ok: false, text: wrongCurrent ? t('auth.currentIncorrect') : t('auth.changeFailed') });
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="card set-card">
+      <h3>{t('settings.account')}</h3>
+      <div className="hint" style={{ marginTop: -2, marginBottom: 12 }}>{t('settings.accountDesc')}</div>
+      <Row label={t('settings.signedInAs')}>
+        <div className="acct-user">
+          <span className="acct-name">{username || '—'}</span>
+          <button type="button" className="btn sm" onClick={onLogout}><Ic.x size={14}/> {t('settings.logout')}</button>
+        </div>
+      </Row>
+      <form className="acct-pw" onSubmit={submit}>
+        <div className="field">
+          <label htmlFor="pw-cur">{t('settings.currentPassword')}</label>
+          <input id="pw-cur" className="input" type="password" autoComplete="current-password"
+            value={cur} onChange={(e) => setCur(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="pw-new">{t('settings.newPassword')}</label>
+          <input id="pw-new" className="input" type="password" autoComplete="new-password"
+            value={next} onChange={(e) => setNext(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="pw-confirm">{t('settings.confirmPassword')}</label>
+          <input id="pw-confirm" className="input" type="password" autoComplete="new-password"
+            value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+        </div>
+        {msg && <div className={msg.ok ? 'acct-msg ok' : 'acct-msg err'}>{msg.text}</div>}
+        <button type="submit" className="btn primary acct-submit" disabled={busy || !cur || !next || !confirm}>
+          {t('settings.updatePassword')}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function horizonSummary(t, sched, settings) {
   const n = Math.max(1, settings.horizonCount || 1);
   const unit = settings.horizonUnit || 'week';
@@ -91,7 +151,7 @@ function horizonSummary(t, sched, settings) {
   return { noun, n, range };
 }
 
-export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sched, skills = [], onAddSkill, onRenameSkill, onRemoveSkill, globalRules = [], setGlobalRules }) {
+export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sched, skills = [], onAddSkill, onRenameSkill, onRemoveSkill, globalRules = [], setGlobalRules, authUser, onLogout }) {
   const { t } = useTranslation();
   const accents = Object.entries(Theme.ACCENTS);
   const active = sched.solverStatus === 'SOLVING_ACTIVE' || sched.solverStatus === 'SOLVING_SCHEDULED';
@@ -102,6 +162,8 @@ export function SettingsView({ prefs, setPref, fonts, settings, setSettings, sch
     <div className="settings">
       <div className="settings-inner">
         <div className="dash-head"><div><h1>{t('settings.title')}</h1><p>{t('settings.subtitle')}</p></div></div>
+
+        <AccountSection username={authUser} onLogout={onLogout} />
 
         <div className="card set-card">
           <h3>{t('settings.appearance')}</h3>

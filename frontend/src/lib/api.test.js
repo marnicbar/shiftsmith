@@ -15,14 +15,60 @@ const ok = (body, status = 200) => ({ ok: true, status, json: async () => body }
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  localStorage.clear();
+  sessionStorage.clear();
 });
 
 describe('getSchedule', () => {
   it('GETs /api/schedule and returns the parsed body', async () => {
     const fetchFn = mockFetch(ok({ total: 3 }));
     const result = await api.getSchedule();
-    expect(fetchFn).toHaveBeenCalledWith('/api/schedule', {});
+    expect(fetchFn).toHaveBeenCalledWith('/api/schedule', { headers: {} });
     expect(result).toEqual({ total: 3 });
+  });
+
+  it('attaches the bearer token when one is stored', async () => {
+    api.setToken('tok123', true);
+    const fetchFn = mockFetch(ok({ total: 1 }));
+    await api.getSchedule();
+    const [, options] = fetchFn.mock.calls[0];
+    expect(options.headers.Authorization).toBe('Bearer tok123');
+  });
+});
+
+describe('auth', () => {
+  it('login stores the token and reports success', async () => {
+    const fetchFn = mockFetch(ok({ token: 'abc', username: 'admin' }));
+    const res = await api.login('admin', 'shiftsmith', true);
+    expect(res).toEqual({ ok: true, username: 'admin' });
+    expect(api.getToken()).toBe('abc');
+    const [url, options] = fetchFn.mock.calls[0];
+    expect(url).toBe('/api/auth/login');
+    expect(JSON.parse(options.body)).toEqual({ username: 'admin', password: 'shiftsmith', remember: true });
+  });
+
+  it('login returns { ok: false } on 401 without storing a token', async () => {
+    mockFetch({ ok: false, status: 401, json: async () => ({}) });
+    const res = await api.login('admin', 'wrong', false);
+    expect(res).toEqual({ ok: false });
+    expect(api.getToken()).toBeNull();
+  });
+
+  it('remember=false stores the token in sessionStorage only', () => {
+    api.setToken('s-tok', false);
+    expect(sessionStorage.getItem('shiftsmith.token')).toBe('s-tok');
+    expect(localStorage.getItem('shiftsmith.token')).toBeNull();
+  });
+
+  it('a 401 clears the token and fires the unauthorized handler', async () => {
+    api.setToken('stale', true);
+    const onUnauth = vi.fn();
+    api.setUnauthorizedHandler(onUnauth);
+    mockFetch({ ok: false, status: 401, json: async () => ({}) });
+    await expect(api.getSchedule()).rejects.toThrow(/401/);
+    expect(onUnauth).toHaveBeenCalled();
+    expect(api.getToken()).toBeNull();
+    api.setUnauthorizedHandler(null);
   });
 });
 
