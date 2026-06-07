@@ -88,7 +88,7 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
             <UI.Avatar name={emp.name} size="lg" square/>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.02em' }}>{emp.name}</div>
-              <div className="muted" style={{ fontSize: 12.5 }}>{emp.skills.join(' · ') || t('personnel.noSkills')}</div>
+              {emp.skills.length > 0 && <div className="muted" style={{ fontSize: 12.5 }}>{emp.skills.join(' · ')}</div>}
             </div>
           </div>
 
