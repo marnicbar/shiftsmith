@@ -56,7 +56,7 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
               <UI.Avatar name={e.name}/>
               <div className="ri-meta">
                 <div className="ri-name">{e.name}</div>
-                <div className="ri-sub">{e.skills.join(' · ') || t('personnel.noSkills')}</div>
+                {e.skills.length > 0 && <div className="ri-sub">{e.skills.join(' · ')}</div>}
               </div>
             </div>
           ))}
