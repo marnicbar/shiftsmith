@@ -619,7 +619,6 @@ body.cal-moving, body.cal-resizing { user-select: none; }
 .pref-emp .pe-x { appearance: none; border: 0; background: none; cursor: pointer; color: var(--text-3); display: grid; place-items: center; padding: 2px; border-radius: 6px; }
 .pref-emp .pe-x:hover { background: var(--surface); color: var(--rose-strong); }
 .pref-emp .pe-x svg { width: 13px; height: 13px; }
-.pref-empty { font-size: 12px; color: var(--text-3); padding: 2px 0; }
 
 /* ---------- Assignment editor (shift plan popover) ---------- */
 .assign-pop { width: 318px; padding: 0; gap: 0; overflow: hidden; }

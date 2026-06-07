@@ -101,17 +101,18 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
         <UI.Stepper value={item.headcount} min={1} onChange={(v) => patch({ headcount: v, preferred: prefIds.slice(0, v) })}/>
       </div>
       <div className="field">
-        <label title={t('positions.preferredHint', { count: item.headcount })}>{t('positions.preferredEmployees')}</label>
-        <div className="pref-list">
-          {chosen.map((e) => (
-            <div key={e.id} className="pref-emp">
-              <span className="avatar sq" style={{ width: 22, height: 22, flexBasis: 22, fontSize: 9.5, background: Theme.avatarColor(e.name) }}>{e.name.split(' ').map((x) => x[0]).slice(0,2).join('')}</span>
-              <span className="pe-name">{e.name}</span>
-              <button className="pe-x" title={t('common.remove')} onClick={() => patch({ preferred: prefIds.filter((x) => x !== e.id) })}><Ic.x/></button>
-            </div>
-          ))}
-          {!chosen.length && <div className="pref-empty">{t('positions.noPreference')}</div>}
-        </div>
+        <label title={`${t('positions.preferredHint', { count: item.headcount })}\n${t('positions.noPreference')}`}>{t('positions.preferredEmployees')}</label>
+        {!!chosen.length && (
+          <div className="pref-list">
+            {chosen.map((e) => (
+              <div key={e.id} className="pref-emp">
+                <span className="avatar sq" style={{ width: 22, height: 22, flexBasis: 22, fontSize: 9.5, background: Theme.avatarColor(e.name) }}>{e.name.split(' ').map((x) => x[0]).slice(0,2).join('')}</span>
+                <span className="pe-name">{e.name}</span>
+                <button className="pe-x" title={t('common.remove')} onClick={() => patch({ preferred: prefIds.filter((x) => x !== e.id) })}><Ic.x/></button>
+              </div>
+            ))}
+          </div>
+        )}
         {atMax ? (
           <div className="hint" style={{ marginTop: 7 }}>{t('positions.limitReached')}</div>
         ) : avail.length ? (
