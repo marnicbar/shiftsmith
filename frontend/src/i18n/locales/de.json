@@ -74,11 +74,9 @@
     "title": "Dashboard",
     "overview": "Live-Überblick",
     "coverageByPosition": "Abdeckung nach Position",
-    "needsAttention": "Benötigt Aufmerksamkeit",
+    "unassignedTitle": "Unbesetzte Schichten",
     "allStaffed": "Jede Schicht in diesem Zeitraum ist vollständig besetzt.",
     "noShifts": "In diesem Zeitraum sind keine Schichten geplant.",
-    "moreItems_one": "+{{count}} weitere unbesetzte Schicht",
-    "moreItems_other": "+{{count}} weitere unbesetzte Schichten",
     "period": {
       "week": "Woche",
       "month": "Monat"

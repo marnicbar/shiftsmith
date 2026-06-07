@@ -20,8 +20,6 @@ function periodDays(period, anchor) {
   return Array.from({ length: 7 }, (_, i) => SS.isoOf(SS.addDays(s, i)));
 }
 
-const ATTN_LIMIT = 10;
-
 export function Dashboard({ employees, positions, assign = {}, onOpenShift }) {
   const { t } = useTranslation();
   const [period, setPeriod] = useState('week');
@@ -132,12 +130,12 @@ export function Dashboard({ employees, positions, assign = {}, onOpenShift }) {
         </div>
 
         <div className="card">
-          <h3>{t('dashboard.needsAttention')}</h3>
+          <h3>{t('dashboard.unassignedTitle')}</h3>
           {stats.attention.length === 0 ? (
             <div className="ph" style={{ height: 120 }}>{t('dashboard.allStaffed')}</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {stats.attention.slice(0, ATTN_LIMIT).map((r) => {
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
+              {stats.attention.map((r) => {
                 const dlabel = SS.parseISO(r.date).toLocaleDateString(dateLocale(), { weekday: 'short', month: 'short', day: 'numeric' });
                 return (
                   <button key={`${r.shiftId}@${r.date}`} type="button" className="tone-undes attn-row"
@@ -152,11 +150,6 @@ export function Dashboard({ employees, positions, assign = {}, onOpenShift }) {
                   </button>
                 );
               })}
-              {stats.attention.length > ATTN_LIMIT && (
-                <div style={{ fontSize: 12, color: 'var(--text-3)', padding: '2px 4px' }}>
-                  {t('dashboard.moreItems', { count: stats.attention.length - ATTN_LIMIT })}
-                </div>
-              )}
             </div>
           )}
         </div>

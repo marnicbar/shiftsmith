@@ -26,7 +26,8 @@ describe('Dashboard', () => {
 
     // Real headline metrics are present.
     expect(screen.getByText('Shifts')).toBeInTheDocument();
-    expect(screen.getByText('Unassigned shifts')).toBeInTheDocument();
+    // "Unassigned shifts" appears as both the KPI label and the list heading.
+    expect(screen.getAllByText('Unassigned shifts').length).toBeGreaterThan(0);
     expect(screen.getByText('Coverage')).toBeInTheDocument();
     // One person is on vacation today.
     expect(screen.getByText('On vacation')).toBeInTheDocument();

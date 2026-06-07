@@ -74,11 +74,9 @@
     "title": "Dashboard",
     "overview": "live overview",
     "coverageByPosition": "Coverage by position",
-    "needsAttention": "Needs attention",
+    "unassignedTitle": "Unassigned shifts",
     "allStaffed": "Every shift in this period is fully staffed.",
     "noShifts": "No shifts scheduled in this period.",
-    "moreItems_one": "+{{count}} more unassigned shift",
-    "moreItems_other": "+{{count}} more unassigned shifts",
     "period": {
       "week": "Week",
       "month": "Month"
