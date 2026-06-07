@@ -4,36 +4,48 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Dashboard } from './dashboard.jsx';
+import { SS } from './data.js';
 
-const employees = [{ id: 'e1' }, { id: 'e2' }, { id: 'e3' }, { id: 'e4' }, { id: 'e5' }];
-const positions = [{ id: 'p1', shifts: [] }, { id: 'p2', shifts: [] }];
+// A single shift needing 2 people on today, so the week/month always covers it.
+const today = SS.isoOf(new Date());
+const positions = [
+  { id: 'p1', name: 'Bar', color: '20', shifts: [
+    { id: 's1', name: 'Evening', start: 1020, end: 1320, headcount: 2, skills: [], repeat: 'none', date: today },
+  ] },
+];
+const employees = [
+  { id: 'e1', name: 'Ann', skills: [], blocks: [] },
+  { id: 'e2', name: 'Bo', skills: [], blocks: [{ type: 'vac', repeat: 'none', date: today, allDay: true }] },
+];
 
 describe('Dashboard', () => {
-  it('renders solver-derived KPIs when a schedule is provided', () => {
-    render(
-      <Dashboard
-        employees={employees}
-        positions={positions}
-        sched={{ total: 10, staffed: 8, unassigned: 2 }}
-        onGo={vi.fn()}
-      />,
-    );
+  it('derives KPIs from the real plan for the current week', () => {
+    // One of the two slots on the daily shift is filled by the solver.
+    const assign = { [`s1@${today}`]: [employees[0]] };
+    render(<Dashboard employees={employees} positions={positions} assign={assign} onOpenShift={vi.fn()} />);
 
-    // coverage = staffed/total = 80%
-    expect(screen.getByText('80%')).toBeInTheDocument();
-    expect(screen.getByText('Coverage')).toBeInTheDocument();
-    // active people = employees.length
-    expect(screen.getByText('5')).toBeInTheDocument();
-    expect(screen.getByText('Active people')).toBeInTheDocument();
-    // unassigned slots from the solver snapshot
+    // Real headline metrics are present.
+    expect(screen.getByText('Shifts')).toBeInTheDocument();
     expect(screen.getByText('Unassigned shifts')).toBeInTheDocument();
+    expect(screen.getByText('Coverage')).toBeInTheDocument();
+    // One person is on vacation today.
+    expect(screen.getByText('On vacation')).toBeInTheDocument();
   });
 
-  it('navigates to the shift plan when "Solve schedule" is clicked', async () => {
-    const onGo = vi.fn();
-    render(<Dashboard employees={employees} positions={positions} sched={{}} onGo={onGo} />);
+  it('lists unassigned shifts and jumps to one when clicked', async () => {
+    const assign = {}; // nothing assigned → today's occurrence is under-staffed
+    const onOpenShift = vi.fn();
+    render(<Dashboard employees={employees} positions={positions} assign={assign} onOpenShift={onOpenShift} />);
 
-    await userEvent.click(screen.getByRole('button', { name: /solve schedule/i }));
-    expect(onGo).toHaveBeenCalledWith('shiftplan');
+    const row = await screen.findByRole('button', { name: /Evening/ });
+    await userEvent.click(row);
+    expect(onOpenShift).toHaveBeenCalledWith('s1', today);
+  });
+
+  it('switches between week and month views', async () => {
+    render(<Dashboard employees={employees} positions={positions} assign={{}} onOpenShift={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Month' }));
+    // Month label includes the year.
+    expect(screen.getByText(new RegExp(String(new Date().getFullYear())))).toBeInTheDocument();
   });
 });

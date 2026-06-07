@@ -78,6 +78,8 @@ export default function App() {
   const [groupOrder, setGroupOrder] = useState([]);
   const [selEmp, setSelEmp] = useState(null);
   const [selPos, setSelPos] = useState(null);
+  // When set, the shift plan opens this shift's assignment editor on mount.
+  const [focusShift, setFocusShift] = useState(null);
 
   // Solver result + status (read-only, refreshed by polling).
   const [sched, setSched] = useState({ assignments: [], solverStatus: 'NOT_SOLVING', score: null, total: 0, staffed: 0, unassigned: 0 });
@@ -233,6 +235,9 @@ export default function App() {
     return m;
   }, [sched.assignments, empById]);
 
+  // Jump from the dashboard's "needs attention" list straight to a shift in the plan.
+  const openShift = useCallback((shiftId, date) => { setFocusShift({ shiftId, date }); setTab('shiftplan'); }, []);
+
   async function solveNow() { try { await api.startSolving(); } catch (e) { setError(e.message); } }
   async function pauseSolver() { try { await api.stopSolving(); } catch (e) { setError(e.message); } }
 
@@ -285,10 +290,10 @@ export default function App() {
       {error && <div className="api-error">{t('app.backendError', { error })}</div>}
       {notice && <div className="api-notice">{notice}<button className="notice-x" onClick={() => setNotice(null)} title={t('common.dismiss')}><Ic.x size={14}/></button></div>}
 
-      {tab === 'dashboard' && <Dashboard employees={employees} positions={positions} sched={sched} onGo={setTab} />}
+      {tab === 'dashboard' && <Dashboard employees={employees} positions={positions} assign={assignMap} onOpenShift={openShift} />}
       {tab === 'personnel' && <Personnel employees={employees} setEmployees={setEmployees} skills={skills} settings={settings} selId={selEmp} setSelId={setSelEmp} snap={snap} newFlow={newFlow} />}
       {tab === 'positions' && <Positions employees={employees} positions={positions} setPositions={setPositions} groupOrder={groupOrder} setGroupOrder={setGroupOrder} skills={skills} selId={selPos} setSelId={setSelPos} snap={snap} newFlow={newFlow} />}
-      {tab === 'shiftplan' && <ShiftPlan key={tlDefault} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} assign={assignMap} overrides={overrides} setOverrides={setOverrides} sched={sched} onSolve={solveNow} onPause={pauseSolver} />}
+      {tab === 'shiftplan' && <ShiftPlan key={tlDefault} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} assign={assignMap} overrides={overrides} setOverrides={setOverrides} sched={sched} onSolve={solveNow} onPause={pauseSolver} focus={focusShift} onFocusConsumed={() => setFocusShift(null)} />}
       {tab === 'settings' && <SettingsView settings={settings} setSettings={setSettings} sched={sched} skills={skills} onAddSkill={addSkill} onRenameSkill={renameSkill} onRemoveSkill={removeSkill} globalRules={settings.globalRules || []} setGlobalRules={setGlobalRules} />}
       {tab === 'account' && <AccountView prefs={prefs} setPref={setPref} fonts={FONTS} authUser={authUser} />}
     </div>

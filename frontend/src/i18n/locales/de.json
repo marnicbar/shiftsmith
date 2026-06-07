@@ -1,6 +1,8 @@
 {
   "common": {
     "today": "Heute",
+    "previous": "Zurück",
+    "next": "Weiter",
     "add": "Hinzufügen",
     "cancel": "Abbrechen",
     "apply": "Übernehmen",
@@ -70,28 +72,30 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "weekOf": "Woche vom {{date}} · Live-Überblick",
-    "solveSchedule": "Plan lösen",
+    "overview": "Live-Überblick",
     "coverageByPosition": "Abdeckung nach Position",
-    "chartPlaceholder": "Diagramm-Platzhalter — Abdeckung pro Position über die Woche",
     "needsAttention": "Benötigt Aufmerksamkeit",
+    "allStaffed": "Jede Schicht in diesem Zeitraum ist vollständig besetzt.",
+    "noShifts": "In diesem Zeitraum sind keine Schichten geplant.",
+    "moreItems_one": "+{{count}} weitere unbesetzte Schicht",
+    "moreItems_other": "+{{count}} weitere unbesetzte Schichten",
+    "period": {
+      "week": "Woche",
+      "month": "Monat"
+    },
     "kpi": {
+      "shifts": "Schichten",
       "unassigned": "Unbesetzte Schichten",
       "coverage": "Abdeckung",
-      "activePeople": "Aktive Personen",
       "onVacation": "Im Urlaub",
-      "thisWeek": "diese Woche",
-      "vsLastWeek": "+4 % ggü. letzter Woche",
-      "positionsCount_one": "{{count}} Position",
-      "positionsCount_other": "{{count}} Positionen",
-      "hardConstraint": "harte Bedingung"
-    },
-    "attention": [
-      { "t": "Bar · Fr Abend", "s": "2 Plätze unbesetzt" },
-      { "t": "Küchenlinie · Sa", "s": "1 Platz unbesetzt" },
-      { "t": "Mei Tanaka", "s": "im Urlaub Sa–So" },
-      { "t": "Nachtaufsicht", "s": "kein geeignetes Personal frei" }
-    ]
+      "slots_one": "{{count}} Platz",
+      "slots_other": "{{count}} Plätze",
+      "slotsOpen_one": "{{count}} Platz offen",
+      "slotsOpen_other": "{{count}} Plätze offen",
+      "slotsFilled": "{{filled}}/{{total}} Plätze besetzt",
+      "ofPeople_one": "von {{count}} Person",
+      "ofPeople_other": "von {{count}} Personen"
+    }
   },
   "avail": {
     "pref": "Bevorzugt",
