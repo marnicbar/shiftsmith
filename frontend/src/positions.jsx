@@ -92,8 +92,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
         <input className="input" value={item.name} onChange={(e) => patch({ name: e.target.value })} autoFocus={item.name === t('positions.newShift')}/>
       </div>
       <div className="field">
-        <label>{t('positions.requiredSkills')}</label>
-        <div className="hint">{t('positions.requiredSkillsHint')}</div>
+        <label title={t('positions.requiredSkillsHint')}>{t('positions.requiredSkills')}</label>
         <UI.SkillEditor value={reqSkills} all={skills}
           onChange={(s) => patch({ skills: s, preferred: prefIds.filter((id) => { const e = employees.find((x) => x.id === id); return e && s.every((sk) => e.skills.includes(sk)); }) })}/>
       </div>
@@ -102,8 +101,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
         <UI.Stepper value={item.headcount} min={1} onChange={(v) => patch({ headcount: v, preferred: prefIds.slice(0, v) })}/>
       </div>
       <div className="field">
-        <label>{t('positions.preferredEmployees')}</label>
-        <div className="hint">{t('positions.preferredHint', { count: item.headcount })}</div>
+        <label title={t('positions.preferredHint', { count: item.headcount })}>{t('positions.preferredEmployees')}</label>
         <div className="pref-list">
           {chosen.map((e) => (
             <div key={e.id} className="pref-emp">
@@ -254,8 +252,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
           </div>
 
           <div className="field">
-            <label>{t('positions.group')}</label>
-            <div className="hint">{t('positions.groupHint')}</div>
+            <label title={t('positions.groupHint')}>{t('positions.group')}</label>
             <select className="input" value={pos.group || ''}
               onChange={(e) => setPosGroup(pos.id, e.target.value)}>
               <option value="">{t('positions.noGroup')}</option>
@@ -265,8 +262,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
           </div>
 
           <div className="field">
-            <label>{t('positions.defaultRequiredSkills')}</label>
-            <div className="hint">{t('positions.defaultSkillsHint')}</div>
+            <label title={t('positions.defaultSkillsHint')}>{t('positions.defaultRequiredSkills')}</label>
             <UI.SkillEditor value={pos.skills} all={skills} onChange={(s) => updatePos({ skills: s })}/>
           </div>
 

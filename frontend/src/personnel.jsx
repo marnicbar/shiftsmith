@@ -97,8 +97,7 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
             <input className="input" value={emp.name} onChange={(e) => updateEmp({ name: e.target.value })}/>
           </div>
           <div className="field">
-            <label>{t('common.skills')}</label>
-            <div className="hint">{t('personnel.skillsHint')}</div>
+            <label title={t('personnel.skillsHint')}>{t('common.skills')}</label>
             <UI.SkillEditor value={emp.skills} all={skills} accent onChange={(s) => updateEmp({ skills: s })}/>
           </div>
 

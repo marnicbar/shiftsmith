@@ -964,7 +964,7 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
 
         {isVac && (
           <div className="field">
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Ic.calendar size={13}/> {t('calendar.endDate')} <span className="muted" style={{ fontWeight: 400 }}>· {t('common.optional')}</span></label>
+            <label title={t('calendar.endDateHint')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Ic.calendar size={13}/> {t('calendar.endDate')} <span className="muted" style={{ fontWeight: 400 }}>· {t('common.optional')}</span></label>
             {item.endDate ? (
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <div style={{ flex: 1, minWidth: 0 }}><DateField value={item.endDate} onChange={(iso) => onPatch({ endDate: iso >= item.date ? iso : item.date })} /></div>
@@ -973,7 +973,6 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
             ) : (
               <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => onPatch({ endDate: SS.isoOf(SS.addDays(SS.parseISO(item.date), 1)) })}><Ic.plus size={13}/> {t('calendar.addEndDate')}</button>
             )}
-            <div className="hint">{t('calendar.endDateHint')}</div>
           </div>
         )}
 
@@ -992,7 +991,7 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
 
         {!isVac && (
           <div className="field">
-            <label style={{ display:'flex', alignItems:'center', gap:6 }}><Ic.repeat size={13}/> {t('calendar.repeat')}</label>
+            <label title={t('calendar.weeklyHint')} style={{ display:'flex', alignItems:'center', gap:6 }}><Ic.repeat size={13}/> {t('calendar.repeat')}</label>
             <div className="seg full">
               {[['none', t('calendar.repeatOnce')], ['daily', t('calendar.repeatDaily')], ['weekly', t('calendar.repeatWeekly')]].map(([v,l]) => (
                 <button key={v} className={(item.repeat || 'none') === v ? 'on' : ''}
@@ -1006,7 +1005,6 @@ function Editor({ item, kind, palette, isNew, occDate, scopable, onPatch, onRemo
                 ))}
               </div>
             )}
-            {item.repeat === 'weekly' && <div className="hint">{t('calendar.weeklyHint')}</div>}
           </div>
         )}
 
