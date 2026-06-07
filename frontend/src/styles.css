@@ -222,6 +222,7 @@ button { font-family: inherit; }
 .config .pad { padding: 18px; display: flex; flex-direction: column; gap: 18px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field > label { font-size: 12px; font-weight: 600; color: var(--text-2); letter-spacing: -0.01em; }
+.field > label[title] { cursor: help; }
 .field .hint { font-size: 11.5px; color: var(--text-3); }
 .input {
   height: 34px; padding: 0 11px; border-radius: 9px; border: 1px solid var(--border);
@@ -520,10 +521,10 @@ body.cal-moving, body.cal-resizing { user-select: none; }
 .splitbtn { position: relative; display: inline-flex; border-radius: 9px; }
 .splitbtn .sb-main, .splitbtn .sb-caret {
   appearance: none; cursor: pointer; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
-  height: 30px; font-size: 12.5px; font-weight: 600; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-  transition: background .14s, border-color .14s;
+  min-height: 30px; font-size: 12.5px; font-weight: 600; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  text-align: center; transition: background .14s, border-color .14s;
 }
-.splitbtn .sb-main { padding: 0 11px; border-radius: 9px 0 0 9px; border-right-width: 0; }
+.splitbtn .sb-main { padding: 4px 11px; border-radius: 9px 0 0 9px; border-right-width: 0; }
 .splitbtn .sb-caret { padding: 0 6px; border-radius: 0 9px 9px 0; }
 .splitbtn.primary .sb-main, .splitbtn.primary .sb-caret { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
 .splitbtn.primary .sb-caret { border-left: 1px solid color-mix(in oklab, var(--accent-fg) 28%, transparent); }
@@ -533,7 +534,7 @@ body.cal-moving, body.cal-resizing { user-select: none; }
 .splitbtn.danger:hover .sb-main, .splitbtn.danger:hover .sb-caret { background: var(--rose-soft); border-color: var(--rose-solid); }
 .splitbtn .sb-main svg, .splitbtn .sb-caret svg { width: 13px; height: 13px; }
 /* Neutral split button in the rail head (add position / more) */
-.rail-split .sb-main, .rail-split .sb-caret { height: 28px; color: var(--text-2); }
+.rail-split .sb-main, .rail-split .sb-caret { min-height: 28px; height: 28px; color: var(--text-2); }
 .rail-split .sb-main { padding: 0 8px; }
 .rail-split .sb-main svg { width: 16px; height: 16px; }
 .rail-split .sb-main:hover, .rail-split .sb-caret:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
@@ -618,7 +619,6 @@ body.cal-moving, body.cal-resizing { user-select: none; }
 .pref-emp .pe-x { appearance: none; border: 0; background: none; cursor: pointer; color: var(--text-3); display: grid; place-items: center; padding: 2px; border-radius: 6px; }
 .pref-emp .pe-x:hover { background: var(--surface); color: var(--rose-strong); }
 .pref-emp .pe-x svg { width: 13px; height: 13px; }
-.pref-empty { font-size: 12px; color: var(--text-3); padding: 2px 0; }
 
 /* ---------- Assignment editor (shift plan popover) ---------- */
 .assign-pop { width: 318px; padding: 0; gap: 0; overflow: hidden; }
