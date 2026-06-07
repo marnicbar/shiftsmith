@@ -5,7 +5,7 @@ import { SS } from './data.js';
 import { Ic } from './icons.jsx';
 import { UI } from './ui.jsx';
 import { Calendar } from './calendar.jsx';
-import { WorkingTimeRules, prefWeekHours } from './rules.jsx';
+import { WorkingTimeRules } from './rules.jsx';
 
 const AVAIL_PALETTE = [
   { type: 'pref',  cls: 'pref',  labelKey: 'avail.pref' },
@@ -35,7 +35,7 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
   const newItem = ({ date, start, end }) => ({ id: SS.uid('b'), type: paint, date, start, end, allDay: paint === 'vac', repeat: 'none' });
 
   const addEmployee = () => {
-    const e = { id: SS.uid('e'), name: t('personnel.newPerson'), contract: 38, skills: [], blocks: [], rules: [] };
+    const e = { id: SS.uid('e'), name: t('personnel.newPerson'), skills: [], blocks: [], rules: [] };
     setEmployees([...employees, e]); setSelId(e.id);
   };
 
@@ -88,7 +88,7 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
             <UI.Avatar name={emp.name} size="lg" square/>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.02em' }}>{emp.name}</div>
-              <div className="muted" style={{ fontSize: 12.5 }}>{prefWeekHours(emp) != null ? t('personnel.weekPreferred', { hours: prefWeekHours(emp) }) : (emp.skills.join(' · ') || t('personnel.noSkills'))}</div>
+              <div className="muted" style={{ fontSize: 12.5 }}>{emp.skills.join(' · ') || t('personnel.noSkills')}</div>
             </div>
           </div>
 

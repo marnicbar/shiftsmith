@@ -107,7 +107,6 @@
     "emptyTitle": "Noch keine Personen",
     "emptyBody": "Füge die erste Person hinzu, um Verfügbarkeiten zu erfassen.",
     "newPerson": "Neue Person",
-    "weekPreferred": "{{hours}} h / Woche bevorzugt",
     "fullName": "Vollständiger Name",
     "skillsHint": "Nur Personen mit einer passenden Fähigkeit werden einer Schicht zugewiesen.",
     "confirmRemove": "{{name}} entfernen?",

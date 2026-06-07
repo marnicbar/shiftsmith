@@ -412,8 +412,3 @@ export function WorkingTimeRules({ emp, onChange, globalRules = [] }) {
     />
   );
 }
-
-export function prefWeekHours(emp) {
-  const r = (emp.rules || []).find((x) => x.metric === 'weekHours' && x.op === 'preferred');
-  return r ? r.value : (emp.contract ?? null);
-}
