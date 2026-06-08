@@ -14,8 +14,8 @@ const positions = [
   ] },
 ];
 const employees = [
-  { id: 'e1', name: 'Ann', skills: [], blocks: [] },
-  { id: 'e2', name: 'Bo', skills: [], blocks: [{ type: 'vac', repeat: 'none', date: today, allDay: true }] },
+  { id: 'e1', firstName: 'Ann', lastName: '', skills: [], blocks: [] },
+  { id: 'e2', firstName: 'Bo', lastName: '', skills: [], blocks: [{ type: 'vac', repeat: 'none', date: today, allDay: true }] },
 ];
 
 describe('Dashboard', () => {

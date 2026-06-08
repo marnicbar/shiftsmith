@@ -31,6 +31,7 @@ export const FONTS = {
 const PREF_DEFAULTS = {
   dark: false, palette: 'slate', accent: 'indigo', font: 'Geist', lang: 'en',
   snapLabel: '15 min', newFlowLabel: 'Paint, then tweak', tlDefaultLabel: 'Week',
+  nameOrder: 'first',
 };
 
 const SNAP_MAP = { '15 min': 15, '30 min': 30, '60 min': 60 };
@@ -203,7 +204,7 @@ export default function App() {
         if (bound != null) { changed = true; return { ...r, value: bound }; }
         return r;
       });
-      if (changed) touched.push(e.name);
+      if (changed) touched.push(SS.fullName(e, prefs.nameOrder));
       return changed ? { ...e, rules } : e;
     });
     if (touched.length) {
@@ -213,7 +214,7 @@ export default function App() {
         : touched.join(', ');
       setNotice(t('app.tightenedRules', { names }));
     }
-  }, [employees, t]);
+  }, [employees, t, prefs.nameOrder]);
 
   const removeSkill = useCallback((name) => {
     const drop = (arr = []) => arr.filter((x) => x !== name);
@@ -291,9 +292,9 @@ export default function App() {
       {notice && <div className="api-notice">{notice}<button className="notice-x" onClick={() => setNotice(null)} title={t('common.dismiss')}><Ic.x size={14}/></button></div>}
 
       {tab === 'dashboard' && <Dashboard employees={employees} positions={positions} assign={assignMap} onOpenShift={openShift} />}
-      {tab === 'personnel' && <Personnel employees={employees} setEmployees={setEmployees} skills={skills} settings={settings} selId={selEmp} setSelId={setSelEmp} snap={snap} newFlow={newFlow} />}
-      {tab === 'positions' && <Positions employees={employees} positions={positions} setPositions={setPositions} groupOrder={groupOrder} setGroupOrder={setGroupOrder} skills={skills} selId={selPos} setSelId={setSelPos} snap={snap} newFlow={newFlow} />}
-      {tab === 'shiftplan' && <ShiftPlan key={tlDefault} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} assign={assignMap} overrides={overrides} setOverrides={setOverrides} sched={sched} onSolve={solveNow} onPause={pauseSolver} focus={focusShift} onFocusConsumed={() => setFocusShift(null)} />}
+      {tab === 'personnel' && <Personnel employees={employees} setEmployees={setEmployees} skills={skills} settings={settings} selId={selEmp} setSelId={setSelEmp} snap={snap} newFlow={newFlow} nameOrder={prefs.nameOrder} />}
+      {tab === 'positions' && <Positions employees={employees} positions={positions} setPositions={setPositions} groupOrder={groupOrder} setGroupOrder={setGroupOrder} skills={skills} selId={selPos} setSelId={setSelPos} snap={snap} newFlow={newFlow} nameOrder={prefs.nameOrder} />}
+      {tab === 'shiftplan' && <ShiftPlan key={tlDefault} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} assign={assignMap} overrides={overrides} setOverrides={setOverrides} sched={sched} onSolve={solveNow} onPause={pauseSolver} focus={focusShift} onFocusConsumed={() => setFocusShift(null)} nameOrder={prefs.nameOrder} />}
       {tab === 'settings' && <SettingsView settings={settings} setSettings={setSettings} sched={sched} skills={skills} onAddSkill={addSkill} onRenameSkill={renameSkill} onRemoveSkill={removeSkill} globalRules={settings.globalRules || []} setGlobalRules={setGlobalRules} />}
       {tab === 'account' && <AccountView prefs={prefs} setPref={setPref} fonts={FONTS} authUser={authUser} />}
     </div>

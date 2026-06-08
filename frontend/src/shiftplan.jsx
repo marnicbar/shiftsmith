@@ -91,7 +91,7 @@ export function buildPlan(employees, positions, dayList, overrides = {}) {
 const LW_TL = 168;
 const FREE_BASE = 18;
 
-export function ShiftPlan({ employees, positions, groupOrder = [], initialMode = 'week', assign = {}, overrides = {}, setOverrides, sched = {}, onSolve, onPause, focus = null, onFocusConsumed }) {
+export function ShiftPlan({ employees, positions, groupOrder = [], initialMode = 'week', assign = {}, overrides = {}, setOverrides, sched = {}, onSolve, onPause, focus = null, onFocusConsumed, nameOrder = 'first' }) {
   const { t } = useTranslation();
   // When the dashboard hands us a shift to focus, start in week view anchored on
   // that date so the occurrence is visible behind its assignment editor.
@@ -379,7 +379,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
       const circles = Array.from({ length: sh.headcount }, (_, i) => {
         const e = crew[i];
         return e
-          ? <span key={i} className="av" style={{ background: Theme.avatarColor(e.name) }} title={e.name}>{e.name.split(' ').map(x=>x[0]).slice(0,2).join('')}</span>
+          ? <span key={i} className="av" style={{ background: Theme.avatarColor(SS.nameSeed(e)) }} title={SS.fullName(e, nameOrder)}>{SS.empInitials(e)}</span>
           : <span key={i} className="slot-empty"></span>;
       });
       // Collapse whatever doesn't fit into a single "+N" circle.
@@ -505,7 +505,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
       {mode === 'free' && <div style={{ padding: '6px 18px', fontSize: 11.5, color: 'var(--text-3)', borderTop: '1px solid var(--border)', background: 'var(--surface)' }}>
         {t('shiftplan.scrollLoad')} · <span className="kbd">⌘</span>/<span className="kbd">Ctrl</span> + {t('shiftplan.scrollZoom')}
       </div>}
-      {editing && <AssignEditor ctx={editing} employees={employees} assign={assign}
+      {editing && <AssignEditor ctx={editing} employees={employees} assign={assign} nameOrder={nameOrder}
         overrides={overrides} setOverrides={setOverrides} onClose={() => setEditing(null)} />}
     </div>
   );
@@ -530,7 +530,7 @@ function SolverBar({ sched = {}, onSolve, onPause }) {
   );
 }
 
-function AssignEditor({ ctx, employees, assign, overrides, setOverrides, onClose }) {
+function AssignEditor({ ctx, employees, assign, overrides, setOverrides, onClose, nameOrder = 'first' }) {
   const { t } = useTranslation();
   const { key, sh, pos, date } = ctx;
   const popRef = useRefSP(null);
@@ -580,7 +580,7 @@ function AssignEditor({ ctx, employees, assign, overrides, setOverrides, onClose
     pref: (sh.preferred || []).includes(e.id),
     elsewhere: !!busyMap[e.id] && !chosen.has(e.id),
   })).sort((a, b) =>
-    (chosen.has(b.e.id) - chosen.has(a.e.id)) || (b.pref - a.pref) || (b.skill - a.skill) || (b.avail - a.avail) || (a.leave - b.leave) || a.e.name.localeCompare(b.e.name)
+    (chosen.has(b.e.id) - chosen.has(a.e.id)) || (b.pref - a.pref) || (b.skill - a.skill) || (b.avail - a.avail) || (a.leave - b.leave) || SS.compareNames(a.e, b.e, nameOrder)
   );
 
   const dateLabel = SS.parseISO(date).toLocaleDateString(dateLocale(), { weekday: 'short', month: 'short', day: 'numeric' });
@@ -610,9 +610,9 @@ function AssignEditor({ ctx, employees, assign, overrides, setOverrides, onClose
               <button key={e.id} type="button" className={`ae-row ${on ? 'on' : ''} ${blocked ? 'blocked' : ''}`}
                 disabled={blocked} onClick={() => toggle(e.id)}>
                 <span className="ae-check">{on && <Ic.check size={13}/>}</span>
-                <span className="avatar sq" style={{ width: 26, height: 26, flexBasis: 26, fontSize: 10, background: Theme.avatarColor(e.name) }}>{e.name.split(' ').map((x) => x[0]).slice(0,2).join('')}</span>
+                <span className="avatar sq" style={{ width: 26, height: 26, flexBasis: 26, fontSize: 10, background: Theme.avatarColor(SS.nameSeed(e)) }}>{SS.empInitials(e)}</span>
                 <span className="ae-who">
-                  <span className="ae-name">{e.name}{pref && <Ic.star size={11} className="ae-star"/>}</span>
+                  <span className="ae-name">{SS.fullName(e, nameOrder)}{pref && <Ic.star size={11} className="ae-star"/>}</span>
                   <span className="ae-tags">
                     {!skill && <span className="ae-tag warn"><Ic.alert size={10}/> {t('shiftplan.tag.missingSkill')}</span>}
                     {!avail && <span className="ae-tag warn"><Ic.clock size={10}/> {t('shiftplan.tag.unavailable')}</span>}

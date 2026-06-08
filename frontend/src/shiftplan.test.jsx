@@ -45,7 +45,7 @@ describe('matchesDay', () => {
 
 // --- buildPlan -------------------------------------------------------------
 
-const emp = (id, skills, blocks = []) => ({ id, name: id, skills, blocks });
+const emp = (id, skills, blocks = []) => ({ id, firstName: id, lastName: '', skills, blocks });
 const shift = (id, over = {}) => ({
   id, date: MON, start: 1020, end: 1440, skills: ['Bar'], headcount: 1,
   repeat: 'none', preferred: [], ...over,

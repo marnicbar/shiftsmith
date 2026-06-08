@@ -3,6 +3,7 @@ package dev.shiftsmith.domain;
 import ai.timefold.solver.core.api.domain.common.PlanningId;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -22,7 +23,8 @@ public class Employee {
 
     @PlanningId
     private String id;
-    private String name;
+    private String firstName;
+    private String lastName;
     private String role;
     private int contract;
     private Set<String> skills = new HashSet<>();
@@ -155,8 +157,39 @@ public class Employee {
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
+    public String getFirstName() { return firstName; }
+    public void setFirstName(String firstName) { this.firstName = firstName; }
+
+    public String getLastName() { return lastName; }
+    public void setLastName(String lastName) { this.lastName = lastName; }
+
+    /** Combined "First Last" for display/logging; empty if neither is set. */
+    public String displayName() {
+        String f = firstName == null ? "" : firstName.trim();
+        String l = lastName == null ? "" : lastName.trim();
+        return (f + " " + l).trim();
+    }
+
+    /**
+     * Backwards-compatibility for problem documents written before the name was
+     * split: absorb a single {@code name} by splitting on the last space. Write-only
+     * (no matching getter), so it is never serialized back — new documents only carry
+     * {@code firstName}/{@code lastName}.
+     */
+    @JsonProperty("name")
+    public void setName(String name) {
+        if (name == null || name.isBlank()) return;
+        if (firstName != null || lastName != null) return;
+        String trimmed = name.trim();
+        int i = trimmed.lastIndexOf(' ');
+        if (i < 0) {
+            firstName = trimmed;
+            lastName = "";
+        } else {
+            firstName = trimmed.substring(0, i).trim();
+            lastName = trimmed.substring(i + 1).trim();
+        }
+    }
 
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
@@ -190,5 +223,5 @@ public class Employee {
     public int hashCode() { return Objects.hashCode(id); }
 
     @Override
-    public String toString() { return name + " (" + id + ")"; }
+    public String toString() { return displayName() + " (" + id + ")"; }
 }

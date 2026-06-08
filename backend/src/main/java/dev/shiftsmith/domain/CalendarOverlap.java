@@ -44,7 +44,7 @@ public final class CalendarOverlap {
             for (Employee e : employees) {
                 LocalDate day = firstOverlapDay(blockEntries(e.getBlocks()));
                 if (day != null) {
-                    return Optional.of("Employee '" + label(e.getName(), e.getId())
+                    return Optional.of("Employee '" + label(e.displayName(), e.getId())
                             + "' has overlapping availability entries on " + day + ".");
                 }
             }
