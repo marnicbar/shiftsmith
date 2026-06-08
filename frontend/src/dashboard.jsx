@@ -82,11 +82,11 @@ export function Dashboard({ employees, positions, assign = {}, onOpenShift }) {
           <h1>{t('dashboard.title')}</h1>
           <p>{periodLabel} · {t('dashboard.overview')}</p>
         </div>
-        <div className="nav" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="nav">
           <button className="iconbtn" title={t('common.previous')} onClick={() => step(-1)}><Ic.chevL/></button>
           <button className="btn sm" onClick={() => setAnchor(new Date())}>{t('common.today')}</button>
           <button className="iconbtn" title={t('common.next')} onClick={() => step(1)}><Ic.chevR/></button>
-          <div className="seg" style={{ marginLeft: 4 }}>
+          <div className="seg" style={{ marginLeft: 6 }}>
             {[['week', t('dashboard.period.week')], ['month', t('dashboard.period.month')]].map(([v, l]) => (
               <button key={v} className={period === v ? 'on' : ''} onClick={() => setPeriod(v)}>{l}</button>
             ))}
