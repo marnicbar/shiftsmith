@@ -91,11 +91,14 @@ export function buildPlan(employees, positions, dayList, overrides = {}) {
 const LW_TL = 168;
 const FREE_BASE = 18;
 
-export function ShiftPlan({ employees, positions, groupOrder = [], initialMode = 'week', assign = {}, overrides = {}, setOverrides, sched = {}, onSolve, onPause }) {
+export function ShiftPlan({ employees, positions, groupOrder = [], initialMode = 'week', assign = {}, overrides = {}, setOverrides, sched = {}, onSolve, onPause, focus = null, onFocusConsumed }) {
   const { t } = useTranslation();
-  const [mode, setMode] = useStateSP(initialMode);
-  const [anchor, setAnchor] = useStateSP(new Date());
-  const [pph, setPph] = useStateSP(initialMode === 'free' ? FREE_BASE : 58);
+  // When the dashboard hands us a shift to focus, start in week view anchored on
+  // that date so the occurrence is visible behind its assignment editor.
+  const startMode = focus ? 'week' : initialMode;
+  const [mode, setMode] = useStateSP(startMode);
+  const [anchor, setAnchor] = useStateSP(focus?.date ? SS.parseISO(focus.date) : new Date());
+  const [pph, setPph] = useStateSP(startMode === 'free' ? FREE_BASE : 58);
   const [collapsed, setCollapsed] = useStateSP({});
   const [containerW, setContainerW] = useStateSP(0);
   const [editing, setEditing] = useStateSP(null);
@@ -107,11 +110,28 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   const wantRef = useRefSP(SS.isoOf(new Date()));
   const busyRef = useRefSP(false);
   const zoomScrollRef = useRefSP(null);
-  const alignRef = useRefSP(initialMode === 'free' ? 'left' : null);
+  const alignRef = useRefSP(startMode === 'free' ? 'left' : null);
   const rafRef = useRefSP(0);
   // Mirror of `pph` that's always current synchronously, so a zoom triggered from
   // the (mode-scoped) wheel listener never reads a stale closed-over pph.
-  const pphRef = useRefSP(initialMode === 'free' ? FREE_BASE : 58);
+  const pphRef = useRefSP(startMode === 'free' ? FREE_BASE : 58);
+
+  // Open the assignment editor for a dashboard-requested shift on mount. The
+  // component remounts each time the plan tab is entered, so this runs once with
+  // the current focus; we clear it afterwards so a later manual visit stays put.
+  useEffectSP(() => {
+    if (!focus) return;
+    for (const p of positions) {
+      const sh = p.shifts.find((s) => s.id === focus.shiftId);
+      if (sh) {
+        setEditing({ key: `${sh.id}@${focus.date}`, sh, pos: p, date: focus.date,
+          x: Math.max(12, window.innerWidth / 2 - 170), y: 96 });
+        break;
+      }
+    }
+    onFocusConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffectSP(() => {
     const el = scrollRef.current; if (!el || !window.ResizeObserver) return;

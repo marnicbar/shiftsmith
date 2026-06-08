@@ -1,6 +1,8 @@
 {
   "common": {
     "today": "Today",
+    "previous": "Previous",
+    "next": "Next",
     "add": "Add",
     "cancel": "Cancel",
     "apply": "Apply",
@@ -70,28 +72,28 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "weekOf": "Week of {{date}} · live overview",
-    "solveSchedule": "Solve schedule",
+    "overview": "live overview",
     "coverageByPosition": "Coverage by position",
-    "chartPlaceholder": "chart placeholder — coverage per position over the week",
-    "needsAttention": "Needs attention",
+    "unassignedTitle": "Unassigned shifts",
+    "allStaffed": "Every shift in this period is fully staffed.",
+    "noShifts": "No shifts scheduled in this period.",
+    "period": {
+      "week": "Week",
+      "month": "Month"
+    },
     "kpi": {
+      "shifts": "Shifts",
       "unassigned": "Unassigned shifts",
       "coverage": "Coverage",
-      "activePeople": "Active people",
       "onVacation": "On vacation",
-      "thisWeek": "this week",
-      "vsLastWeek": "+4% vs last week",
-      "positionsCount_one": "{{count}} position",
-      "positionsCount_other": "{{count}} positions",
-      "hardConstraint": "hard constraint"
-    },
-    "attention": [
-      { "t": "Bar · Fri evening", "s": "2 slots unfilled" },
-      { "t": "Kitchen Line · Sat", "s": "1 slot unfilled" },
-      { "t": "Mei Tanaka", "s": "on vacation Sat–Sun" },
-      { "t": "Night Supervisor", "s": "no eligible staff free" }
-    ]
+      "slots_one": "{{count}} slot",
+      "slots_other": "{{count}} slots",
+      "slotsOpen_one": "{{count}} slot open",
+      "slotsOpen_other": "{{count}} slots open",
+      "slotsFilled": "{{filled}}/{{total}} slots filled",
+      "ofPeople_one": "of {{count}} person",
+      "ofPeople_other": "of {{count}} people"
+    }
   },
   "avail": {
     "pref": "Preferred",
