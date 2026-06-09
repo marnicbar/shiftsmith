@@ -7,7 +7,7 @@ import { UI } from './ui.jsx';
 import { Theme } from './theme.js';
 import { Calendar } from './calendar.jsx';
 
-export function Positions({ employees = [], positions, setPositions, groupOrder, setGroupOrder, skills, selId, setSelId, snap, newFlow }) {
+export function Positions({ employees = [], positions, setPositions, groupOrder, setGroupOrder, skills, selId, setSelId, snap, newFlow, nameOrder = 'first' }) {
   const { t } = useTranslation();
   const [q, setQ] = useStatePos('');
   const [view, setView] = useStatePos('week');
@@ -106,8 +106,8 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
           <div className="pref-list">
             {chosen.map((e) => (
               <div key={e.id} className="pref-emp">
-                <span className="avatar sq" style={{ width: 22, height: 22, flexBasis: 22, fontSize: 9.5, background: Theme.avatarColor(e.name) }}>{e.name.split(' ').map((x) => x[0]).slice(0,2).join('')}</span>
-                <span className="pe-name">{e.name}</span>
+                <span className="avatar sq" style={{ width: 22, height: 22, flexBasis: 22, fontSize: 9.5, background: Theme.avatarColor(SS.nameSeed(e)) }}>{SS.empInitials(e)}</span>
+                <span className="pe-name">{SS.fullName(e, nameOrder)}</span>
                 <button className="pe-x" title={t('common.remove')} onClick={() => patch({ preferred: prefIds.filter((x) => x !== e.id) })}><Ic.x/></button>
               </div>
             ))}
@@ -119,7 +119,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
           <select className="input" style={{ marginTop: 7 }} value=""
             onChange={(e) => { if (e.target.value) patch({ preferred: [...prefIds, e.target.value] }); }}>
             <option value="">{t('positions.addPreferred')}</option>
-            {avail.map((e) => <option key={e.id} value={e.id}>{e.name}{e.skills.length ? ` · ${e.skills.join(', ')}` : ''}</option>)}
+            {avail.map((e) => <option key={e.id} value={e.id}>{SS.fullName(e, nameOrder)}{e.skills.length ? ` · ${e.skills.join(', ')}` : ''}</option>)}
           </select>
         ) : (
           <div className="hint" style={{ marginTop: 7 }}>{chosen.length ? t('positions.noOtherEligible') : t('positions.noEligible')}</div>

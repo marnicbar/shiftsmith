@@ -81,3 +81,46 @@ describe('SS.shiftSkills', () => {
     expect(SS.shiftSkills({})).toEqual([]);
   });
 });
+
+describe('SS.fullName', () => {
+  const e = { firstName: 'Ada', lastName: 'Lovelace' };
+  it('joins first then last by default', () => {
+    expect(SS.fullName(e)).toBe('Ada Lovelace');
+    expect(SS.fullName(e, 'first')).toBe('Ada Lovelace');
+  });
+  it('renders "Last, First" when ordered by last name', () => {
+    expect(SS.fullName(e, 'last')).toBe('Lovelace, Ada');
+  });
+  it('handles a missing name part without stray separators', () => {
+    expect(SS.fullName({ firstName: 'Ada', lastName: '' })).toBe('Ada');
+    expect(SS.fullName({ firstName: '', lastName: 'Lovelace' }, 'last')).toBe('Lovelace');
+    expect(SS.fullName({ firstName: '', lastName: '' })).toBe('');
+    expect(SS.fullName(null)).toBe('');
+  });
+});
+
+describe('SS.empInitials', () => {
+  it('takes the first letter of each name, uppercased', () => {
+    expect(SS.empInitials({ firstName: 'ada', lastName: 'lovelace' })).toBe('AL');
+    expect(SS.empInitials({ firstName: 'Bo', lastName: '' })).toBe('B');
+    expect(SS.empInitials({ firstName: '', lastName: '' })).toBe('?');
+  });
+});
+
+describe('SS.nameSeed', () => {
+  it('is stable regardless of display order', () => {
+    const e = { firstName: 'Ada', lastName: 'Lovelace' };
+    expect(SS.nameSeed(e)).toBe('Ada Lovelace');
+  });
+});
+
+describe('SS.compareNames', () => {
+  const a = { firstName: 'Ada', lastName: 'Zane' };
+  const b = { firstName: 'Bo', lastName: 'Apex' };
+  it('orders by first name by default', () => {
+    expect(SS.compareNames(a, b, 'first')).toBeLessThan(0);
+  });
+  it('orders by last name when requested', () => {
+    expect(SS.compareNames(a, b, 'last')).toBeGreaterThan(0); // Zane after Apex
+  });
+});

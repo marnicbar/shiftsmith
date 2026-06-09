@@ -2,12 +2,12 @@
 import { useState as useStateUI } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Theme } from './theme.js';
+import { SS } from './data.js';
 import { Ic } from './icons.jsx';
 
-function Avatar({ name, size, square }) {
-  const initials = name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+function Avatar({ emp, size, square }) {
   return <div className={`avatar ${size === 'lg' ? 'lg' : ''} ${square ? 'sq' : ''}`}
-    style={{ background: Theme.avatarColor(name) }}>{initials}</div>;
+    style={{ background: Theme.avatarColor(SS.nameSeed(emp)) }}>{SS.empInitials(emp)}</div>;
 }
 
 function SkillEditor({ value, all, onChange, accent }) {

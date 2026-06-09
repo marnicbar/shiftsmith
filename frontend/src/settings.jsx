@@ -156,6 +156,9 @@ function AppearanceCard({ prefs, setPref, fonts }) {
           ))}
         </div>
       </Row>
+      <Row label={t('settings.nameOrder')} hint={t('settings.nameOrderHint')}>
+        <Seg value={prefs.nameOrder} options={[{ value: 'first', label: t('settings.order.first') }, { value: 'last', label: t('settings.order.last') }]} onChange={(v) => setPref('nameOrder', v)} />
+      </Row>
       <Row label={t('settings.uiFont')}>
         <select className="input set-select" value={prefs.font} onChange={(e) => setPref('font', e.target.value)}>
           {Object.keys(fonts).map((f) => <option key={f} value={f}>{f}</option>)}

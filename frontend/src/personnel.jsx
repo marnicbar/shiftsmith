@@ -13,17 +13,22 @@ const AVAIL_PALETTE = [
   { type: 'vac',   cls: 'vac',   labelKey: 'avail.vac' },
 ];
 
-export function Personnel({ employees, setEmployees, skills, settings, selId, setSelId, snap, newFlow }) {
+export function Personnel({ employees, setEmployees, skills, settings, selId, setSelId, snap, newFlow, nameOrder = 'first' }) {
   const { t } = useTranslation();
   const palette = AVAIL_PALETTE.map((p) => ({ ...p, label: t(p.labelKey) }));
   const [q, setQ] = useStateP('');
+  const [sortKey, setSortKey] = useStateP(nameOrder);
+  const [sortOpen, setSortOpen] = useStateP(false);
   const [view, setView] = useStateP('week');
   const [anchor, setAnchor] = useStateP(new Date());
   const [zoom, setZoom] = useStateP(46);
   const [paint, setPaint] = useStateP('pref');
 
   const emp = employees.find((e) => e.id === selId) || employees[0];
-  const list = employees.filter((e) => e.name.toLowerCase().includes(q.toLowerCase()) || e.skills.some((s) => s.toLowerCase().includes(q.toLowerCase())));
+  const ql = q.toLowerCase();
+  const list = employees
+    .filter((e) => SS.fullName(e).toLowerCase().includes(ql) || e.skills.some((s) => s.toLowerCase().includes(ql)))
+    .sort((a, b) => SS.compareNames(a, b, sortKey));
 
   function updateEmp(patch) { setEmployees(employees.map((e) => e.id === emp.id ? { ...e, ...patch } : e)); }
   function commitBlock(b) {
@@ -35,7 +40,7 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
   const newItem = ({ date, start, end }) => ({ id: SS.uid('b'), type: paint, date, start, end, allDay: paint === 'vac', repeat: 'none' });
 
   const addEmployee = () => {
-    const e = { id: SS.uid('e'), name: t('personnel.newPerson'), skills: [], blocks: [], rules: [] };
+    const e = { id: SS.uid('e'), firstName: t('personnel.newPerson'), lastName: '', skills: [], blocks: [], rules: [] };
     setEmployees([...employees, e]); setSelId(e.id);
   };
 
@@ -48,14 +53,35 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
             <span className="section-title">{t('personnel.people')} <span className="muted">· {employees.length}</span></span>
             <button className="iconbtn" style={{ width: 28, height: 28 }} onClick={addEmployee} title={t('personnel.addPerson')}><Ic.plus size={16}/></button>
           </div>
-          <div className="search"><Ic.search/><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('personnel.searchPlaceholder')}/></div>
+          <div className="rail-filter">
+            <div className="search"><Ic.search/><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('personnel.searchPlaceholder')}/></div>
+            <div className="rail-sort">
+              <button className={`iconbtn ${sortOpen ? 'active' : ''}`} style={{ width: 32, height: 32 }}
+                aria-haspopup="menu" aria-expanded={sortOpen} title={t('personnel.sortBy')}
+                onClick={() => setSortOpen((o) => !o)}><Ic.sliders size={16}/></button>
+              {sortOpen && (
+                <>
+                  <div className="menu-backdrop" onClick={() => setSortOpen(false)}></div>
+                  <div className="mini-menu" role="menu">
+                    <div className="acct-menu-head">{t('personnel.sortBy')}</div>
+                    {[['first', t('personnel.firstName')], ['last', t('personnel.lastName')]].map(([key, label]) => (
+                      <button key={key} role="menuitemradio" aria-checked={sortKey === key}
+                        onClick={() => { setSortKey(key); setSortOpen(false); }}>
+                        <span className="mm-check">{sortKey === key && <Ic.check size={14}/>}</span>{label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
         <div className="rail-list">
           {list.map((e) => (
             <div key={e.id} className={`rail-item ${e.id === emp.id ? 'sel' : ''}`} onClick={() => setSelId(e.id)}>
-              <UI.Avatar name={e.name}/>
+              <UI.Avatar emp={e}/>
               <div className="ri-meta">
-                <div className="ri-name">{e.name}</div>
+                <div className="ri-name">{SS.fullName(e, nameOrder)}</div>
                 {e.skills.length > 0 && <div className="ri-sub">{e.skills.join(' · ')}</div>}
               </div>
             </div>
@@ -85,16 +111,24 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
       <div className="config">
         <div className="pad">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <UI.Avatar name={emp.name} size="lg" square/>
+            <UI.Avatar emp={emp} size="lg" square/>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.02em' }}>{emp.name}</div>
+              <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.02em' }}>{SS.fullName(emp, nameOrder)}</div>
               {emp.skills.length > 0 && <div className="muted" style={{ fontSize: 12.5 }}>{emp.skills.join(' · ')}</div>}
             </div>
           </div>
 
-          <div className="field">
-            <label>{t('personnel.fullName')}</label>
-            <input className="input" value={emp.name} onChange={(e) => updateEmp({ name: e.target.value })}/>
+          <div className="row" style={{ gap: 10, alignItems: 'flex-end' }}>
+            <div className="field" style={{ flex: 1 }}>
+              <label>{t('personnel.firstName')}</label>
+              <input className="input" value={emp.firstName || ''} onChange={(e) => updateEmp({ firstName: e.target.value })}
+                autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"/>
+            </div>
+            <div className="field" style={{ flex: 1 }}>
+              <label>{t('personnel.lastName')}</label>
+              <input className="input" value={emp.lastName || ''} onChange={(e) => updateEmp({ lastName: e.target.value })}
+                autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"/>
+            </div>
           </div>
           <div className="field">
             <label title={t('personnel.skillsHint')}>{t('common.skills')}</label>
@@ -107,7 +141,7 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
 
           <div className="divider"></div>
           <button className="btn danger" style={{ justifyContent: 'center' }}
-            onClick={() => { if (confirm(t('personnel.confirmRemove', { name: emp.name }))) { const rest = employees.filter((x) => x.id !== emp.id); setEmployees(rest); setSelId(rest[0]?.id); } }}>
+            onClick={() => { if (confirm(t('personnel.confirmRemove', { name: SS.fullName(emp, nameOrder) }))) { const rest = employees.filter((x) => x.id !== emp.id); setEmployees(rest); setSelId(rest[0]?.id); } }}>
             <Ic.trash size={15}/> {t('personnel.removePerson')}
           </button>
         </div>

@@ -37,7 +37,7 @@ public final class Fixtures {
     public static Employee employee(String id, String... skills) {
         Employee e = new Employee();
         e.setId(id);
-        e.setName(id);
+        e.setFirstName(id);
         e.setSkills(new HashSet<>(Arrays.asList(skills)));
         return e;
     }
