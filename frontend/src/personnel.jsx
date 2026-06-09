@@ -18,6 +18,7 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
   const palette = AVAIL_PALETTE.map((p) => ({ ...p, label: t(p.labelKey) }));
   const [q, setQ] = useStateP('');
   const [sortKey, setSortKey] = useStateP(nameOrder);
+  const [sortOpen, setSortOpen] = useStateP(false);
   const [view, setView] = useStateP('week');
   const [anchor, setAnchor] = useStateP(new Date());
   const [zoom, setZoom] = useStateP(46);
@@ -52,12 +53,26 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
             <span className="section-title">{t('personnel.people')} <span className="muted">· {employees.length}</span></span>
             <button className="iconbtn" style={{ width: 28, height: 28 }} onClick={addEmployee} title={t('personnel.addPerson')}><Ic.plus size={16}/></button>
           </div>
-          <div className="search"><Ic.search/><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('personnel.searchPlaceholder')}/></div>
-          <div className="row" style={{ marginTop: 8 }}>
-            <span className="muted" style={{ fontSize: 12 }}>{t('personnel.sortBy')}</span>
-            <div className="seg">
-              <button className={sortKey === 'first' ? 'on' : ''} onClick={() => setSortKey('first')}>{t('personnel.firstName')}</button>
-              <button className={sortKey === 'last' ? 'on' : ''} onClick={() => setSortKey('last')}>{t('personnel.lastName')}</button>
+          <div className="rail-filter">
+            <div className="search"><Ic.search/><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('personnel.searchPlaceholder')}/></div>
+            <div className="rail-sort">
+              <button className={`iconbtn ${sortOpen ? 'active' : ''}`} style={{ width: 32, height: 32 }}
+                aria-haspopup="menu" aria-expanded={sortOpen} title={t('personnel.sortBy')}
+                onClick={() => setSortOpen((o) => !o)}><Ic.sliders size={16}/></button>
+              {sortOpen && (
+                <>
+                  <div className="menu-backdrop" onClick={() => setSortOpen(false)}></div>
+                  <div className="mini-menu" role="menu">
+                    <div className="acct-menu-head">{t('personnel.sortBy')}</div>
+                    {[['first', t('personnel.firstName')], ['last', t('personnel.lastName')]].map(([key, label]) => (
+                      <button key={key} role="menuitemradio" aria-checked={sortKey === key}
+                        onClick={() => { setSortKey(key); setSortOpen(false); }}>
+                        <span className="mm-check">{sortKey === key && <Ic.check size={14}/>}</span>{label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -106,11 +121,13 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
           <div className="row" style={{ gap: 10, alignItems: 'flex-end' }}>
             <div className="field" style={{ flex: 1 }}>
               <label>{t('personnel.firstName')}</label>
-              <input className="input" value={emp.firstName || ''} onChange={(e) => updateEmp({ firstName: e.target.value })}/>
+              <input className="input" value={emp.firstName || ''} onChange={(e) => updateEmp({ firstName: e.target.value })}
+                autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"/>
             </div>
             <div className="field" style={{ flex: 1 }}>
               <label>{t('personnel.lastName')}</label>
-              <input className="input" value={emp.lastName || ''} onChange={(e) => updateEmp({ lastName: e.target.value })}/>
+              <input className="input" value={emp.lastName || ''} onChange={(e) => updateEmp({ lastName: e.target.value })}
+                autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other"/>
             </div>
           </div>
           <div className="field">
