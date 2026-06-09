@@ -481,7 +481,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
             return (
               <div key={p.id} className="tl-row" style={{ height: rowH }}>
                 <div className="tl-label">
-                  <div className="avatar sq" style={{ background: `oklch(0.62 0.13 ${p.color})`, width: boxOnly?24:30, height: boxOnly?24:30, flexBasis: boxOnly?24:30 }}><Ic.briefcase size={boxOnly?13:15}/></div>
+                  <div className="avatar sq" style={{ background: `oklch(0.62 0.13 ${p.color})`, width: 30, height: 30, flexBasis: 30 }}><Ic.briefcase size={15}/></div>
                   <div style={{ minWidth: 0 }}>
                     <div className="nm">{p.name}</div>
                   </div>
