@@ -263,6 +263,25 @@
       "bookedElsewhere": "Booked elsewhere"
     }
   },
+  "plan": {
+    "scope": {
+      "overview": "Overview",
+      "personnel": "Personnel",
+      "positions": "Positions"
+    },
+    "openSlots_one": "{{count}} open",
+    "openSlots_other": "{{count}} open",
+    "pickPerson": "Select a person",
+    "pickPersonBody": "Choose someone to see the shifts they're assigned.",
+    "pickPosition": "Select a position",
+    "pickPositionBody": "Choose a position to see who is working each shift.",
+    "inView": "In this view",
+    "assignedShifts": "Assigned shifts",
+    "assignedHours": "Assigned hours",
+    "hours": "{{hours}} h",
+    "filledSlots": "Filled slots",
+    "openSlotsLabel": "Open slots"
+  },
   "calendar": {
     "overlapAvail": "This overlaps another availability entry. Entries can’t overlap — except vacation, which spans the whole day.",
     "overlapShift": "This overlaps another shift. Shifts can’t overlap.",

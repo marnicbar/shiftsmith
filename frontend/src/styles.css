@@ -61,6 +61,25 @@ button { font-family: inherit; }
 .tab svg { width: 16px; height: 16px; color: var(--text-3); }
 .tab .pill { margin-left: 2px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: var(--rose-solid); color: #fff; }
 
+/* Shift Plan tab morphs into its scope selector while active: same 36px height,
+   expands to the right to reveal Overview / Personnel / Positions. */
+.tab.tab-morph { padding: 0 4px 0 14px; gap: 8px; cursor: default; }
+.tab-morph .tab-lead { display: flex; align-items: center; gap: 8px; }
+.tab-scope {
+  display: flex; align-items: center; gap: 2px; overflow: hidden; white-space: nowrap;
+  padding-left: 8px; border-left: 1px solid color-mix(in oklab, var(--accent-strong) 22%, transparent);
+  animation: scopeOpen .2s ease;
+}
+@keyframes scopeOpen { from { max-width: 0; opacity: 0; } to { max-width: 420px; opacity: 1; } }
+.tab-scope button {
+  appearance: none; border: 0; background: transparent; cursor: pointer; font: inherit;
+  height: 28px; padding: 0 11px; border-radius: 7px;
+  font-size: 12.5px; font-weight: 500; color: var(--accent-strong); opacity: .68;
+  transition: background .12s, opacity .12s;
+}
+.tab-scope button:hover { opacity: 1; background: color-mix(in oklab, var(--accent) 14%, transparent); }
+.tab-scope button.on { opacity: 1; background: var(--surface); color: var(--accent-strong); box-shadow: 0 1px 2px rgba(0,0,0,.10); }
+
 .topbar .spacer { flex: 1; }
 
 .iconbtn {
@@ -127,6 +146,25 @@ button { font-family: inherit; }
 .tone-undes  { --tone: var(--amber-solid);  --tone-soft: var(--amber-soft);  --tone-strong: var(--amber-strong); }
 .tone-vac    { --tone: var(--rose-solid);   --tone-soft: var(--rose-soft);   --tone-strong: var(--rose-strong); }
 .tone-shift  { --tone: var(--accent);       --tone-soft: var(--accent-soft); --tone-strong: var(--accent-strong); }
+/* Read-only assignment events: filled slots use the accent, open (understaffed)
+   slots use amber with a dashed edge to read as "not yet filled". */
+.tone-assign { --tone: var(--accent);       --tone-soft: var(--accent-soft); --tone-strong: var(--accent-strong); }
+.tone-open   { --tone: var(--amber-solid);  --tone-soft: var(--amber-soft);  --tone-strong: var(--amber-strong); }
+.evt.tone-open, .mg-evt.tone-open { border-left-style: dashed; }
+/* Per-position assignment event: time on its own line, then one row per assignee
+   (a small avatar + the name in the same thin style as other event labels), and
+   an "open" line when understaffed. */
+.evt-people { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.evt-person { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.evt-av {
+  flex: 0 0 auto; width: 15px; height: 15px; border-radius: 99px;
+  display: inline-grid; place-items: center; color: #fff;
+  font-size: 8px; font-weight: 600; letter-spacing: -0.02em;
+}
+.asg-name { flex: 1 1 auto; min-width: 0; font-size: 11px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.asg-open { font-size: 11px; color: var(--amber-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mg-evt.multi { flex-direction: column; align-items: stretch; white-space: normal; gap: 2px; }
+.mg-evt .mg-time { font-size: 10px; opacity: .85; }
 
 /* ---------- Generic layout ---------- */
 .view { flex: 1; min-height: 0; display: flex; overflow: hidden; }

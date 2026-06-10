@@ -8,7 +8,7 @@ import { SS } from './data.js';
 import i18n from './i18n/index.js';
 import { Personnel } from './personnel.jsx';
 import { Positions } from './positions.jsx';
-import { ShiftPlan } from './shiftplan.jsx';
+import { PlanView } from './planview.jsx';
 import { Dashboard } from './dashboard.jsx';
 import { SettingsView, AccountView } from './settings.jsx';
 import { Login } from './login.jsx';
@@ -21,6 +21,9 @@ const TABS = [
   { id: 'positions', labelKey: 'nav.positions', icon: 'briefcase' },
   { id: 'shiftplan', labelKey: 'nav.shiftPlan', icon: 'timeline' },
 ];
+
+// Scopes the Shift Plan tab morphs into while active (see the nav below).
+const PLAN_SCOPES = ['overview', 'personnel', 'positions'];
 
 export const FONTS = {
   'Geist':          "'Geist', system-ui, sans-serif",
@@ -62,6 +65,8 @@ export default function App() {
   const { t } = useTranslation();
   const [prefs, setPref] = usePrefs();
   const [tab, setTab] = useState('personnel');
+  // Sub-view of the Shift Plan tab; the tab button itself hosts the selector.
+  const [planScope, setPlanScope] = useState('overview');
   const [acctMenu, setAcctMenu] = useState(false);
   // Remember the last primary view so a settings/account panel can toggle back to it.
   const prevTabRef = useRef('personnel');
@@ -237,7 +242,7 @@ export default function App() {
   }, [sched.assignments, empById]);
 
   // Jump from the dashboard's "needs attention" list straight to a shift in the plan.
-  const openShift = useCallback((shiftId, date) => { setFocusShift({ shiftId, date }); setTab('shiftplan'); }, []);
+  const openShift = useCallback((shiftId, date) => { setFocusShift({ shiftId, date }); setPlanScope('overview'); setTab('shiftplan'); }, []);
 
   async function solveNow() { try { await api.startSolving(); } catch (e) { setError(e.message); } }
   async function pauseSolver() { try { await api.stopSolving(); } catch (e) { setError(e.message); } }
@@ -258,12 +263,28 @@ export default function App() {
       <div className="topbar">
         <div className="brand"><span className="logo">S</span><span className="brand-name"><b>Shift</b>Smith</span></div>
         <nav className="tabs">
-          {TABS.map((x) => (
-            <button key={x.id} className={`tab ${tab === x.id ? 'active' : ''}`} onClick={() => setTab(x.id)}>
-              {React.createElement(Ic[x.icon], { size: 16 })}{t(x.labelKey)}
-              {x.id === 'shiftplan' && sched.unassigned > 0 && <span className="pill">{sched.unassigned}</span>}
-            </button>
-          ))}
+          {TABS.map((x) => {
+            const pill = x.id === 'shiftplan' && sched.unassigned > 0 ? <span className="pill">{sched.unassigned}</span> : null;
+            // While active, the Shift Plan tab morphs into its scope selector,
+            // expanding to the right at the same height.
+            if (x.id === 'shiftplan' && tab === 'shiftplan') {
+              return (
+                <div key={x.id} className="tab active tab-morph">
+                  <span className="tab-lead">{React.createElement(Ic[x.icon], { size: 16 })}{t(x.labelKey)}{pill}</span>
+                  <span className="tab-scope">
+                    {PLAN_SCOPES.map((s) => (
+                      <button key={s} className={planScope === s ? 'on' : ''} onClick={() => setPlanScope(s)}>{t(`plan.scope.${s}`)}</button>
+                    ))}
+                  </span>
+                </div>
+              );
+            }
+            return (
+              <button key={x.id} className={`tab ${tab === x.id ? 'active' : ''}`} onClick={() => setTab(x.id)}>
+                {React.createElement(Ic[x.icon], { size: 16 })}{t(x.labelKey)}{pill}
+              </button>
+            );
+          })}
         </nav>
         <div className="spacer"></div>
         <SolverBadge status={sched.solverStatus} />
@@ -294,7 +315,7 @@ export default function App() {
       {tab === 'dashboard' && <Dashboard employees={employees} positions={positions} assign={assignMap} onOpenShift={openShift} />}
       {tab === 'personnel' && <Personnel employees={employees} setEmployees={setEmployees} skills={skills} settings={settings} selId={selEmp} setSelId={setSelEmp} snap={snap} newFlow={newFlow} nameOrder={prefs.nameOrder} />}
       {tab === 'positions' && <Positions employees={employees} positions={positions} setPositions={setPositions} groupOrder={groupOrder} setGroupOrder={setGroupOrder} skills={skills} selId={selPos} setSelId={setSelPos} snap={snap} newFlow={newFlow} nameOrder={prefs.nameOrder} />}
-      {tab === 'shiftplan' && <ShiftPlan key={tlDefault} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} assign={assignMap} overrides={overrides} setOverrides={setOverrides} sched={sched} onSolve={solveNow} onPause={pauseSolver} focus={focusShift} onFocusConsumed={() => setFocusShift(null)} nameOrder={prefs.nameOrder} />}
+      {tab === 'shiftplan' && <PlanView key={tlDefault} scope={planScope} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} assign={assignMap} overrides={overrides} setOverrides={setOverrides} sched={sched} onSolve={solveNow} onPause={pauseSolver} focus={focusShift} onFocusConsumed={() => setFocusShift(null)} nameOrder={prefs.nameOrder} selEmp={selEmp} setSelEmp={setSelEmp} selPos={selPos} setSelPos={setSelPos} />}
       {tab === 'settings' && <SettingsView settings={settings} setSettings={setSettings} sched={sched} skills={skills} onAddSkill={addSkill} onRenameSkill={renameSkill} onRemoveSkill={removeSkill} globalRules={settings.globalRules || []} setGlobalRules={setGlobalRules} />}
       {tab === 'account' && <AccountView prefs={prefs} setPref={setPref} fonts={FONTS} authUser={authUser} />}
     </div>
