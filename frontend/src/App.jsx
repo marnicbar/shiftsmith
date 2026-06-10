@@ -8,7 +8,7 @@ import { SS } from './data.js';
 import i18n from './i18n/index.js';
 import { Personnel } from './personnel.jsx';
 import { Positions } from './positions.jsx';
-import { ShiftPlan } from './shiftplan.jsx';
+import { PlanView } from './planview.jsx';
 import { Dashboard } from './dashboard.jsx';
 import { SettingsView, AccountView } from './settings.jsx';
 import { Login } from './login.jsx';
@@ -294,7 +294,7 @@ export default function App() {
       {tab === 'dashboard' && <Dashboard employees={employees} positions={positions} assign={assignMap} onOpenShift={openShift} />}
       {tab === 'personnel' && <Personnel employees={employees} setEmployees={setEmployees} skills={skills} settings={settings} selId={selEmp} setSelId={setSelEmp} snap={snap} newFlow={newFlow} nameOrder={prefs.nameOrder} />}
       {tab === 'positions' && <Positions employees={employees} positions={positions} setPositions={setPositions} groupOrder={groupOrder} setGroupOrder={setGroupOrder} skills={skills} selId={selPos} setSelId={setSelPos} snap={snap} newFlow={newFlow} nameOrder={prefs.nameOrder} />}
-      {tab === 'shiftplan' && <ShiftPlan key={tlDefault} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} assign={assignMap} overrides={overrides} setOverrides={setOverrides} sched={sched} onSolve={solveNow} onPause={pauseSolver} focus={focusShift} onFocusConsumed={() => setFocusShift(null)} nameOrder={prefs.nameOrder} />}
+      {tab === 'shiftplan' && <PlanView key={tlDefault} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} assign={assignMap} overrides={overrides} setOverrides={setOverrides} sched={sched} onSolve={solveNow} onPause={pauseSolver} focus={focusShift} onFocusConsumed={() => setFocusShift(null)} nameOrder={prefs.nameOrder} selEmp={selEmp} setSelEmp={setSelEmp} selPos={selPos} setSelPos={setSelPos} />}
       {tab === 'settings' && <SettingsView settings={settings} setSettings={setSettings} sched={sched} skills={skills} onAddSkill={addSkill} onRenameSkill={renameSkill} onRemoveSkill={removeSkill} globalRules={settings.globalRules || []} setGlobalRules={setGlobalRules} />}
       {tab === 'account' && <AccountView prefs={prefs} setPref={setPref} fonts={FONTS} authUser={authUser} />}
     </div>

@@ -136,6 +136,14 @@ preferred weekly hours, workload balance. Constraint names must be alphanumeric 
 - Appearance/interaction prefs persist in `localStorage`; solver settings live in the backend.
 - `ShiftPlan` renders the solver's assignment map; the `AssignEditor` writes manual
   overrides which sync back as pins.
+- The **Shift Plan tab** is `PlanView` (`planview.jsx`), a scope selector (Overview /
+  Personnel / Positions) rendered next to the day/week control. *Overview* is the
+  `ShiftPlan` timeline; *Personnel* and *Positions* are read-only day/week/month
+  calendars of the **actual** assignments (`buildPersonEvents` / `buildPositionEvents`
+  turn the solver's `assignMap` into concrete events). They reuse the shared `Calendar`
+  in `readOnly` mode (no create/drag/edit; events carry `_tone`/`_label`/`_title`/`_color`).
+  `calendar.jsx` exports `calendarDays(view, anchor)` so the builders expand exactly the
+  visible range.
 
 ### Internationalization (`i18n/`)
 - UI strings live in `i18n/locales/{en,de}.json` (one `translation` namespace, nested by

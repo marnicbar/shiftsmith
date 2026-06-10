@@ -127,6 +127,11 @@ button { font-family: inherit; }
 .tone-undes  { --tone: var(--amber-solid);  --tone-soft: var(--amber-soft);  --tone-strong: var(--amber-strong); }
 .tone-vac    { --tone: var(--rose-solid);   --tone-soft: var(--rose-soft);   --tone-strong: var(--rose-strong); }
 .tone-shift  { --tone: var(--accent);       --tone-soft: var(--accent-soft); --tone-strong: var(--accent-strong); }
+/* Read-only assignment events: filled slots use the accent, open (understaffed)
+   slots use amber with a dashed edge to read as "not yet filled". */
+.tone-assign { --tone: var(--accent);       --tone-soft: var(--accent-soft); --tone-strong: var(--accent-strong); }
+.tone-open   { --tone: var(--amber-solid);  --tone-soft: var(--amber-soft);  --tone-strong: var(--amber-strong); }
+.evt.tone-open, .mg-evt.tone-open { border-left-style: dashed; }
 
 /* ---------- Generic layout ---------- */
 .view { flex: 1; min-height: 0; display: flex; overflow: hidden; }

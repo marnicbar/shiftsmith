@@ -7,6 +7,16 @@ import { cleanup } from '@testing-library/react';
 // render their text in tests without needing an explicit provider.
 import '../i18n/index.js';
 
+// jsdom has no ResizeObserver; calendar/timeline components observe their scroll
+// area for layout. A no-op stub lets those components mount in component tests.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 afterEach(() => {
   cleanup();
 });

@@ -91,7 +91,7 @@ export function buildPlan(employees, positions, dayList, overrides = {}) {
 const LW_TL = 168;
 const FREE_BASE = 18;
 
-export function ShiftPlan({ employees, positions, groupOrder = [], initialMode = 'week', assign = {}, overrides = {}, setOverrides, sched = {}, onSolve, onPause, focus = null, onFocusConsumed, nameOrder = 'first' }) {
+export function ShiftPlan({ employees, positions, groupOrder = [], initialMode = 'week', assign = {}, overrides = {}, setOverrides, sched = {}, onSolve, onPause, focus = null, onFocusConsumed, nameOrder = 'first', scopeSelector = null }) {
   const { t } = useTranslation();
   // When the dashboard hands us a shift to focus, start in week view anchored on
   // that date so the occurrence is visible behind its assignment editor.
@@ -428,6 +428,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
             <button onClick={() => zoomAround(viewCenter(), (z) => z * 1.25)}><Ic.zoomIn size={14}/></button>
           </div>
         )}
+        {scopeSelector}
         <div className="seg">
           {[['day', t('shiftplan.view.day')], ['week', t('shiftplan.view.week')], ['free', t('shiftplan.view.free')]].map(([v, l]) => (
             <button key={v} className={mode === v ? 'on' : ''} onClick={() => pickMode(v)}>{l}</button>

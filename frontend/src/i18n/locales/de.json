@@ -263,6 +263,25 @@
       "bookedElsewhere": "Anderweitig eingeplant"
     }
   },
+  "plan": {
+    "scope": {
+      "overview": "Übersicht",
+      "personnel": "Personal",
+      "positions": "Positionen"
+    },
+    "openSlots_one": "{{count}} offen",
+    "openSlots_other": "{{count}} offen",
+    "pickPerson": "Person auswählen",
+    "pickPersonBody": "Wähle eine Person, um die zugewiesenen Schichten zu sehen.",
+    "pickPosition": "Position auswählen",
+    "pickPositionBody": "Wähle eine Position, um zu sehen, wer welche Schicht arbeitet.",
+    "inView": "In dieser Ansicht",
+    "assignedShifts": "Zugewiesene Schichten",
+    "assignedHours": "Zugewiesene Stunden",
+    "hours": "{{hours}} h",
+    "filledSlots": "Besetzte Plätze",
+    "openSlotsLabel": "Offene Plätze"
+  },
   "calendar": {
     "overlapAvail": "Dies überschneidet sich mit einem anderen Verfügbarkeitseintrag. Einträge dürfen sich nicht überschneiden — außer Urlaub, der den ganzen Tag umfasst.",
     "overlapShift": "Dies überschneidet sich mit einer anderen Schicht. Schichten dürfen sich nicht überschneiden.",

@@ -160,7 +160,7 @@ export function Calendar(props) {
   const { t } = useTranslation();
   const { view, anchor, items, kind, zoom = 46, onZoom, paint, palette,
           newItem, onCommit, onDelete, onSplit, extraFields, dayStart = 6,
-          snap = 15 } = props;
+          snap = 15, readOnly = false } = props;
   const scrollRef = useRef(null);
   const gridRef = useRef(null);
   const [editor, setEditor] = useState(null);
@@ -175,9 +175,7 @@ export function Calendar(props) {
     setEditor({ id: it.id, isNew: false, occDate: occDate || it.date });
   }
 
-  const dayList = view === 'week'
-    ? Array.from({ length: 7 }, (_, i) => SS.isoOf(SS.addDays(SS.startOfWeek(anchor), i)))
-    : view === 'day' ? [SS.isoOf(anchor)] : monthDays(anchor);
+  const dayList = calendarDays(view, anchor);
 
   const todayISO = SS.isoOf(new Date());
 
@@ -517,15 +515,15 @@ export function Calendar(props) {
 
   return (
     <div className="cal" ref={gridRef}>
-      <Toolbar {...props} onAdd={addNew} zoomControls={zoomControls} />
+      <Toolbar {...props} onAdd={addNew} zoomControls={zoomControls} readOnly={readOnly} />
       {view === 'month'
         ? <MonthGrid dayList={dayList} anchor={anchor} items={liveItems} kind={kind} todayISO={todayISO}
             onDayClick={(d, el) => startCreate(newItem({ date: d, start: 9*60, end: 17*60 }))}
-            onEvtDown={onEvtDown} />
+            onEvtDown={onEvtDown} readOnly={readOnly} />
         : <TimeGrid scrollRef={scrollRef} dayList={dayList} view={view} zoom={zoom} items={liveItems}
             kind={kind} todayISO={todayISO} onColMouseDown={onColMouseDown}
-            onEvtDown={onEvtDown} />}
-      {editing && (
+            onEvtDown={onEvtDown} readOnly={readOnly} />}
+      {editing && !readOnly && (
         <Editor item={editing} kind={kind} palette={palette} isNew={editor.isNew}
           occDate={editor.occDate} scopable={!!onSplit && !editor.isNew}
           onPatch={patch} onRemove={remove} onClose={discard} onDone={done}
@@ -536,6 +534,15 @@ export function Calendar(props) {
       )}
     </div>
   );
+}
+
+// The exact day list a given view+anchor renders. Exported so read-only callers
+// (e.g. the assignment schedules) can pre-expand concrete events for precisely the
+// visible range and stay in lock-step with what the grid draws.
+export function calendarDays(view, anchor) {
+  if (view === 'week') return Array.from({ length: 7 }, (_, i) => SS.isoOf(SS.addDays(SS.startOfWeek(anchor), i)));
+  if (view === 'day') return [SS.isoOf(anchor)];
+  return monthDays(anchor);
 }
 
 function monthDays(anchor) {
@@ -550,7 +557,7 @@ function monthDays(anchor) {
 
 function Toolbar(props) {
   const { t } = useTranslation();
-  const { view, onView, anchor, onAnchor, kind, paint, onPaint, onAdd, zoomControls } = props;
+  const { view, onView, anchor, onAnchor, kind, paint, onPaint, onAdd, zoomControls, readOnly, headerExtra } = props;
   const monthLabel = anchor.toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' });
   let title = monthLabel, sub = '';
   if (view === 'week') {
@@ -579,19 +586,22 @@ function Toolbar(props) {
           <button onClick={zoomControls.onIn} disabled={!zoomControls.canIn} title={t('calendar.zoomIn')}><Ic.zoomIn size={14}/></button>
         </div>
       )}
+      {headerExtra}
       <div className="seg" style={{ marginRight: 8, flexShrink: 0 }}>
         {['day','week','month'].map((v) => (
           <button key={v} className={view === v ? 'on' : ''} onClick={() => onView(v)}>{t(`calendar.view.${v}`)}</button>
         ))}
       </div>
-      <button className="btn primary sm" style={{ flexShrink: 0 }} onClick={onAdd} title={kind === 'availability' ? t('calendar.addAvailability') : t('calendar.addShift')}>
-        <Ic.plus size={14}/> {t('common.add')}
-      </button>
+      {!readOnly && (
+        <button className="btn primary sm" style={{ flexShrink: 0 }} onClick={onAdd} title={kind === 'availability' ? t('calendar.addAvailability') : t('calendar.addShift')}>
+          <Ic.plus size={14}/> {t('common.add')}
+        </button>
+      )}
     </div>
   );
 }
 
-function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onColMouseDown, onEvtDown }) {
+function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onColMouseDown, onEvtDown, readOnly }) {
   const { t } = useTranslation();
   const WD = t('common.weekdays3', { returnObjects: true });
   const H = 24 * zoom;
@@ -640,7 +650,8 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onCol
             <div key={d} className="wg-col" style={{ gridRow: 2, gridColumn: i+2, position:'sticky', top: Math.max(0, headH - 1), zIndex: 18, background:'var(--surface)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', padding: 4, display:'flex', flexDirection:'column', gap: 3, minHeight: 30 }}>
               {allDayByDay[d].map((o) => (
                 <div key={o.key} className={`mg-evt allday tone-${toneCls(o.item, kind)} ${o.item._preview ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''}`}
-                     onMouseDown={(e) => onEvtDown(e, o, 'move')} onClick={(e) => e.stopPropagation()} style={{ cursor: o.item._preview ? 'default' : 'grab' }}>
+                     title={o.item._title || undefined}
+                     onMouseDown={readOnly ? undefined : (e) => onEvtDown(e, o, 'move')} onClick={(e) => e.stopPropagation()} style={{ cursor: readOnly || o.item._preview ? 'default' : 'grab' }}>
                   {kind==='availability' ? <Ic.palm size={11}/> : null}{labelOf(o.item, kind, t)}
                 </div>
               ))}
@@ -658,7 +669,7 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onCol
           const isToday = d === todayISO;
           return (
             <div key={d} data-daycol={d} className={`wg-col ${weekend?'weekend':''}`} style={{ gridRow: hasAllDay ? 3 : 2, gridColumn: i+2, position:'relative' }}
-                 onMouseDown={(e) => onColMouseDown(e, d)}>
+                 onMouseDown={readOnly ? undefined : (e) => onColMouseDown(e, d)}>
               {Array.from({ length: 24 }, (_, h) => (<React.Fragment key={h}>
                 <div className="wg-hourline" style={{ top: h * zoom }}></div>
                 <div className="wg-halfline" style={{ top: h * zoom + zoom/2 }}></div>
@@ -667,11 +678,12 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onCol
                 const top = o.s/60*zoom, h = Math.max(16, (o.e - o.s)/60*zoom);
                 const w = 100 / o._lanes, left = o._lane * w;
                 const ghost = o.item._preview;
-                const resizable = !ghost && o.seg === 'full' && !o.item.allDay;
+                const resizable = !readOnly && !ghost && o.seg === 'full' && !o.item.allDay;
                 return (
                   <div key={o.key} className={`evt tone-${toneCls(o.item, kind)} ${o.seg !== 'full' ? 'seg-'+o.seg : ''} ${ghost ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''}`}
-                       onMouseDown={ghost ? undefined : (e) => onEvtDown(e, o, 'move')}
-                       style={{ top, height: h, left: `calc(${left}% + 3px)`, width: `calc(${w}% - 6px)`, cursor: ghost ? 'default' : 'grab' }}>
+                       title={o.item._title || undefined}
+                       onMouseDown={readOnly || ghost ? undefined : (e) => onEvtDown(e, o, 'move')}
+                       style={{ top, height: h, left: `calc(${left}% + 3px)`, width: `calc(${w}% - 6px)`, cursor: readOnly || ghost ? 'default' : 'grab', ...(o.item._color ? { borderLeftColor: o.item._color } : null) }}>
                     {resizable && <div className="evt-handle n" onMouseDown={(e) => onEvtDown(e, o, 'n')}></div>}
                     {o.item.repeat !== 'none' && <span className="rep"><Ic.repeat/></span>}
                     {o.seg === 'tail' && <span className="ovn" title={t('calendar.continuesPrev')}><Ic.chevD size={11} style={{ transform: 'rotate(180deg)' }}/></span>}
@@ -691,7 +703,7 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onCol
   );
 }
 
-function MonthGrid({ dayList, anchor, items, kind, todayISO, onDayClick, onEvtDown }) {
+function MonthGrid({ dayList, anchor, items, kind, todayISO, onDayClick, onEvtDown, readOnly }) {
   const { t } = useTranslation();
   const WD = t('common.weekdays3', { returnObjects: true });
   const occ = expand(items, dayList).filter((o) => o.seg !== 'tail');
@@ -707,12 +719,14 @@ function MonthGrid({ dayList, anchor, items, kind, todayISO, onDayClick, onEvtDo
           const evs = byDay[d].sort((a,b)=> (b.item.allDay?1:0)-(a.item.allDay?1:0) || a.item.start-b.item.start);
           const shown = evs.slice(0, 3);
           return (
-            <div key={d} data-daycell={d} className={`mg-cell ${out?'out':''} ${isToday?'today':''}`} onClick={(e) => onDayClick(d, e.currentTarget)}>
+            <div key={d} data-daycell={d} className={`mg-cell ${out?'out':''} ${isToday?'today':''}`}
+                 onClick={readOnly ? undefined : (e) => onDayClick(d, e.currentTarget)} style={readOnly ? { cursor: 'default' } : null}>
               <span className="mg-num">{dt.getDate()}</span>
               {shown.map((o) => (
                 <div key={o.key} className={`mg-evt ${o.item.allDay?'allday':''} tone-${toneCls(o.item, kind)} ${o.item._preview ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''}`}
-                     onMouseDown={o.item._preview ? undefined : (e) => onEvtDown(e, o, 'move')}
-                     onClick={(e) => e.stopPropagation()} style={{ cursor: o.item._preview ? 'default' : 'grab' }}>
+                     title={o.item._title || undefined}
+                     onMouseDown={readOnly || o.item._preview ? undefined : (e) => onEvtDown(e, o, 'move')}
+                     onClick={(e) => e.stopPropagation()} style={{ cursor: readOnly || o.item._preview ? 'default' : 'grab', ...(o.item._color ? { borderLeftColor: o.item._color } : null) }}>
                   {!o.item.allDay && <span className="mono" style={{ fontSize: 10, opacity:.85 }}>{SS.minLabel(o.item.start)}</span>}
                   {labelOf(o.item, kind, t)}
                 </div>
@@ -727,10 +741,12 @@ function MonthGrid({ dayList, anchor, items, kind, todayISO, onDayClick, onEvtDo
 }
 
 function toneCls(item, kind) {
+  if (item._tone) return item._tone; // read-only events carry their own tone
   if (kind === 'availability') return item.type === 'pref' ? 'pref' : item.type === 'undes' ? 'undes' : 'vac';
   return 'shift';
 }
 function labelOf(item, kind, t) {
+  if (item._label != null) return item._label; // read-only events carry their own label
   if (kind === 'availability') return item.type === 'pref' ? t('avail.pref') : item.type === 'undes' ? t('avail.undes') : t('avail.vac');
   return item.name || t('common.shift');
 }
