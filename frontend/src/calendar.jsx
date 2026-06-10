@@ -678,12 +678,13 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onCol
                 const w = 100 / o._lanes, left = o._lane * w;
                 const ghost = o.item._preview;
                 const resizable = !readOnly && !ghost && o.seg === 'full' && !o.item.allDay;
-                const strip = stripBg(o.item._segments);
+                const segs = o.item._segments;
                 return (
-                  <div key={o.key} className={`evt tone-${toneCls(o.item, kind)} ${o.seg !== 'full' ? 'seg-'+o.seg : ''} ${ghost ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''} ${strip ? 'has-strip' : ''}`}
+                  <div key={o.key} className={`evt tone-${toneCls(o.item, kind)} ${o.seg !== 'full' ? 'seg-'+o.seg : ''} ${ghost ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''} ${segs ? 'has-strip' : ''}`}
                        title={o.item._title || undefined}
                        onMouseDown={readOnly || ghost ? undefined : (e) => onEvtDown(e, o, 'move')}
-                       style={{ top, height: h, left: `calc(${left}% + 3px)`, width: `calc(${w}% - 6px)`, cursor: readOnly || ghost ? 'default' : 'grab', ...(strip ? { background: strip } : (o.item._color ? { borderLeftColor: o.item._color } : null)) }}>
+                       style={{ top, height: h, left: `calc(${left}% + 3px)`, width: `calc(${w}% - 6px)`, cursor: readOnly || ghost ? 'default' : 'grab', ...(!segs && o.item._color ? { borderLeftColor: o.item._color } : null) }}>
+                    {segs && <div className="evt-strip">{segs.map((c, si) => <span key={si} style={{ background: c }} />)}</div>}
                     {resizable && <div className="evt-handle n" onMouseDown={(e) => onEvtDown(e, o, 'n')}></div>}
                     {o.item.repeat !== 'none' && <span className="rep"><Ic.repeat/></span>}
                     {o.seg === 'tail' && <span className="ovn" title={t('calendar.continuesPrev')}><Ic.chevD size={11} style={{ transform: 'rotate(180deg)' }}/></span>}
@@ -728,13 +729,14 @@ function MonthGrid({ dayList, anchor, items, kind, todayISO, onDayClick, onEvtDo
                  onClick={readOnly ? undefined : (e) => onDayClick(d, e.currentTarget)} style={readOnly ? { cursor: 'default' } : null}>
               <span className="mg-num">{dt.getDate()}</span>
               {shown.map((o) => {
-                const strip = stripBg(o.item._segments);
+                const segs = o.item._segments;
                 const multi = !!o.item._lines;
                 return (
-                <div key={o.key} className={`mg-evt ${o.item.allDay?'allday':''} tone-${toneCls(o.item, kind)} ${o.item._preview ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''} ${multi ? 'multi' : ''} ${strip ? 'has-strip' : ''}`}
+                <div key={o.key} className={`mg-evt ${o.item.allDay?'allday':''} tone-${toneCls(o.item, kind)} ${o.item._preview ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''} ${multi ? 'multi' : ''} ${segs ? 'has-strip' : ''}`}
                      title={o.item._title || undefined}
                      onMouseDown={readOnly || o.item._preview ? undefined : (e) => onEvtDown(e, o, 'move')}
-                     onClick={(e) => e.stopPropagation()} style={{ cursor: readOnly || o.item._preview ? 'default' : 'grab', ...(strip ? { background: strip } : (o.item._color ? { borderLeftColor: o.item._color } : null)) }}>
+                     onClick={(e) => e.stopPropagation()} style={{ cursor: readOnly || o.item._preview ? 'default' : 'grab', ...(!segs && o.item._color ? { borderLeftColor: o.item._color } : null) }}>
+                  {segs && <div className="evt-strip">{segs.map((c, si) => <span key={si} style={{ background: c }} />)}</div>}
                   {multi ? (
                     <>
                       <span className="mono mg-time">{o.item._timeLabel || `${SS.minLabel(o.item.start)}–${SS.minLabel(o.item.end)}`}</span>
@@ -756,18 +758,6 @@ function MonthGrid({ dayList, anchor, items, kind, todayISO, onDayClick, onEvtDo
       </div>
     </div>
   );
-}
-
-// Build a left accent strip as a background-gradient layer (over the soft tone
-// fill) so a multi-colour split follows the event's rounded corners exactly like
-// a real border-left would. One equal band per segment, top to bottom.
-function stripBg(segments) {
-  if (!segments || !segments.length) return null;
-  const n = segments.length;
-  const stops = segments
-    .map((c, i) => `${c} ${(i / n * 100).toFixed(3)}% ${((i + 1) / n * 100).toFixed(3)}%`)
-    .join(', ');
-  return `linear-gradient(to bottom, ${stops}) left / 3px 100% no-repeat, var(--tone-soft)`;
 }
 
 function toneCls(item, kind) {
