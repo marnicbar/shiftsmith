@@ -151,21 +151,20 @@ button { font-family: inherit; }
 .tone-assign { --tone: var(--accent);       --tone-soft: var(--accent-soft); --tone-strong: var(--accent-strong); }
 .tone-open   { --tone: var(--amber-solid);  --tone-soft: var(--amber-soft);  --tone-strong: var(--amber-strong); }
 .evt.tone-open, .mg-evt.tone-open { border-left-style: dashed; }
-/* Split accent strip: one band per slot (a colour per assigned person, muted for
-   open slots). The event drops its border so its overflow:hidden clips the strip
-   to the rounded corners — so the split wraps the corners like a single border. */
-.evt.has-strip { border: 0; padding-left: 11px; }
-.mg-evt.has-strip { border: 0; padding-left: 9px; position: relative; }
-.evt-strip { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; display: flex; flex-direction: column; }
-.evt-strip span { flex: 1 1 0; min-height: 0; }
-/* Combined assignment event: time on its own line, then one name per line. */
-.evt .evt-names { display: flex; flex-direction: column; min-width: 0; }
-.evt .evt-name, .evt .evt-open { font-size: 11px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.evt .evt-name { font-weight: 500; }
-.evt .evt-open, .mg-evt .mg-open { color: var(--amber-strong); font-weight: 500; }
-.mg-evt.multi { flex-direction: column; align-items: stretch; white-space: normal; gap: 1px; position: relative; }
+/* Per-position assignment event: time on its own line, then one row per assignee
+   (a small avatar + the name in the same thin style as other event labels), and
+   an "open" line when understaffed. */
+.evt-people { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.evt-person { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.evt-av {
+  flex: 0 0 auto; width: 15px; height: 15px; border-radius: 99px;
+  display: inline-grid; place-items: center; color: #fff;
+  font-size: 8px; font-weight: 600; letter-spacing: -0.02em;
+}
+.asg-name { flex: 1 1 auto; min-width: 0; font-size: 11px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.asg-open { font-size: 11px; color: var(--amber-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mg-evt.multi { flex-direction: column; align-items: stretch; white-space: normal; gap: 2px; }
 .mg-evt .mg-time { font-size: 10px; opacity: .85; }
-.mg-evt .mg-name, .mg-evt .mg-open { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- Generic layout ---------- */
 .view { flex: 1; min-height: 0; display: flex; overflow: hidden; }

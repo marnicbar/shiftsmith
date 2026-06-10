@@ -12,27 +12,29 @@ const emp = (id) => ({ id, firstName: id, lastName: '', skills: [] });
 const shift = (id, over = {}) => ({ id, name: id, date: MON, start: 540, end: 1020, headcount: 1, repeat: 'none', ...over });
 const position = (over = {}) => ({ id: 'p1', name: 'Bar', color: 200, shifts: [], ...over });
 
+const names = (ev) => ev._crew.map((c) => c.name);
+
 describe('buildPositionEvents', () => {
-  it('emits one combined event per occurrence listing every assigned person', () => {
+  it('emits one event per occurrence with an avatar + name for each assignee', () => {
     const pos = position({ shifts: [shift('s1', { headcount: 2 })] });
     const assign = { [`s1@${MON}`]: [emp('a'), emp('b')] };
     const evs = buildPositionEvents(pos, [MON], assign);
     expect(evs).toHaveLength(1);
     expect(evs[0]).toMatchObject({ _tone: 'assign', date: MON, start: 540, end: 1020, open: 0, _openLabel: null });
-    expect(evs[0]._lines).toEqual(['a', 'b']);
+    expect(names(evs[0])).toEqual(['a', 'b']);
+    expect(evs[0]._crew[0]).toMatchObject({ name: 'a', initials: 'A' });
+    expect(evs[0]._crew[0].color).toBeTruthy(); // person-coloured avatar
     expect(evs[0]._timeLabel).toBe('09:00–17:00'); // from–to, not just the start
-    expect(evs[0]._segments).toHaveLength(2); // one colour per assigned person
   });
 
-  it('keeps a single event when understaffed, with an open line and muted bar segments', () => {
+  it('keeps a single event when understaffed, with an open line', () => {
     const pos = position({ shifts: [shift('s1', { headcount: 3 })] });
     const assign = { [`s1@${MON}`]: [emp('a')] };
     const evs = buildPositionEvents(pos, [MON], assign);
     expect(evs).toHaveLength(1);
     expect(evs[0]).toMatchObject({ _tone: 'assign', open: 2 });
-    expect(evs[0]._lines).toEqual(['a']);
+    expect(names(evs[0])).toEqual(['a']);
     expect(evs[0]._openLabel).toBeTruthy();
-    expect(evs[0]._segments).toHaveLength(3); // 1 person + 2 open slots
   });
 
   it('omits the open line when fully staffed', () => {
@@ -40,15 +42,14 @@ describe('buildPositionEvents', () => {
     const assign = { [`s1@${MON}`]: [emp('a')] };
     const evs = buildPositionEvents(pos, [MON], assign);
     expect(evs[0]._openLabel).toBeNull();
-    expect(evs[0]._segments).toHaveLength(1);
   });
 
-  it('shows an all-open occurrence (no split bar) when nobody is assigned', () => {
+  it('shows an all-open occurrence when nobody is assigned', () => {
     const pos = position({ shifts: [shift('s1', { headcount: 2 })] });
     const evs = buildPositionEvents(pos, [MON], {});
     expect(evs).toHaveLength(1);
-    expect(evs[0]).toMatchObject({ _tone: 'open', open: 2, _segments: null });
-    expect(evs[0]._lines).toEqual([]);
+    expect(evs[0]).toMatchObject({ _tone: 'open', open: 2 });
+    expect(evs[0]._crew).toEqual([]);
   });
 
   it('expands recurrence across the day list and keys assignments per date', () => {
@@ -56,8 +57,8 @@ describe('buildPositionEvents', () => {
     const assign = { [`s1@${MON}`]: [emp('a')], [`s1@${TUE}`]: [emp('b')] };
     const evs = buildPositionEvents(pos, [MON, TUE, WED], assign);
     const byDate = Object.fromEntries(evs.map((e) => [e.date, e]));
-    expect(byDate[MON]._lines).toEqual(['a']);
-    expect(byDate[TUE]._lines).toEqual(['b']);
+    expect(names(byDate[MON])).toEqual(['a']);
+    expect(names(byDate[TUE])).toEqual(['b']);
     expect(byDate[WED]._tone).toBe('open'); // recurs but nobody assigned that day
   });
 

@@ -678,22 +678,22 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onCol
                 const w = 100 / o._lanes, left = o._lane * w;
                 const ghost = o.item._preview;
                 const resizable = !readOnly && !ghost && o.seg === 'full' && !o.item.allDay;
-                const segs = o.item._segments;
                 return (
-                  <div key={o.key} className={`evt tone-${toneCls(o.item, kind)} ${o.seg !== 'full' ? 'seg-'+o.seg : ''} ${ghost ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''} ${segs ? 'has-strip' : ''}`}
+                  <div key={o.key} className={`evt tone-${toneCls(o.item, kind)} ${o.seg !== 'full' ? 'seg-'+o.seg : ''} ${ghost ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''}`}
                        title={o.item._title || undefined}
                        onMouseDown={readOnly || ghost ? undefined : (e) => onEvtDown(e, o, 'move')}
-                       style={{ top, height: h, left: `calc(${left}% + 3px)`, width: `calc(${w}% - 6px)`, cursor: readOnly || ghost ? 'default' : 'grab', ...(!segs && o.item._color ? { borderLeftColor: o.item._color } : null) }}>
-                    {segs && <div className="evt-strip">{segs.map((c, si) => <span key={si} style={{ background: c }} />)}</div>}
+                       style={{ top, height: h, left: `calc(${left}% + 3px)`, width: `calc(${w}% - 6px)`, cursor: readOnly || ghost ? 'default' : 'grab', ...(o.item._color ? { borderLeftColor: o.item._color } : null) }}>
                     {resizable && <div className="evt-handle n" onMouseDown={(e) => onEvtDown(e, o, 'n')}></div>}
                     {o.item.repeat !== 'none' && <span className="rep"><Ic.repeat/></span>}
                     {o.seg === 'tail' && <span className="ovn" title={t('calendar.continuesPrev')}><Ic.chevD size={11} style={{ transform: 'rotate(180deg)' }}/></span>}
                     {o.seg === 'head' && <span className="ovn" title={t('calendar.continuesNext')}><Ic.chevD size={11}/></span>}
                     <span className="et mono">{o.item._timeLabel || `${SS.minLabel(o.item.start)}–${SS.minLabel(o.item.end)}`}</span>
-                    {o.item._lines
-                      ? <span className="evt-names">
-                          {o.item._lines.map((n, ni) => <span key={ni} className="evt-name">{n}</span>)}
-                          {o.item._openLabel && <span className="evt-open">{o.item._openLabel}</span>}
+                    {o.item._crew
+                      ? <span className="evt-people">
+                          {o.item._crew.map((p, pi) => (
+                            <span key={pi} className="evt-person"><span className="evt-av" style={{ background: p.color }}>{p.initials}</span><span className="asg-name">{p.name}</span></span>
+                          ))}
+                          {o.item._openLabel && <span className="asg-open">{o.item._openLabel}</span>}
                         </span>
                       : <span className="el">{labelOf(o.item, kind, t)}</span>}
                     {resizable && <div className="evt-handle s" onMouseDown={(e) => onEvtDown(e, o, 's')}></div>}
@@ -729,19 +729,21 @@ function MonthGrid({ dayList, anchor, items, kind, todayISO, onDayClick, onEvtDo
                  onClick={readOnly ? undefined : (e) => onDayClick(d, e.currentTarget)} style={readOnly ? { cursor: 'default' } : null}>
               <span className="mg-num">{dt.getDate()}</span>
               {shown.map((o) => {
-                const segs = o.item._segments;
-                const multi = !!o.item._lines;
+                const multi = !!o.item._crew;
                 return (
-                <div key={o.key} className={`mg-evt ${o.item.allDay?'allday':''} tone-${toneCls(o.item, kind)} ${o.item._preview ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''} ${multi ? 'multi' : ''} ${segs ? 'has-strip' : ''}`}
+                <div key={o.key} className={`mg-evt ${o.item.allDay?'allday':''} tone-${toneCls(o.item, kind)} ${o.item._preview ? 'dragging' : ''} ${o.item._invalid ? 'invalid' : ''} ${multi ? 'multi' : ''}`}
                      title={o.item._title || undefined}
                      onMouseDown={readOnly || o.item._preview ? undefined : (e) => onEvtDown(e, o, 'move')}
-                     onClick={(e) => e.stopPropagation()} style={{ cursor: readOnly || o.item._preview ? 'default' : 'grab', ...(!segs && o.item._color ? { borderLeftColor: o.item._color } : null) }}>
-                  {segs && <div className="evt-strip">{segs.map((c, si) => <span key={si} style={{ background: c }} />)}</div>}
+                     onClick={(e) => e.stopPropagation()} style={{ cursor: readOnly || o.item._preview ? 'default' : 'grab', ...(o.item._color ? { borderLeftColor: o.item._color } : null) }}>
                   {multi ? (
                     <>
                       <span className="mono mg-time">{o.item._timeLabel || `${SS.minLabel(o.item.start)}–${SS.minLabel(o.item.end)}`}</span>
-                      {o.item._lines.map((n, ni) => <span key={ni} className="mg-name">{n}</span>)}
-                      {o.item._openLabel && <span className="mg-open">{o.item._openLabel}</span>}
+                      <span className="evt-people">
+                        {o.item._crew.map((p, pi) => (
+                          <span key={pi} className="evt-person"><span className="evt-av" style={{ background: p.color }}>{p.initials}</span><span className="asg-name">{p.name}</span></span>
+                        ))}
+                        {o.item._openLabel && <span className="asg-open">{o.item._openLabel}</span>}
+                      </span>
                     </>
                   ) : (
                     <>
