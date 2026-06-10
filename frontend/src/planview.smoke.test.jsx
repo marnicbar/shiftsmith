@@ -1,7 +1,7 @@
-// Smoke test: the Shift Plan tab's scope selector switches between the timeline
-// overview and the two read-only assignment calendars.
+// Smoke test: PlanView renders the right sub-view for each scope (the scope
+// selector itself lives in the top nav's morphing Shift Plan tab).
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { PlanView } from './planview.jsx';
 
 // Anchor the fixture shift on the real "today" so it falls inside the calendars'
@@ -19,9 +19,9 @@ const positions = [{
 }];
 const assign = { [`s1@${TODAY}`]: [employees[0]] };
 
-function renderPlan() {
+function renderPlan(scope) {
   return render(
-    <PlanView employees={employees} positions={positions} assign={assign}
+    <PlanView scope={scope} employees={employees} positions={positions} assign={assign}
       selEmp="e1" setSelEmp={vi.fn()} selPos="p1" setSelPos={vi.fn()}
       groupOrder={[]} initialMode="week" overrides={{}} setOverrides={vi.fn()}
       sched={{ total: 2, staffed: 1, unassigned: 1, solverStatus: 'NOT_SOLVING' }}
@@ -29,16 +29,14 @@ function renderPlan() {
   );
 }
 
-describe('PlanView scope selector', () => {
-  it('starts on the timeline overview', () => {
-    renderPlan();
-    // The overview carries the solver controls; the calendars do not.
+describe('PlanView scopes', () => {
+  it('overview renders the timeline with solver controls', () => {
+    renderPlan('overview');
     expect(screen.getByRole('button', { name: /Solve now/ })).toBeInTheDocument();
   });
 
-  it('switches to the per-person calendar', () => {
-    renderPlan();
-    fireEvent.click(screen.getByRole('button', { name: 'Personnel' }));
+  it('personnel renders the read-only per-person calendar', () => {
+    renderPlan('personnel');
     expect(screen.getAllByText('Alice Ng').length).toBeGreaterThan(0); // rail + summary
     expect(screen.getByText('Assigned shifts')).toBeInTheDocument();
     // read-only: no overview solver controls, no calendar "Add" button
@@ -46,16 +44,10 @@ describe('PlanView scope selector', () => {
     expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
   });
 
-  it('switches to the per-position calendar and surfaces open slots', () => {
-    renderPlan();
-    fireEvent.click(screen.getByRole('button', { name: 'Positions' }));
+  it('positions renders one combined entry with the assignee, a from–to time and an open line', () => {
+    renderPlan('positions');
     expect(screen.getByText('Filled slots')).toBeInTheDocument();
     expect(screen.getByText('Open slots')).toBeInTheDocument();
-  });
-
-  it('renders one combined entry with the assignee, a from–to time and an open line', () => {
-    renderPlan();
-    fireEvent.click(screen.getByRole('button', { name: 'Positions' }));
     // headcount 2, one assignee → a single event listing the name, the full time
     // range (not just the start) and the remaining open slot.
     expect(screen.getAllByText('Alice Ng').length).toBeGreaterThan(0);

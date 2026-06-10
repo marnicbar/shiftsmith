@@ -137,7 +137,8 @@ preferred weekly hours, workload balance. Constraint names must be alphanumeric 
 - `ShiftPlan` renders the solver's assignment map; the `AssignEditor` writes manual
   overrides which sync back as pins.
 - The **Shift Plan tab** is `PlanView` (`planview.jsx`), a scope selector (Overview /
-  Personnel / Positions) rendered next to the day/week control. *Overview* is the
+  Personnel / Positions) owned by the top nav — the Shift Plan tab button *morphs*
+  into the selector while active (`planScope` in `App.jsx`). *Overview* is the
   `ShiftPlan` timeline; *Personnel* and *Positions* are read-only day/week/month
   calendars of the **actual** assignments (`buildPersonEvents` / `buildPositionEvents`
   turn the solver's `assignMap` into concrete events). They reuse the shared `Calendar`

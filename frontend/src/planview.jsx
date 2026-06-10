@@ -91,7 +91,7 @@ export function buildPersonEvents(employee, positions = [], dayList, assign = {}
 
 // --- per-person view --------------------------------------------------------
 
-function PersonSchedule({ employees = [], positions = [], assign, selId, setSelId, nameOrder, scopeSelector }) {
+function PersonSchedule({ employees = [], positions = [], assign, selId, setSelId, nameOrder }) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
   const [view, setView] = useState('week');
@@ -135,11 +135,11 @@ function PersonSchedule({ employees = [], positions = [], assign, selId, setSelI
       </div>
 
       {!emp ? (
-        <ScopeEmpty scopeSelector={scopeSelector} icon={<Ic.users/>} title={t('plan.pickPerson')} body={t('plan.pickPersonBody')} />
+        <ScopeEmpty icon={<Ic.users/>} title={t('plan.pickPerson')} body={t('plan.pickPersonBody')} />
       ) : (
         <>
           <Calendar kind="assign-person" readOnly view={view} onView={setView} anchor={anchor} onAnchor={setAnchor}
-            zoom={zoom} onZoom={setZoom} palette={[]} items={events} headerExtra={scopeSelector}
+            zoom={zoom} onZoom={setZoom} palette={[]} items={events}
             newItem={NEW_ITEM} onCommit={NOOP} onDelete={NOOP} onSplit={NOOP} />
           <div className="config">
             <div className="pad">
@@ -166,7 +166,7 @@ function PersonSchedule({ employees = [], positions = [], assign, selId, setSelI
 
 // --- per-position view ------------------------------------------------------
 
-function PositionSchedule({ positions = [], assign, selId, setSelId, nameOrder, scopeSelector }) {
+function PositionSchedule({ positions = [], assign, selId, setSelId, nameOrder }) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
   const [view, setView] = useState('week');
@@ -208,11 +208,11 @@ function PositionSchedule({ positions = [], assign, selId, setSelId, nameOrder, 
       </div>
 
       {!pos ? (
-        <ScopeEmpty scopeSelector={scopeSelector} icon={<Ic.briefcase/>} title={t('plan.pickPosition')} body={t('plan.pickPositionBody')} />
+        <ScopeEmpty icon={<Ic.briefcase/>} title={t('plan.pickPosition')} body={t('plan.pickPositionBody')} />
       ) : (
         <>
           <Calendar kind="assign-position" readOnly view={view} onView={setView} anchor={anchor} onAnchor={setAnchor}
-            zoom={zoom} onZoom={setZoom} palette={[]} items={events} headerExtra={scopeSelector}
+            zoom={zoom} onZoom={setZoom} palette={[]} items={events}
             newItem={NEW_ITEM} onCommit={NOOP} onDelete={NOOP} onSplit={NOOP} />
           <div className="config">
             <div className="pad">
@@ -237,18 +237,15 @@ function PositionSchedule({ positions = [], assign, selId, setSelId, nameOrder, 
   );
 }
 
-// Empty-state body that still surfaces the scope selector so the user can switch
-// back to the overview when there is nothing to show in this scope.
-function ScopeEmpty({ scopeSelector, icon, title, body }) {
+// Empty-state body for a scope with nothing selected. The scope selector itself
+// lives in the top nav (the morphing Shift Plan tab), so it's always reachable.
+function ScopeEmpty({ icon, title, body }) {
   return (
-    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
-      <div className="cal-toolbar" style={{ justifyContent: 'flex-end' }}>{scopeSelector}</div>
-      <div className="empty-state">
-        <div className="inner">
-          {icon}
-          <div style={{ fontSize: 15, fontWeight: 600 }}>{title}</div>
-          <div className="muted">{body}</div>
-        </div>
+    <div className="empty-state">
+      <div className="inner">
+        {icon}
+        <div style={{ fontSize: 15, fontWeight: 600 }}>{title}</div>
+        <div className="muted">{body}</div>
       </div>
     </div>
   );
@@ -256,29 +253,21 @@ function ScopeEmpty({ scopeSelector, icon, title, body }) {
 
 // --- the tab shell ----------------------------------------------------------
 
+// `scope` ('overview' | 'personnel' | 'positions') is owned by the top nav, where
+// the Shift Plan tab morphs into the scope selector while active.
 export function PlanView(props) {
-  const { t } = useTranslation();
-  const [scope, setScope] = useState('overview');
-  const { employees, positions, assign, selEmp, setSelEmp, selPos, setSelPos, nameOrder } = props;
-
-  const scopeSelector = (
-    <div className="seg" style={{ flexShrink: 0 }}>
-      {['overview', 'personnel', 'positions'].map((s) => (
-        <button key={s} className={scope === s ? 'on' : ''} onClick={() => setScope(s)}>{t(`plan.scope.${s}`)}</button>
-      ))}
-    </div>
-  );
+  const { employees, positions, assign, selEmp, setSelEmp, selPos, setSelPos, nameOrder, scope = 'overview' } = props;
 
   if (scope === 'personnel') {
     return <PersonSchedule employees={employees} positions={positions} assign={assign}
-      selId={selEmp} setSelId={setSelEmp} nameOrder={nameOrder} scopeSelector={scopeSelector} />;
+      selId={selEmp} setSelId={setSelEmp} nameOrder={nameOrder} />;
   }
   if (scope === 'positions') {
     return <PositionSchedule positions={positions} assign={assign}
-      selId={selPos} setSelId={setSelPos} nameOrder={nameOrder} scopeSelector={scopeSelector} />;
+      selId={selPos} setSelId={setSelPos} nameOrder={nameOrder} />;
   }
   return <ShiftPlan employees={employees} positions={positions} groupOrder={props.groupOrder}
     initialMode={props.initialMode} assign={assign} overrides={props.overrides} setOverrides={props.setOverrides}
     sched={props.sched} onSolve={props.onSolve} onPause={props.onPause} focus={props.focus}
-    onFocusConsumed={props.onFocusConsumed} nameOrder={nameOrder} scopeSelector={scopeSelector} />;
+    onFocusConsumed={props.onFocusConsumed} nameOrder={nameOrder} />;
 }

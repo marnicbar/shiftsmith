@@ -557,7 +557,7 @@ function monthDays(anchor) {
 
 function Toolbar(props) {
   const { t } = useTranslation();
-  const { view, onView, anchor, onAnchor, kind, paint, onPaint, onAdd, zoomControls, readOnly, headerExtra } = props;
+  const { view, onView, anchor, onAnchor, kind, paint, onPaint, onAdd, zoomControls, readOnly } = props;
   const monthLabel = anchor.toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' });
   let title = monthLabel, sub = '';
   if (view === 'week') {
@@ -586,7 +586,6 @@ function Toolbar(props) {
           <button onClick={zoomControls.onIn} disabled={!zoomControls.canIn} title={t('calendar.zoomIn')}><Ic.zoomIn size={14}/></button>
         </div>
       )}
-      {headerExtra}
       <div className="seg" style={{ marginRight: 8, flexShrink: 0 }}>
         {['day','week','month'].map((v) => (
           <button key={v} className={view === v ? 'on' : ''} onClick={() => onView(v)}>{t(`calendar.view.${v}`)}</button>
