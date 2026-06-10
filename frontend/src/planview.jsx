@@ -15,6 +15,8 @@ import { ShiftPlan, matchesDay } from './shiftplan.jsx';
 
 const NOOP = () => {};
 const NEW_ITEM = () => ({});
+// Muted fill for an unfilled slot in a position event's split accent bar.
+const OPEN_SEG = 'var(--border-strong)';
 
 // Hours a concrete (non-recurring) event spans, accounting for overnight (end < start).
 function evHours(ev) {
@@ -24,9 +26,11 @@ function evHours(ev) {
 
 // --- pure event builders (exported for tests) -------------------------------
 
-// Read-only calendar events for one position over `dayList`: one event per
-// assigned person on each shift occurrence, plus a single "open" event when the
-// occurrence is understaffed. `assign` is the solver's map `shiftId@date → [emp]`.
+// Read-only calendar events for one position over `dayList`: ONE event per shift
+// occurrence, listing every assigned person (one name per line) plus an "open"
+// line when understaffed. The left accent bar is split into one segment per slot
+// — a colour per assigned person and a muted segment per open slot — so coverage
+// reads at a glance. `assign` is the solver's map `shiftId@date → [emp]`.
 export function buildPositionEvents(position, dayList, assign = {}, { nameOrder = 'first', t } = {}) {
   const out = [];
   if (!position) return out;
@@ -35,24 +39,27 @@ export function buildPositionEvents(position, dayList, assign = {}, { nameOrder 
     for (const d of dayList) {
       if (!matchesDay(sh, d)) continue;
       const crew = assign[`${sh.id}@${d}`] || [];
+      const headcount = Math.max(sh.headcount || 1, crew.length);
+      const open = Math.max(0, headcount - crew.length);
       const time = `${SS.minLabel(sh.start)}–${SS.minLabel(sh.end)}`;
-      crew.forEach((emp, i) => {
-        const name = SS.fullName(emp, nameOrder);
-        out.push({
-          id: `${sh.id}@${d}#${i}`, date: d, start: sh.start, end: sh.end, repeat: 'none', allDay: false,
-          _tone: 'assign', _color: Theme.avatarColor(SS.nameSeed(emp)),
-          _label: name, _title: `${name} · ${sh.name} · ${time}`,
-          emp, shiftId: sh.id, slotIndex: i,
-        });
+      const names = crew.map((e) => SS.fullName(e, nameOrder));
+      // Only show a split bar once at least one person is assigned; a fully open
+      // occurrence keeps the plain amber "open" tone instead.
+      const segments = crew.length
+        ? [...crew.map((e) => Theme.avatarColor(SS.nameSeed(e))), ...Array.from({ length: open }, () => OPEN_SEG)]
+        : null;
+      const title = [sh.name, time, names.join(', '), open ? openLabel(open) : '']
+        .filter(Boolean).join(' · ');
+      out.push({
+        id: `${sh.id}@${d}`, date: d, start: sh.start, end: sh.end, repeat: 'none', allDay: false,
+        _tone: crew.length ? 'assign' : 'open',
+        _segments: segments,
+        _timeLabel: time,
+        _lines: names,
+        _openLabel: open > 0 ? openLabel(open) : null,
+        _title: title,
+        crew, open, shiftId: sh.id,
       });
-      const open = Math.max(0, (sh.headcount || 1) - crew.length);
-      if (open > 0) {
-        out.push({
-          id: `${sh.id}@${d}#open`, date: d, start: sh.start, end: sh.end, repeat: 'none', allDay: false,
-          _tone: 'open', _label: openLabel(open), _title: `${sh.name} · ${time} · ${openLabel(open)}`,
-          open, shiftId: sh.id,
-        });
-      }
     }
   }
   return out;
@@ -174,7 +181,7 @@ function PositionSchedule({ positions = [], assign, selId, setSelId, nameOrder, 
     () => (pos ? buildPositionEvents(pos, dayList, assign, { nameOrder, t }) : []),
     [pos, dayList, assign, nameOrder, t],
   );
-  const filled = events.filter((e) => e._tone === 'assign').length;
+  const filled = events.reduce((a, e) => a + (e.crew ? e.crew.length : 0), 0);
   const open = events.reduce((a, e) => a + (e.open || 0), 0);
 
   return (

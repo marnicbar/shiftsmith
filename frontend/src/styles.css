@@ -132,6 +132,22 @@ button { font-family: inherit; }
 .tone-assign { --tone: var(--accent);       --tone-soft: var(--accent-soft); --tone-strong: var(--accent-strong); }
 .tone-open   { --tone: var(--amber-solid);  --tone-soft: var(--amber-soft);  --tone-strong: var(--amber-strong); }
 .evt.tone-open, .mg-evt.tone-open { border-left-style: dashed; }
+/* Split accent bar: one segment per slot (a colour per assigned person, muted for
+   open slots), replacing the single left border on a combined assignment event. */
+.evt-segbar { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; display: flex; flex-direction: column; overflow: hidden; }
+.evt-segbar span { flex: 1 1 0; min-height: 0; }
+.evt .evt-segbar { border-radius: 7px 0 0 7px; }
+.mg-evt .evt-segbar { border-radius: 5px 0 0 5px; }
+.evt.has-segbar { border-left: 0; padding-left: 11px; }
+.mg-evt.has-segbar { border-left: 0; padding-left: 9px; position: relative; }
+/* Combined assignment event: time on its own line, then one name per line. */
+.evt .evt-names { display: flex; flex-direction: column; min-width: 0; }
+.evt .evt-name, .evt .evt-open { font-size: 11px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.evt .evt-name { font-weight: 500; }
+.evt .evt-open, .mg-evt .mg-open { color: var(--amber-strong); font-weight: 500; }
+.mg-evt.multi { flex-direction: column; align-items: stretch; white-space: normal; gap: 1px; position: relative; }
+.mg-evt .mg-time { font-size: 10px; opacity: .85; }
+.mg-evt .mg-name, .mg-evt .mg-open { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- Generic layout ---------- */
 .view { flex: 1; min-height: 0; display: flex; overflow: hidden; }
