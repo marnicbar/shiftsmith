@@ -9,7 +9,25 @@ function parseISO(s) { const [y,m,dd] = s.split('-').map(Number); return new Dat
 function minLabel(m) { return `${pad(Math.floor(m/60))}:${pad(m%60)}`; }
 function min12(m) { let h = Math.floor(m/60); const mm = m%60; const ap = h < 12 ? 'AM':'PM'; h = h%12 || 12; return mm ? `${h}:${pad(mm)} ${ap}` : `${h} ${ap}`; }
 
-let _uid = 1; const uid = (p) => `${p}${_uid++}`;
+// Entity IDs must be collision-free across page reloads and across concurrently
+// open tabs (the counter-based scheme reset to 1 on every load, so a reload would
+// re-mint `e1` over the `e1` already loaded from the backend and corrupt records).
+// We mint a random UUID per id instead. `crypto.randomUUID` needs a secure context,
+// which a LAN deployment served over plain HTTP does not have, so we fall back to
+// `crypto.getRandomValues` (available in insecure contexts and jsdom) and finally
+// to `Math.random` for ancient environments. The prefix is kept for readability.
+function randomUUID() {
+  const c = typeof crypto !== 'undefined' ? crypto : null;
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+  const b = new Uint8Array(16);
+  if (c && typeof c.getRandomValues === 'function') c.getRandomValues(b);
+  else for (let i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+  b[6] = (b[6] & 0x0f) | 0x40; // version 4
+  b[8] = (b[8] & 0x3f) | 0x80; // variant 10
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0'));
+  return `${h[0]}${h[1]}${h[2]}${h[3]}-${h[4]}${h[5]}-${h[6]}${h[7]}-${h[8]}${h[9]}-${h[10]}${h[11]}${h[12]}${h[13]}${h[14]}${h[15]}`;
+}
+const uid = (p) => `${p}${randomUUID()}`;
 
 const shiftSkills = (s) => s.skills ? s.skills : (s.skill ? [s.skill] : []);
 
