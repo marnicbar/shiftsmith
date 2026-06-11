@@ -8,6 +8,7 @@ import dev.shiftsmith.rest.dto.ApiError;
 import dev.shiftsmith.rest.dto.ProblemDTO;
 import dev.shiftsmith.rest.dto.ScheduleDTO;
 import dev.shiftsmith.service.ScheduleService;
+import io.smallrye.common.annotation.Blocking;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.inject.Inject;
@@ -45,11 +46,18 @@ public class ScheduleResource {
      *
      * <p>Snapshots are rebuilt off the solver thread (via {@code emitOn}) so the
      * solver is never blocked by serialization or slow clients.
+     *
+     * <p>{@code @Blocking} so the request runs on a worker thread: the shared
+     * {@link dev.shiftsmith.auth.AuthFilter} performs a transactional DB lookup
+     * (the seeded-password check), which is illegal on the reactive IO thread a
+     * {@code Multi}-returning endpoint would otherwise use. The streaming itself
+     * stays off the worker thread — each snapshot is emitted via {@code emitOn}.
      */
     @GET
     @Path("/stream")
     @Produces(MediaType.SERVER_SENT_EVENTS)
     @RestStreamElementType(MediaType.APPLICATION_JSON)
+    @Blocking
     public Multi<ScheduleDTO> stream() {
         Multi<ScheduleDTO> initial = Multi.createFrom().item(service::snapshotDTO);
 
