@@ -90,7 +90,14 @@ export default function App() {
   // Solver result + status (read-only, refreshed by polling).
   const [sched, setSched] = useState({ assignments: [], solverStatus: 'NOT_SOLVING', score: null, total: 0, staffed: 0, unassigned: 0 });
   const [loaded, setLoaded] = useState(false);
+  // Banner state: { text, validation }. A validation error carries the backend's
+  // explanation (e.g. "the solve window is too long") and shows it directly; any
+  // other failure is treated as a connectivity problem.
   const [error, setError] = useState(null);
+  const reportError = useCallback((e) => {
+    if (e && e.serverMessage) setError({ text: e.serverMessage, validation: true });
+    else setError({ text: e?.message ?? String(e), validation: false });
+  }, []);
   const [notice, setNotice] = useState(null);
 
   // Auth gate: 'checking' until we know, then 'in' (show the app) or 'out' (show login).
@@ -149,9 +156,9 @@ export default function App() {
         setMeta(d);
         lastSyncRef.current = JSON.stringify({ employees: d.employees, positions: d.positions, settings: d.settings, overrides: d.overrides || {} });
         setLoaded(true);
-      } catch (e) { setError(e.message); }
+      } catch (e) { reportError(e); }
     })();
-  }, [authState, mustChangePassword, setMeta]);
+  }, [authState, mustChangePassword, setMeta, reportError]);
 
   // Live updates: subscribe to the backend's SSE stream once loaded. The solver's
   // progress, our own edits and other clients' edits all arrive here, so the
@@ -168,11 +175,11 @@ export default function App() {
     const ser = JSON.stringify(problem);
     if (ser === lastSyncRef.current) return;
     const t = setTimeout(async () => {
-      try { await api.putProblem(problem); lastSyncRef.current = ser; }
-      catch (e) { setError(e.message); }
+      try { await api.putProblem(problem); lastSyncRef.current = ser; setError(null); }
+      catch (e) { reportError(e); }
     }, 600);
     return () => clearTimeout(t);
-  }, [loaded, employees, positions, settings, overrides]);
+  }, [loaded, employees, positions, settings, overrides, reportError]);
 
   const snap = SNAP_MAP[prefs.snapLabel] ?? 15;
   const newFlow = FLOW_MAP[prefs.newFlowLabel] ?? 'quick';
@@ -249,8 +256,8 @@ export default function App() {
   // Jump from the dashboard's "needs attention" list straight to a shift in the plan.
   const openShift = useCallback((shiftId, date) => { setFocusShift({ shiftId, date }); setPlanScope('overview'); setTab('shiftplan'); }, []);
 
-  async function solveNow() { try { await api.startSolving(); } catch (e) { setError(e.message); } }
-  async function pauseSolver() { try { await api.stopSolving(); } catch (e) { setError(e.message); } }
+  async function solveNow() { try { await api.startSolving(); } catch (e) { reportError(e); } }
+  async function pauseSolver() { try { await api.stopSolving(); } catch (e) { reportError(e); } }
 
   if (authState === 'checking') {
     return <div className="app"><div className="loading">{t('app.loading')}</div></div>;
@@ -317,7 +324,13 @@ export default function App() {
         </div>
       </div>
 
-      {error && <div className="api-error">{t('app.backendError', { error })}</div>}
+      {error && (
+        <div className="api-error">
+          {error.validation
+            ? t('app.invalidInput', { error: error.text })
+            : t('app.backendError', { error: error.text })}
+        </div>
+      )}
       {notice && <div className="api-notice">{notice}<button className="notice-x" onClick={() => setNotice(null)} title={t('common.dismiss')}><Ic.x size={14}/></button></div>}
 
       {tab === 'dashboard' && <Dashboard employees={employees} positions={positions} assign={assignMap} onOpenShift={openShift} />}

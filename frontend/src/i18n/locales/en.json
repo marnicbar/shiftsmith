@@ -38,6 +38,7 @@
   "app": {
     "loading": "Loading schedule…",
     "backendError": "Backend error: {{error}}. Is the backend running on :8080?",
+    "invalidInput": "Couldn't save your changes: {{error}}",
     "tightenedRules": "Tightened personal rules for {{names}} to satisfy the new system limits.",
     "namesMore": "{{names}} +{{count}} more"
   },
