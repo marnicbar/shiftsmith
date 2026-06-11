@@ -55,16 +55,29 @@ and their tests — in lock-step.
 React SPA → Quarkus REST → Timefold Solver, with PostgreSQL for persistence. In
 dev the Vite server proxies `/api/*` to Quarkus; in the production image Quarkus
 serves the built SPA itself (same origin, no proxy). `ScheduleService` keeps the working problem in memory (the
-solver needs it there) but **persists it to Postgres as a single JSONB
-document** so it survives restarts. On boot it rehydrates from the DB; an empty
+solver needs it there) but **persists it to Postgres as normalized, time-indexed
+rows** so it survives restarts. On boot it rehydrates from the DB; an empty
 database starts with an empty problem (no demo data).
 
 ### Persistence (`persistence` package)
-The whole editable problem (employees, positions, settings, overrides) is stored
-as one JSONB row via `ProblemEntity` (`@JdbcTypeCode(SqlTypes.JSON)`) behind
-`ProblemStore`. It's a document, not normalised tables: the model is deeply
-nested, synced atomically, and several domain classes carry Timefold annotations
-that don't mix with JPA. `ProblemDocument` is the serialized shape.
+The editable problem is stored in **normalized tables** (issue #47, Phase 1):
+`settings`, `skill`, `employee`(+`employee_skill`), `availability_block`
+(+`availability_block_exception`), `work_rule`(+`work_rule_change`, with a NULL
+`employee_id` for a global rule), `position`(+`position_skill`),
+`shift_template`(+`_skill`/`_exception`/`_preferred`), and the core `assignment`
+table (one row per concrete slot; in this phase it holds the manual pins migrated
+from the old `overrides` map). Schema is owned by **Flyway** (`db/migration`,
+`migrate-at-start`, `baseline-on-migrate`); Hibernate only `validate`s it (no
+auto-DDL). The two models stay separate: the Timefold-annotated domain classes
+(`domain/`) and the JPA entities (`persistence/entity/`), bridged by the pure,
+unit-tested `ProblemMapper`. `ProblemStore.load()/save()` still speak the
+document-shaped `ProblemDocument` (the in-memory/API shape) but read/write rows
+underneath; on first boot after the migration an existing single-row JSONB
+`problem` document is backfilled into rows once (guarded by the normalized side
+being empty). The legacy `problem`/`ProblemEntity` blob path is kept only as that
+backfill source and is removed in a later phase. Granular per-resource APIs,
+windowed reads, optimistic concurrency, SSE deltas and bounded solver scope are
+the subsequent phases of #47.
 - Dev (`mvn quarkus:dev`): Quarkus Dev Services auto-starts a throwaway Postgres
   (needs Docker). Prod/compose: connects to the `db` service via
   `QUARKUS_DATASOURCE_*` env (see `application.properties` `%prod` keys).
