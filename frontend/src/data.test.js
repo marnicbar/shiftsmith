@@ -147,3 +147,34 @@ describe('SS.compareNames', () => {
     expect(SS.compareNames(a, b, 'last')).toBeGreaterThan(0); // Zane after Apex
   });
 });
+
+describe('SS.horizonDays', () => {
+  const TODAY = new Date(2026, 5, 3); // Wednesday 2026-06-03, matches the backend test anchor
+
+  it('day window spans 1 + count days', () => {
+    expect(SS.horizonDays({ horizonUnit: 'day', horizonCount: 1 }, TODAY)).toBe(2);
+    expect(SS.horizonDays({ horizonUnit: 'day', horizonCount: 3 }, TODAY)).toBe(4);
+  });
+
+  it('week window ends at the Monday after the counted weeks', () => {
+    // start 06-03 → end 06-15 (week+1) = 12 days; week+2 = 06-22 = 19 days
+    expect(SS.horizonDays({ horizonUnit: 'week', horizonCount: 1 }, TODAY)).toBe(12);
+    expect(SS.horizonDays({ horizonUnit: 'week', horizonCount: 2 }, TODAY)).toBe(19);
+  });
+
+  it('month window ends at the first of the month after the counted months', () => {
+    // start 06-03 → end 08-01 = 59 days; +2 months → 09-01 = 90 days
+    expect(SS.horizonDays({ horizonUnit: 'month', horizonCount: 1 }, TODAY)).toBe(59);
+    expect(SS.horizonDays({ horizonUnit: 'month', horizonCount: 2 }, TODAY)).toBe(90);
+  });
+
+  it('clamps a non-positive count to one', () => {
+    expect(SS.horizonDays({ horizonUnit: 'week', horizonCount: 0 }, TODAY))
+      .toBe(SS.horizonDays({ horizonUnit: 'week', horizonCount: 1 }, TODAY));
+  });
+
+  it('flags an over-long window against the shared cap', () => {
+    expect(SS.horizonDays({ horizonUnit: 'month', horizonCount: 24 }, TODAY)).toBeGreaterThan(SS.MAX_HORIZON_DAYS);
+    expect(SS.horizonDays({ horizonUnit: 'week', horizonCount: 100 }, TODAY)).toBeLessThanOrEqual(SS.MAX_HORIZON_DAYS);
+  });
+});

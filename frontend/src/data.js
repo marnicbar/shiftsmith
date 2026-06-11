@@ -6,6 +6,28 @@ const isoOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDat
 function startOfWeek(d) { const x = new Date(d); const wd = (x.getDay() + 6) % 7; x.setHours(0,0,0,0); x.setDate(x.getDate() - wd); return x; }
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 function parseISO(s) { const [y,m,dd] = s.split('-').map(Number); return new Date(y, m-1, dd); }
+function startOfDay(d) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
+
+// Length of the solve window in days. MUST mirror the backend's
+// Settings.rawHorizonEnd / horizonStart (dev.shiftsmith.domain.Settings): the
+// window runs from the start of today to the start of the next full unit plus
+// `horizonCount` more units. We check it client-side so an over-long horizon is
+// caught with a localized message before the PUT is rejected with a 400.
+const MAX_HORIZON_DAYS = 732; // ~2 years — keep in lock-step with Settings.MAX_HORIZON_DAYS
+function horizonDays(settings, today = new Date()) {
+  const count = Math.max(1, (settings && settings.horizonCount) || 1);
+  const unit = (settings && settings.horizonUnit) || 'week';
+  const start = startOfDay(today);
+  let end;
+  if (unit === 'day') {
+    end = addDays(start, 1 + count);
+  } else if (unit === 'month') {
+    end = new Date(start.getFullYear(), start.getMonth() + 1 + count, 1);
+  } else { // week (Monday-based, matching the backend)
+    end = addDays(startOfWeek(start), 7 * (1 + count));
+  }
+  return Math.round((end - start) / DAY);
+}
 function minLabel(m) { return `${pad(Math.floor(m/60))}:${pad(m%60)}`; }
 function min12(m) { let h = Math.floor(m/60); const mm = m%60; const ap = h < 12 ? 'AM':'PM'; h = h%12 || 12; return mm ? `${h}:${pad(mm)} ${ap}` : `${h} ${ap}`; }
 
@@ -65,6 +87,6 @@ function reflowPositions(positions, order) {
 
 export const SS = {
   DAY, pad, isoOf, startOfWeek, addDays, parseISO, minLabel, min12, uid,
-  shiftSkills, reflowPositions,
+  shiftSkills, reflowPositions, MAX_HORIZON_DAYS, horizonDays,
   fullName, empInitials, nameSeed, compareNames,
 };

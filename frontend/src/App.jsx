@@ -174,12 +174,20 @@ export default function App() {
     const problem = { employees, positions, settings, overrides };
     const ser = JSON.stringify(problem);
     if (ser === lastSyncRef.current) return;
-    const t = setTimeout(async () => {
+    // Catch an over-long solve window here, with a localized message: the backend
+    // also rejects it (400), but its message isn't translated, so we'd rather
+    // explain it in the user's language and skip the doomed request.
+    const days = SS.horizonDays(settings);
+    if (days > SS.MAX_HORIZON_DAYS) {
+      setError({ text: t('app.horizonTooLong', { days, max: SS.MAX_HORIZON_DAYS }), validation: true });
+      return;
+    }
+    const t0 = setTimeout(async () => {
       try { await api.putProblem(problem); lastSyncRef.current = ser; setError(null); }
       catch (e) { reportError(e); }
     }, 600);
-    return () => clearTimeout(t);
-  }, [loaded, employees, positions, settings, overrides, reportError]);
+    return () => clearTimeout(t0);
+  }, [loaded, employees, positions, settings, overrides, reportError, t]);
 
   const snap = SNAP_MAP[prefs.snapLabel] ?? 15;
   const newFlow = FLOW_MAP[prefs.newFlowLabel] ?? 'quick';

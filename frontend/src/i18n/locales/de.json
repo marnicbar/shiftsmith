@@ -39,6 +39,7 @@
     "loading": "Plan wird geladen…",
     "backendError": "Backend-Fehler: {{error}}. Läuft das Backend auf :8080?",
     "invalidInput": "Änderungen konnten nicht gespeichert werden: {{error}}",
+    "horizonTooLong": "Der Planungszeitraum ist zu lang ({{days}} Tage). Das Maximum sind {{max}} Tage (etwa zwei Jahre).",
     "tightenedRules": "Persönliche Regeln für {{names}} verschärft, um die neuen Systemgrenzen einzuhalten.",
     "namesMore": "{{names}} +{{count}} weitere"
   },
