@@ -81,6 +81,18 @@ class ScheduleExpanderTest {
     }
 
     @Test
+    void overnightTemplateRollsEndIntoTheNextDay() {
+        ShiftTemplate t = template("t1", MON, 1320, 120, 1, "Bar"); // 22:00–02:00
+        List<ShiftAssignment> slots = ScheduleExpander.expand(
+                List.of(positionWith(t)), List.of(), weekWindow, Map.of(), MON);
+        assertThat(slots).hasSize(1);
+        ShiftAssignment a = slots.get(0);
+        assertThat(a.getStart()).isEqualTo(MON.atTime(22, 0));
+        assertThat(a.getEnd()).isEqualTo(MON.plusDays(1).atTime(2, 0)); // forward interval
+        assertThat(a.getDurationHours()).isEqualTo(4.0);
+    }
+
+    @Test
     void overridesPinTheWholeOccurrenceAndAssignListedEmployees() {
         ShiftTemplate t = template("t1", MON, 540, 1020, 2, "Reception");
         Employee mei = employee("mei", "Reception");

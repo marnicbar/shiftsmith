@@ -35,6 +35,15 @@ class ShiftAssignmentTest {
     }
 
     @Test
+    void overnightShiftWrapsEndPastMidnight() {
+        ShiftAssignment a = assignment("a", MON, 1320, 120, null); // 22:00–02:00 next day
+        assertThat(a.getEnd().toLocalDate()).isEqualTo(MON.plusDays(1));
+        assertThat(a.getStartMinutes()).isEqualTo(1320);
+        assertThat(a.getEndMinutes()).isEqualTo(1560);   // 02:00 expressed as 24:00 + 2h
+        assertThat(a.getDurationHours()).isEqualTo(4.0);  // not negative
+    }
+
+    @Test
     void weekStartIsTheMondayOfTheShiftsWeek() {
         ShiftAssignment wed = assignment("a", MON.plusDays(2), 540, 600, null); // Wednesday
         assertThat(wed.getWeekStart()).isEqualTo(MON);

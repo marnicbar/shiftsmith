@@ -114,8 +114,9 @@ public final class Fixtures {
 
     /**
      * A concrete {@link ShiftAssignment} on {@code date} from {@code startMin} to
-     * {@code endMin} (minutes-from-midnight; {@code endMin >= 1440} rolls to the
-     * next day's 00:00, mirroring {@code ScheduleExpander}). Optionally assigned.
+     * {@code endMin} (minutes-from-midnight). An overnight end ({@code endMin <= startMin})
+     * or an end at midnight ({@code endMin >= 1440}) rolls to the next day, mirroring
+     * {@code ScheduleExpander}. Optionally assigned.
      */
     public static ShiftAssignment assignment(String id, LocalDate date, int startMin, int endMin,
                                              Employee assignee, String... requiredSkills) {
@@ -123,7 +124,15 @@ public final class Fixtures {
         a.setId(id);
         a.setDate(date);
         a.setStart(date.atTime(startMin / 60, startMin % 60));
-        a.setEnd(endMin >= 1440 ? date.plusDays(1).atStartOfDay() : date.atTime(endMin / 60, endMin % 60));
+        LocalDateTime end;
+        if (endMin >= 1440) {
+            end = date.plusDays(1).atStartOfDay();
+        } else if (endMin <= startMin) {
+            end = date.plusDays(1).atTime(endMin / 60, endMin % 60);
+        } else {
+            end = date.atTime(endMin / 60, endMin % 60);
+        }
+        a.setEnd(end);
         a.setRequiredSkills(new HashSet<>(Arrays.asList(requiredSkills)));
         a.setPreferredEmployeeIds(new ArrayList<>());
         a.setEmployee(assignee);

@@ -90,6 +90,10 @@ public class Employee {
             if (!match.test(b) || !b.occursOn(d)) continue;
             if (b.isAllDay()) raw.add(new int[]{0, 1440});
             else if (b.getStart() < b.getEnd()) raw.add(new int[]{b.getStart(), b.getEnd()});
+            // An overnight window (start > end) wraps past midnight into the next
+            // day, mirroring how an overnight shift's end minute is expressed
+            // (end + 1440), so such a window stays usable instead of being dropped.
+            else if (b.getStart() > b.getEnd()) raw.add(new int[]{b.getStart(), b.getEnd() + 1440});
         }
         raw.sort(Comparator.comparingInt(r -> r[0]));
         List<int[]> merged = new ArrayList<>();
