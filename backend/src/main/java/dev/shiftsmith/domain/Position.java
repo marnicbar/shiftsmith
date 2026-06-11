@@ -33,8 +33,8 @@ public class Position {
     public void setGroup(String group) { this.group = group; }
 
     public Set<String> getSkills() { return skills; }
-    public void setSkills(Set<String> skills) { this.skills = skills; }
+    public void setSkills(Set<String> skills) { this.skills = skills == null ? new HashSet<>() : skills; }
 
     public List<ShiftTemplate> getShifts() { return shifts; }
-    public void setShifts(List<ShiftTemplate> shifts) { this.shifts = shifts; }
+    public void setShifts(List<ShiftTemplate> shifts) { this.shifts = shifts == null ? new ArrayList<>() : shifts; }
 }

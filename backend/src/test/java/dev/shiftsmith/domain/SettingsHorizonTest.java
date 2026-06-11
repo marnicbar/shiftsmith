@@ -51,4 +51,18 @@ class SettingsHorizonTest {
         assertThat(new Settings("day", -5).horizonEnd(TODAY))
                 .isEqualTo(new Settings("day", 1).horizonEnd(TODAY));
     }
+
+    @Test
+    void overlongWindowIsClampedToTheDurationCeiling() {
+        // A runaway count can't push the window past the ~2-year ceiling.
+        LocalDate cap = TODAY.plusDays(Settings.MAX_HORIZON_DAYS);
+        assertThat(new Settings("month", 1_000_000).horizonEnd(TODAY)).isEqualTo(cap);
+        assertThat(new Settings("day", Integer.MAX_VALUE).horizonEnd(TODAY)).isEqualTo(cap);
+    }
+
+    @Test
+    void windowWithinTheCeilingIsNotClamped() {
+        // ~14 months stays under the cap, so the raw end is returned unchanged.
+        assertThat(new Settings("month", 12).horizonEnd(TODAY)).isEqualTo(LocalDate.of(2027, 7, 1));
+    }
 }

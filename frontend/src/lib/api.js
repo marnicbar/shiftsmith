@@ -39,7 +39,20 @@ async function request(url, options = {}) {
     if (onUnauthorized) onUnauthorized();
     throw new Error(`${options.method ?? 'GET'} ${url} failed: 401`);
   }
-  if (!res.ok) throw new Error(`${options.method ?? 'GET'} ${url} failed: ${res.status}`);
+  if (!res.ok) {
+    // Surface the server's error envelope ({ error: "..." }) when present — e.g. a
+    // 400 validation message — so the UI can explain *why* the request was rejected
+    // instead of falling back to a bare status / "is the backend running?" notice.
+    let serverMessage = null;
+    try {
+      const body = await res.json();
+      if (body && typeof body.error === 'string') serverMessage = body.error;
+    } catch { /* empty or non-JSON body */ }
+    const err = new Error(serverMessage || `${options.method ?? 'GET'} ${url} failed: ${res.status}`);
+    err.status = res.status;
+    err.serverMessage = serverMessage;
+    throw err;
+  }
   if (res.status === 204) return null;
   return res.json();
 }

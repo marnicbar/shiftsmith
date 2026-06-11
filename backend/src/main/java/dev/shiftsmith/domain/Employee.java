@@ -202,13 +202,16 @@ public class Employee {
     public void setContract(int contract) { this.contract = contract; }
 
     public Set<String> getSkills() { return skills; }
-    public void setSkills(Set<String> skills) { this.skills = skills; }
+    // Normalize an explicit JSON null to an empty set: the solver thread reads
+    // skills unguarded (e.g. containsAll in the constraint provider), so a null
+    // here would NPE the solver, not the request.
+    public void setSkills(Set<String> skills) { this.skills = skills == null ? new HashSet<>() : skills; }
 
     public List<Block> getBlocks() { return blocks; }
-    public void setBlocks(List<Block> blocks) { this.blocks = blocks; }
+    public void setBlocks(List<Block> blocks) { this.blocks = blocks == null ? new ArrayList<>() : blocks; }
 
     public List<Rule> getRules() { return rules; }
-    public void setRules(List<Rule> rules) { this.rules = rules; }
+    public void setRules(List<Rule> rules) { this.rules = rules == null ? new ArrayList<>() : rules; }
 
     @JsonIgnore
     public List<Rule> getGlobalRules() { return globalRules; }

@@ -120,6 +120,20 @@ describe('error handling', () => {
     mockFetch({ ok: false, status: 500, json: async () => ({}) });
     await expect(api.getSchedule()).rejects.toThrow(/500/);
   });
+
+  it('surfaces the server error message and status on a rejected PUT', async () => {
+    mockFetch({ ok: false, status: 400, json: async () => ({ error: 'The solve window is too long' }) });
+    await expect(api.putProblem({})).rejects.toMatchObject({
+      message: 'The solve window is too long',
+      serverMessage: 'The solve window is too long',
+      status: 400,
+    });
+  });
+
+  it('falls back to the status when the error body carries no message', async () => {
+    mockFetch({ ok: false, status: 400, json: async () => ({}) });
+    await expect(api.putProblem({})).rejects.toMatchObject({ status: 400, serverMessage: null });
+  });
 });
 
 describe('subscribeSchedule (SSE)', () => {
