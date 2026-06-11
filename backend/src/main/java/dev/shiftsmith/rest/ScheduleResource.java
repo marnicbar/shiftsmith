@@ -2,6 +2,7 @@ package dev.shiftsmith.rest;
 
 import dev.shiftsmith.domain.CalendarOverlap;
 import dev.shiftsmith.domain.DuplicateId;
+import dev.shiftsmith.domain.ProblemValidation;
 import dev.shiftsmith.realtime.ScheduleBroadcaster;
 import dev.shiftsmith.rest.dto.ApiError;
 import dev.shiftsmith.rest.dto.ProblemDTO;
@@ -79,6 +80,12 @@ public class ScheduleResource {
         if (conflict.isPresent()) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(new ApiError(conflict.get()))
+                    .build();
+        }
+        Optional<String> invalid = ProblemValidation.firstError(dto.employees, dto.positions, dto.settings);
+        if (invalid.isPresent()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new ApiError(invalid.get()))
                     .build();
         }
         service.replaceProblem(dto.employees, dto.positions, dto.settings, dto.overrides);

@@ -51,7 +51,7 @@ public class ShiftTemplate {
     public void setEnd(int end) { this.end = end; }
 
     public Set<String> getSkills() { return skills; }
-    public void setSkills(Set<String> skills) { this.skills = skills; }
+    public void setSkills(Set<String> skills) { this.skills = skills == null ? new HashSet<>() : skills; }
 
     public int getHeadcount() { return headcount; }
     public void setHeadcount(int headcount) { this.headcount = headcount; }
@@ -60,7 +60,7 @@ public class ShiftTemplate {
     public void setRepeat(String repeat) { this.repeat = repeat; }
 
     public List<String> getPreferred() { return preferred; }
-    public void setPreferred(List<String> preferred) { this.preferred = preferred; }
+    public void setPreferred(List<String> preferred) { this.preferred = preferred == null ? new ArrayList<>() : preferred; }
 
     public LocalDate getUntil() { return until; }
     public void setUntil(LocalDate until) { this.until = until; }

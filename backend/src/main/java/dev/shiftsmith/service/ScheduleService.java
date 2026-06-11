@@ -78,12 +78,24 @@ public class ScheduleService {
             persist();
             LOG.info("Fresh database — starting with an empty problem");
         }
-        startSolving();
+        // A document persisted before validation existed could still be poison. Never
+        // let it abort startup: serve the loaded-but-unsolved state and let the next
+        // valid edit fix it, instead of bricking every boot.
+        try {
+            startSolving();
+        } catch (Exception e) {
+            LOG.error("Loaded problem could not be solved at startup; serving it unsolved", e);
+        }
     }
 
     // --- problem snapshot ------------------------------------------------
 
     private Schedule buildProblem() {
+        return buildProblem(employees, positions, settings, overrides);
+    }
+
+    private static Schedule buildProblem(List<Employee> employees, List<Position> positions,
+                                         Settings settings, Map<String, List<String>> overrides) {
         // Global working-time rules apply to everyone as defaults; hand them to each
         // employee so the constraints fall back to them where there's no personal rule.
         List<dev.shiftsmith.domain.Rule> global = settings.getGlobalRules();
@@ -158,6 +170,16 @@ public class ScheduleService {
      */
     public synchronized void replaceProblem(List<Employee> newEmployees, List<Position> newPositions,
                                             Settings newSettings, Map<String, List<String>> newOverrides) {
+        // Resolve the candidate state (a null field leaves the current value untouched)
+        // and trial-build it *before* committing. Expansion is what catches anything the
+        // REST validator didn't, so by building first we never persist a document that
+        // would throw — which would otherwise re-throw on the next boot and brick startup.
+        List<Employee> nextEmployees = newEmployees != null ? newEmployees : employees;
+        List<Position> nextPositions = newPositions != null ? newPositions : positions;
+        Settings nextSettings = newSettings != null ? newSettings : settings;
+        Map<String, List<String>> nextOverrides = newOverrides != null ? newOverrides : overrides;
+        buildProblem(nextEmployees, nextPositions, nextSettings, nextOverrides);
+
         if (newEmployees != null) { employees.clear(); employees.addAll(newEmployees); }
         if (newPositions != null) { positions.clear(); positions.addAll(newPositions); }
         if (newSettings != null) { settings = newSettings; }

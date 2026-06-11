@@ -48,7 +48,9 @@ public class Settings {
 
     /** Exclusive last day of the solve window. */
     public LocalDate horizonEnd(LocalDate today) {
-        int count = Math.max(1, horizonCount);
+        // Clamp to a sane band even if a legacy/corrupt document slipped past the
+        // API validator, so the day-by-day expansion loop can never run away.
+        int count = Math.min(ProblemValidation.MAX_HORIZON_COUNT, Math.max(1, horizonCount));
         return switch (horizonUnit == null ? "week" : horizonUnit) {
             case "day" -> today.plusDays(1).plusDays(count);
             case "month" -> today.withDayOfMonth(1).plusMonths(1).plusMonths(count);
@@ -66,8 +68,8 @@ public class Settings {
     public void setHorizonCount(int horizonCount) { this.horizonCount = horizonCount; }
 
     public List<String> getSkills() { return skills; }
-    public void setSkills(List<String> skills) { this.skills = skills; }
+    public void setSkills(List<String> skills) { this.skills = skills == null ? new ArrayList<>() : skills; }
 
     public List<Rule> getGlobalRules() { return globalRules; }
-    public void setGlobalRules(List<Rule> globalRules) { this.globalRules = globalRules; }
+    public void setGlobalRules(List<Rule> globalRules) { this.globalRules = globalRules == null ? new ArrayList<>() : globalRules; }
 }
