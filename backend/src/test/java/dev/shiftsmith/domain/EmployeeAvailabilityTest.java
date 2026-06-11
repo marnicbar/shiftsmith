@@ -55,6 +55,25 @@ class EmployeeAvailabilityTest {
         assertThat(e.isAvailableFor(D, 540, 960)).isFalse(); // 09:00–16:00 crosses the gap
     }
 
+    @Test
+    void overnightWindowWrapsPastMidnightInsteadOfBeingDropped() {
+        Employee e = employee("e1");
+        e.getBlocks().add(window("pref", D, 1320, 120)); // 22:00 → 02:00 next day
+        // The window is usable, not dropped: it spans [1320, 1560] in wrapped minutes.
+        assertThat(e.availableWindows(D)).hasSize(1);
+        assertThat(e.isAvailableFor(D, 1320, 1560)).isTrue();  // 22:00–02:00 fits exactly
+        assertThat(e.isAvailableFor(D, 1380, 1500)).isTrue();  // 23:00–01:00 fits inside
+        assertThat(e.isAvailableFor(D, 1260, 1560)).isFalse(); // starts 21:00, before window
+    }
+
+    @Test
+    void overnightPreferredMinutesCountTheWrappedOverlap() {
+        Employee e = employee("e1");
+        e.getBlocks().add(window("pref", D, 1320, 120)); // 22:00 → 02:00 preferred
+        // shift 23:00–02:00 → 23:00–02:00 (180 min) all inside the wrapped window
+        assertThat(e.preferredMinutes(D, 1380, 1560)).isEqualTo(180);
+    }
+
     // --- preferred / undesired minutes ----------------------------------
 
     @Test

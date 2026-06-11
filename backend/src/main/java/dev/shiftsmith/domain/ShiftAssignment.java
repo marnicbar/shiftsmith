@@ -86,9 +86,12 @@ public class ShiftAssignment {
 
     @JsonIgnore
     public int getEndMinutes() {
-        // end may roll to the next day's 00:00 (template end == 1440)
-        if (end.toLocalDate().isAfter(date)) return 1440;
-        return end.getHour() * 60 + end.getMinute();
+        // An overnight shift's end lands on a later calendar day; express it as
+        // minutes past this slot's own midnight so it stays after the start. A
+        // 22:00–24:00 shift reports 1440, a 22:00–02:00 shift reports 1560 — both
+        // consistent with how availability windows wrap an overnight block.
+        int dayOffset = (int) (end.toLocalDate().toEpochDay() - date.toEpochDay());
+        return dayOffset * 1440 + end.getHour() * 60 + end.getMinute();
     }
 
     public boolean isPreferred(Employee e) {

@@ -42,12 +42,6 @@ public class Block {
         return occursOn(d);
     }
 
-    /** True when this timed block overlaps the [shiftStart, shiftEnd) minute range on day d. */
-    public boolean overlapsMinutes(LocalDate d, int shiftStart, int shiftEnd) {
-        if (allDay || !occursOn(d)) return false;
-        return start < shiftEnd && end > shiftStart;
-    }
-
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 

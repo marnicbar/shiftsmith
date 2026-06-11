@@ -182,6 +182,34 @@ class ScheduleConstraintProviderTest {
         verifier.verifyThat(ScheduleConstraintProvider::maxConsecutiveDays).given(e, a, b, c, d).penalizesBy(2);
     }
 
+    // -------------------------------------------------- overnight (end < start)
+
+    @Test
+    void overnightShift_countsPositiveHoursTowardsTheDailyLimit() {
+        Employee e = employee("e1", "Bar");
+        e.getRules().add(rule("dayHours", "max", 3));
+        ShiftAssignment a = assignment("a1", day(0), 1320, 120, e, "Bar"); // 22:00–02:00 = 4h
+        // 4h worked, cap 3h → 1h (60 min) over — not a negative contribution.
+        verifier.verifyThat(ScheduleConstraintProvider::maxHoursPerDay).given(e, a).penalizesBy(60);
+    }
+
+    @Test
+    void overnightShift_detectsOverlapAcrossMidnight() {
+        Employee e = employee("e1", "Bar");
+        ShiftAssignment a = assignment("a1", day(0), 1320, 120, e, "Bar"); // 22:00–02:00 (day 0→1)
+        ShiftAssignment b = assignment("a2", day(1), 0, 180, e, "Bar");    // 00:00–03:00 next day
+        verifier.verifyThat(ScheduleConstraintProvider::overlappingShifts).given(e, a, b).penalizesBy(1);
+    }
+
+    @Test
+    void overnightShift_restGapIsMeasuredFromTheRealEnd() {
+        Employee e = employee("e1", "Bar");
+        e.getRules().add(rule("restHours", "min", 8));
+        ShiftAssignment a = assignment("a1", day(0), 1320, 360, e, "Bar"); // 22:00–06:00 (ends day 1 06:00)
+        ShiftAssignment b = assignment("a2", day(1), 600, 840, e, "Bar");  // 10:00–14:00 → only 4h rest
+        verifier.verifyThat(ScheduleConstraintProvider::minRestBetweenShifts).given(e, a, b).penalizesBy(1);
+    }
+
     // -------------------------------------------------------------- coverage
 
     @Test

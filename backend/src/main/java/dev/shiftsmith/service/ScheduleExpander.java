@@ -40,10 +40,20 @@ public final class ScheduleExpander {
             for (ShiftTemplate t : p.getShifts()) {
                 for (LocalDate d = start; d.isBefore(end); d = d.plusDays(1)) {
                     if (!t.occursOn(d)) continue;
-                    LocalDateTime st = d.atTime(t.getStart() / 60, t.getStart() % 60);
-                    LocalDateTime en = t.getEnd() >= 1440
-                            ? d.plusDays(1).atStartOfDay()
-                            : d.atTime(t.getEnd() / 60, t.getEnd() % 60);
+                    int startMin = t.getStart();
+                    int endMin = t.getEnd();
+                    LocalDateTime st = d.atTime(startMin / 60, startMin % 60);
+                    // An overnight shift (end at or before start) — or one ending exactly
+                    // at midnight (end >= 1440) — rolls its end into the next calendar day,
+                    // so [st, en) stays a forward interval (mirrors CalendarOverlap's wrap).
+                    LocalDateTime en;
+                    if (endMin >= 1440) {
+                        en = d.plusDays(1).atStartOfDay();
+                    } else if (endMin <= startMin) {
+                        en = d.plusDays(1).atTime(endMin / 60, endMin % 60);
+                    } else {
+                        en = d.atTime(endMin / 60, endMin % 60);
+                    }
 
                     String key = t.getId() + "@" + d;
                     List<String> pins = ov.get(key);

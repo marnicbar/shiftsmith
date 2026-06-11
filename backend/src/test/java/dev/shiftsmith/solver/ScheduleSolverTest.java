@@ -21,6 +21,7 @@ import static dev.shiftsmith.support.Fixtures.position;
 import static dev.shiftsmith.support.Fixtures.rule;
 import static dev.shiftsmith.support.Fixtures.template;
 import static dev.shiftsmith.support.Fixtures.vacation;
+import static dev.shiftsmith.support.Fixtures.window;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -106,6 +107,36 @@ class ScheduleSolverTest {
 
         assertThat(solved.getScore().hardScore()).isZero();
         assertThat(only(solved).getEmployee().getId()).isEqualTo("bob");
+    }
+
+    @Test
+    void staffsAnOvernightShiftThatFitsAnOvernightAvailabilityWindow() {
+        ShiftTemplate night = template("night", MON, 1320, 120, 1, "Bar"); // 22:00–02:00
+        Employee alice = employee("alice", "Bar");
+        alice.getBlocks().add(window("pref", MON, 1200, 360)); // 20:00 → 06:00 available
+
+        Schedule solved = SolverHarness.solve(build(
+                List.of(positionWith("p", "Bar", night)), List.of(alice)));
+
+        assertThat(solved.getScore().hardScore()).isZero();
+        assertThat(only(solved).getEmployee().getId()).isEqualTo("alice");
+        assertThat(solved.getScore().mediumScore()).isEqualTo(1);
+    }
+
+    @Test
+    void overnightShiftRespectsTheDailyHourCapInsteadOfReportingFalselyFeasible() {
+        // Regression: an overnight shift used to subtract negative minutes, so the
+        // solver would happily staff it past a tight hour cap while reporting 0 hard.
+        ShiftTemplate night = template("night", MON, 1320, 120, 1, "Bar"); // 22:00–02:00 = 4h
+        Employee alice = employee("alice", "Bar");
+        alice.getBlocks().add(window("pref", MON, 1200, 360)); // available across midnight
+        alice.getRules().add(rule("dayHours", "max", 3)); // 4h shift can never fit a 3h cap
+
+        Schedule solved = SolverHarness.solve(build(
+                List.of(positionWith("p", "Bar", night)), List.of(alice)));
+
+        assertThat(solved.getScore().hardScore()).isZero();
+        assertThat(only(solved).getEmployee()).isNull();
     }
 
     // ===================================================================
