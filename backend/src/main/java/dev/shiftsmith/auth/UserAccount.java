@@ -27,6 +27,18 @@ public class UserAccount extends PanacheEntityBase {
     @Column(nullable = false)
     public String passwordHash;
 
+    /**
+     * When set, the operator is still using a publicly-known seeded password and
+     * must rotate it before any protected endpoint will serve them. Nullable so
+     * the column can be added to an existing table without a backfill; a missing
+     * value is treated as "no change required".
+     */
+    public Boolean mustChangePassword;
+
+    public boolean mustChange() {
+        return Boolean.TRUE.equals(mustChangePassword);
+    }
+
     public static UserAccount findByUsername(String username) {
         return find("username", username).firstResult();
     }

@@ -55,7 +55,9 @@
     "changeFailed": "Passwort konnte nicht aktualisiert werden.",
     "currentIncorrect": "Aktuelles Passwort ist falsch.",
     "tooShort": "Das neue Passwort muss mindestens 6 Zeichen lang sein.",
-    "mismatch": "Die neuen Passwörter stimmen nicht überein."
+    "mismatch": "Die neuen Passwörter stimmen nicht überein.",
+    "forceTitle": "Neues Passwort wählen",
+    "forceSubtitle": "Dieses Konto verwendet noch das Standardpasswort. Legen Sie ein neues fest, um fortzufahren."
   },
   "account": {
     "title": "Konto",

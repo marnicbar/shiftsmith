@@ -40,11 +40,29 @@ describe('auth', () => {
   it('login stores the token and reports success', async () => {
     const fetchFn = mockFetch(ok({ token: 'abc', username: 'admin' }));
     const res = await api.login('admin', 'shiftsmith', true);
-    expect(res).toEqual({ ok: true, username: 'admin' });
+    expect(res).toEqual({ ok: true, username: 'admin', mustChangePassword: false });
     expect(api.getToken()).toBe('abc');
     const [url, options] = fetchFn.mock.calls[0];
     expect(url).toBe('/api/auth/login');
     expect(JSON.parse(options.body)).toEqual({ username: 'admin', password: 'shiftsmith', remember: true });
+  });
+
+  it('login surfaces mustChangePassword from the response', async () => {
+    mockFetch(ok({ token: 'abc', username: 'admin', mustChangePassword: true }));
+    const res = await api.login('admin', 'shiftsmith', false);
+    expect(res).toEqual({ ok: true, username: 'admin', mustChangePassword: true });
+  });
+
+  it('me returns the username and mustChangePassword flag', async () => {
+    api.setToken('tok', true);
+    mockFetch(ok({ username: 'admin', mustChangePassword: true }));
+    const res = await api.me();
+    expect(res).toEqual({ username: 'admin', mustChangePassword: true });
+  });
+
+  it('me returns null when no token is stored', async () => {
+    const res = await api.me();
+    expect(res).toBeNull();
   });
 
   it('login returns { ok: false } on 401 without storing a token', async () => {

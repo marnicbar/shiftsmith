@@ -29,8 +29,8 @@ public class AuthResource {
     AuthService auth;
 
     public record LoginRequest(String username, String password, boolean remember) {}
-    public record LoginResponse(String token, String username) {}
-    public record MeResponse(String username) {}
+    public record LoginResponse(String token, String username, boolean mustChangePassword) {}
+    public record MeResponse(String username, boolean mustChangePassword) {}
     public record ChangePasswordRequest(String currentPassword, String newPassword) {}
 
     @POST
@@ -45,14 +45,16 @@ public class AuthResource {
             return Response.status(Response.Status.UNAUTHORIZED)
                     .entity(new ApiError("Invalid username or password")).build();
         }
-        return Response.ok(new LoginResponse(token.get(), req.username())).build();
+        return Response.ok(new LoginResponse(token.get(), req.username(),
+                auth.mustChangePassword(req.username()))).build();
     }
 
     /** Confirms the caller's token is valid; used by the SPA on startup. */
     @GET
     @Path("/me")
     public MeResponse me(@Context ContainerRequestContext ctx) {
-        return new MeResponse((String) ctx.getProperty(AuthFilter.USERNAME_PROPERTY));
+        String username = (String) ctx.getProperty(AuthFilter.USERNAME_PROPERTY);
+        return new MeResponse(username, auth.mustChangePassword(username));
     }
 
     @POST

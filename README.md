@@ -56,6 +56,25 @@ To run a published image instead of building locally, drop the `build:` block in
 PostgreSQL with the standard `QUARKUS_DATASOURCE_JDBC_URL`, `POSTGRES_USER` and
 `POSTGRES_PASSWORD` environment variables.
 
+#### Admin credentials
+On a **fresh database** ShiftSmith seeds a single admin account. Set the initial
+password at deploy time so the instance is never reachable on a known credential:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SHIFTSMITH_ADMIN_USERNAME` | `admin` | Username of the seeded account. |
+| `SHIFTSMITH_ADMIN_PASSWORD` | _(none)_ | Initial password. **Set this in production.** |
+
+- If `SHIFTSMITH_ADMIN_PASSWORD` is set, that password is used and the account is
+  ready immediately.
+- If it is **not** set, the account falls back to the well-known default
+  (`admin` / `shiftsmith`) but is flagged for rotation: every protected endpoint
+  returns `403` and the UI forces a password change on first sign-in, so the
+  default password can never be used to operate the app.
+
+These only take effect when the account is first created. To rotate the password
+later, use **Account → Sign-in** in the app (or `POST /api/auth/change-password`).
+
 ### Development
 Hot-reload stack (separate Vite dev server + backend + db) in Docker:
 ```bash
