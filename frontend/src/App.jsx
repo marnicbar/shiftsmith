@@ -95,7 +95,10 @@ export default function App() {
   // other failure is treated as a connectivity problem.
   const [error, setError] = useState(null);
   const reportError = useCallback((e) => {
-    if (e && e.serverMessage) setError({ text: e.serverMessage, validation: true });
+    // A 400 is a validation rejection we can explain verbatim; anything else (a
+    // network drop, or a 5xx such as a failed persist) is a transient connectivity
+    // problem the sync effect retries in the background.
+    if (e && e.status === 400 && e.serverMessage) setError({ text: e.serverMessage, validation: true });
     else setError({ text: e?.message ?? String(e), validation: false });
   }, []);
   const [notice, setNotice] = useState(null);
@@ -155,6 +158,7 @@ export default function App() {
         setGroupOrder(g);
         setMeta(d);
         lastSyncRef.current = JSON.stringify({ employees: d.employees, positions: d.positions, settings: d.settings, overrides: d.overrides || {} });
+        setError(null);
         setLoaded(true);
       } catch (e) { reportError(e); }
     })();
@@ -182,11 +186,30 @@ export default function App() {
       setError({ text: t('app.horizonTooLong', { days, max: SS.MAX_HORIZON_DAYS }), validation: true });
       return;
     }
-    const t0 = setTimeout(async () => {
-      try { await api.putProblem(problem); lastSyncRef.current = ser; setError(null); }
-      catch (e) { reportError(e); }
-    }, 600);
-    return () => clearTimeout(t0);
+    // Debounce the first attempt by 600ms; on a transient failure (network drop or
+    // 5xx such as a failed persist) keep retrying with exponential backoff so the
+    // edit isn't silently lost the moment the user stops typing. A 400 won't fix
+    // itself, so we surface it and stop. A fresh edit re-runs the effect, which
+    // cancels this loop (clearing the banner on the next success).
+    let cancelled = false;
+    let timer;
+    const attempt = (delay) => {
+      timer = setTimeout(async () => {
+        try {
+          await api.putProblem(problem);
+          if (cancelled) return;
+          lastSyncRef.current = ser;
+          setError(null);
+        } catch (e) {
+          if (cancelled) return;
+          reportError(e);
+          const retriable = !e || !e.status || e.status >= 500;
+          if (retriable) attempt(Math.min(delay * 2, 16000));
+        }
+      }, delay);
+    };
+    attempt(600);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [loaded, employees, positions, settings, overrides, reportError, t]);
 
   const snap = SNAP_MAP[prefs.snapLabel] ?? 15;

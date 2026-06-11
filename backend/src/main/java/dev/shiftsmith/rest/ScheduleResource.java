@@ -3,6 +3,7 @@ package dev.shiftsmith.rest;
 import dev.shiftsmith.domain.CalendarOverlap;
 import dev.shiftsmith.domain.DuplicateId;
 import dev.shiftsmith.domain.ProblemValidation;
+import dev.shiftsmith.persistence.PersistFailedException;
 import dev.shiftsmith.realtime.ScheduleBroadcaster;
 import dev.shiftsmith.rest.dto.ApiError;
 import dev.shiftsmith.rest.dto.ProblemDTO;
@@ -96,7 +97,16 @@ public class ScheduleResource {
                     .entity(new ApiError(invalid.get()))
                     .build();
         }
-        service.replaceProblem(dto.employees, dto.positions, dto.settings, dto.overrides);
+        try {
+            service.replaceProblem(dto.employees, dto.positions, dto.settings, dto.overrides);
+        } catch (PersistFailedException e) {
+            // The write to the database failed: the edit was *not* saved and our state
+            // is unchanged. Tell the client so it doesn't treat the edit as durable —
+            // the frontend retries 5xx with backoff.
+            return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                    .entity(new ApiError("Could not save changes — the database is unavailable. Please retry."))
+                    .build();
+        }
         return Response.noContent().build();
     }
 
