@@ -52,29 +52,130 @@ public class ProblemStore {
         return Optional.of(readNormalized());
     }
 
-    /** Replace the whole problem: wipe the normalized rows and re-insert from {@code doc}. */
+    /**
+     * Persist the whole problem by <em>merging</em> it into the normalized rows.
+     *
+     * <p>The FK targets of the durable {@code assignment} table — {@code employee},
+     * {@code position} and {@code shift_template} — are upserted by id so their rows
+     * (and therefore the solver-produced assignment history hanging off them) survive
+     * an edit instead of being cascade-pruned by a delete-and-reinsert. Entities not
+     * referenced by {@code assignment} (settings, skills, blocks, rules) are simply
+     * replaced. A removed template/position prunes its assignment rows via cascade
+     * (issue #39); a removed employee leaves its past slots unstaffed (FK SET NULL).
+     */
     @Transactional
     public void save(ProblemDocument doc) {
         ProblemMapper.Tables tables = ProblemMapper.toTables(doc);
-        wipe();
+        Set<String> keepEmployees = ids(tables.employees, e -> e.id);
+        Set<String> keepPositions = ids(tables.positions, p -> p.id);
+        Set<String> keepTemplates = ids(tables.templates, t -> t.id);
 
-        if (tables.settings != null) tables.settings.persist();
+        // Delete only the rows that vanished, child-first, via bulk queries so each row
+        // is removed exactly once and the DB's ON DELETE CASCADE prunes the dependents
+        // (a removed template/position takes its assignment rows with it — issue #39; a
+        // removed employee leaves its past slots unstaffed via SET NULL). Doing this with
+        // managed-entity deletes would double-delete cascaded rows (no JPA association
+        // encodes the order) and trip Hibernate's optimistic row-count check.
+        if (keepTemplates.isEmpty()) ShiftTemplateEntity.deleteAll();
+        else ShiftTemplateEntity.delete("id not in ?1", keepTemplates);
+        if (keepPositions.isEmpty()) PositionEntity.deleteAll();
+        else PositionEntity.delete("id not in ?1", keepPositions);
+        if (keepEmployees.isEmpty()) EmployeeEntity.deleteAll();
+        else EmployeeEntity.delete("id not in ?1", keepEmployees);
+
+        upsertSettings(tables.settings);
+        SkillEntity.deleteAll();
         for (SkillEntity s : tables.skills) s.persist();
-        for (EmployeeEntity e : tables.employees) e.persist();
+        upsertPositions(tables.positions);   // before templates: FK target
+        upsertTemplates(tables.templates);
+        upsertEmployees(tables.employees);   // before blocks/rules: FK target
+        AvailabilityBlockEntity.deleteAll();
         for (AvailabilityBlockEntity b : tables.blocks) b.persist();
+        WorkRuleEntity.deleteAll();          // personal + global
         for (WorkRuleEntity r : tables.rules) r.persist();
-        for (PositionEntity p : tables.positions) p.persist();
-        for (ShiftTemplateEntity t : tables.templates) t.persist();
+        reconcileManualPins(tables.assignments, keepEmployees);
+    }
 
-        // A manual pin may only reference a person who still exists (the assignment FK
-        // is enforced). Drop dangling employee references to null rather than failing
-        // the write — the slot persists as unstaffed.
-        Set<String> knownEmployees = new HashSet<>();
-        for (EmployeeEntity e : tables.employees) knownEmployees.add(e.id);
-        for (AssignmentEntity a : tables.assignments) {
-            if (a.employeeId != null && !knownEmployees.contains(a.employeeId)) a.employeeId = null;
-            a.persist();
+    private void upsertSettings(SettingsEntity in) {
+        if (in == null) return;
+        SettingsEntity managed = SettingsEntity.findById(in.id);
+        if (managed == null) {
+            in.persist();
+        } else {
+            managed.horizonUnit = in.horizonUnit;
+            managed.horizonCount = in.horizonCount;
         }
+    }
+
+    private void upsertEmployees(List<EmployeeEntity> incoming) {
+        for (EmployeeEntity in : incoming) {
+            EmployeeEntity m = EmployeeEntity.findById(in.id);
+            if (m == null) { in.persist(); continue; }
+            m.firstName = in.firstName;
+            m.lastName = in.lastName;
+            m.role = in.role;
+            m.contract = in.contract;
+            m.skills.clear();
+            m.skills.addAll(in.skills);
+        }
+    }
+
+    private void upsertPositions(List<PositionEntity> incoming) {
+        for (PositionEntity in : incoming) {
+            PositionEntity m = PositionEntity.findById(in.id);
+            if (m == null) { in.persist(); continue; }
+            m.name = in.name;
+            m.color = in.color;
+            m.group = in.group;
+            m.skills.clear();
+            m.skills.addAll(in.skills);
+        }
+    }
+
+    private void upsertTemplates(List<ShiftTemplateEntity> incoming) {
+        for (ShiftTemplateEntity in : incoming) {
+            ShiftTemplateEntity m = ShiftTemplateEntity.findById(in.id);
+            if (m == null) { in.persist(); continue; }
+            m.positionId = in.positionId;
+            m.name = in.name;
+            m.anchorDate = in.anchorDate;
+            m.startMin = in.startMin;
+            m.endMin = in.endMin;
+            m.headcount = in.headcount;
+            m.repeat = in.repeat;
+            m.untilDate = in.untilDate;
+            m.days = in.days;
+            m.skills.clear();
+            m.skills.addAll(in.skills);
+            m.exceptions.clear();
+            m.exceptions.addAll(in.exceptions);
+            m.preferred.clear();
+            m.preferred.addAll(in.preferred);
+        }
+    }
+
+
+    /**
+     * Reconcile the manual-pin rows ({@code source = manual}) from the overrides, without
+     * disturbing the solver's history. A pin may only reference a person who still exists
+     * (the assignment FK is enforced); a dangling reference is nulled so the slot persists
+     * unstaffed rather than failing the write. Any prior row for a pinned slot — including
+     * a stale solver pick — is cleared so the pin takes over.
+     */
+    private void reconcileManualPins(List<AssignmentEntity> pins, Set<String> knownEmployees) {
+        AssignmentEntity.delete("source = ?1", "manual");
+        for (AssignmentEntity pin : pins) {
+            if (pin.employeeId != null && !knownEmployees.contains(pin.employeeId)) pin.employeeId = null;
+            AssignmentEntity.delete("templateId = ?1 and occurrenceDate = ?2 and slotIndex = ?3",
+                    pin.templateId, pin.occurrenceDate, pin.slotIndex);
+            pin.persist();
+        }
+    }
+
+    private static <T> Set<String> ids(List<T> items, java.util.function.Function<T, String> id) {
+        Set<String> out = new HashSet<>();
+        for (T item : items) out.add(id.apply(item));
+        return out;
     }
 
     /** True when no problem has been persisted into the normalized tables yet. */
@@ -96,17 +197,6 @@ public class ProblemStore {
         t.templates.addAll(ShiftTemplateEntity.<ShiftTemplateEntity>listAll(Sort.by("id")));
         t.assignments.addAll(AssignmentEntity.<AssignmentEntity>listAll(Sort.by("templateId", "occurrenceDate", "slotIndex")));
         return ProblemMapper.toDocument(t);
-    }
-
-    /** Delete every normalized row. Child tables are pruned by ON DELETE CASCADE. */
-    private void wipe() {
-        AssignmentEntity.deleteAll();
-        WorkRuleEntity.deleteAll();   // personal + global
-        EmployeeEntity.deleteAll();   // cascades skills, availability blocks (+exceptions)
-        ShiftTemplateEntity.deleteAll();
-        PositionEntity.deleteAll();   // cascades position skills
-        SkillEntity.deleteAll();
-        SettingsEntity.deleteAll();
     }
 
     private Optional<ProblemDocument> loadLegacyDocument() {
