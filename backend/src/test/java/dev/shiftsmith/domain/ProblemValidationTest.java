@@ -105,12 +105,29 @@ class ProblemValidationTest {
     }
 
     @Test
-    @DisplayName("rejects an absurd horizon count")
+    @DisplayName("rejects a solve window longer than the duration cap")
+    void overlongHorizonRejected() {
+        // ~2.5 years of months, well past the ~2-year ceiling, whatever the unit.
+        Optional<String> err = ProblemValidation.firstError(
+                List.of(), List.of(), new Settings("month", 30));
+        assertThat(err).isPresent();
+        assertThat(err.get()).contains("too long");
+    }
+
+    @Test
+    @DisplayName("rejects an absurd horizon count by duration")
     void hugeHorizonCountRejected() {
         Optional<String> err = ProblemValidation.firstError(
-                List.of(), List.of(), new Settings("month", 1_000_000));
+                List.of(), List.of(), new Settings("day", 1_000_000));
         assertThat(err).isPresent();
-        assertThat(err.get()).contains("Horizon");
+        assertThat(err.get()).contains("too long");
+    }
+
+    @Test
+    @DisplayName("accepts a window just under the duration cap, regardless of unit")
+    void nearLimitHorizonAccepted() {
+        // ~100 weeks (~700 days) stays under the ~2-year ceiling.
+        assertThat(ProblemValidation.firstError(List.of(), List.of(), new Settings("week", 100))).isEmpty();
     }
 
     @Test

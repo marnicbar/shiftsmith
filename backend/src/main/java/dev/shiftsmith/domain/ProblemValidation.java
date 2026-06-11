@@ -1,5 +1,7 @@
 package dev.shiftsmith.domain;
 
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,9 +28,6 @@ public final class ProblemValidation {
 
     /** A single shift slot needing more people than this is certainly a bad payload. */
     public static final int MAX_HEADCOUNT = 1000;
-
-    /** Upper bound on the horizon multiplier — keeps the expansion loop bounded. */
-    public static final int MAX_HORIZON_COUNT = 60;
 
     /** Minutes-from-midnight: a start must land on a real wall-clock time (00:00–23:59). */
     private static final int MAX_START = 1439;
@@ -63,9 +62,16 @@ public final class ProblemValidation {
         }
         if (settings != null) {
             int count = settings.getHorizonCount();
-            if (count < 1 || count > MAX_HORIZON_COUNT) {
-                return Optional.of("Horizon count must be between 1 and " + MAX_HORIZON_COUNT
-                        + " (got " + count + ").");
+            if (count < 1) {
+                return Optional.of("Horizon count must be at least 1 (got " + count + ").");
+            }
+            // Cap the *duration* of the solve window, not the raw count, so the limit
+            // means the same thing whatever the unit (day/week/month).
+            LocalDate today = LocalDate.now();
+            long days = ChronoUnit.DAYS.between(settings.horizonStart(today), settings.rawHorizonEnd(today));
+            if (days > Settings.MAX_HORIZON_DAYS) {
+                return Optional.of("The solve window is too long (" + days + " days); the maximum is "
+                        + Settings.MAX_HORIZON_DAYS + " days (about two years).");
             }
         }
         return Optional.empty();

@@ -46,11 +46,25 @@ public class Settings {
         return today;
     }
 
-    /** Exclusive last day of the solve window. */
+    /**
+     * Hard ceiling on the solve window length, in days, regardless of unit — about
+     * two years (covering leap days). The day-by-day expansion loops once per day in
+     * the window, so this bounds the work no matter how the unit/count are set.
+     */
+    public static final int MAX_HORIZON_DAYS = 732;
+
+    /** Exclusive last day of the solve window, clamped to {@link #MAX_HORIZON_DAYS}. */
     public LocalDate horizonEnd(LocalDate today) {
-        // Clamp to a sane band even if a legacy/corrupt document slipped past the
+        // Clamp to a sane span even if a legacy/corrupt document slipped past the
         // API validator, so the day-by-day expansion loop can never run away.
-        int count = Math.min(ProblemValidation.MAX_HORIZON_COUNT, Math.max(1, horizonCount));
+        LocalDate raw = rawHorizonEnd(today);
+        LocalDate cap = horizonStart(today).plusDays(MAX_HORIZON_DAYS);
+        return raw.isAfter(cap) ? cap : raw;
+    }
+
+    /** Exclusive end of the window as configured, before the safety cap is applied. */
+    LocalDate rawHorizonEnd(LocalDate today) {
+        int count = Math.max(1, horizonCount);
         return switch (horizonUnit == null ? "week" : horizonUnit) {
             case "day" -> today.plusDays(1).plusDays(count);
             case "month" -> today.withDayOfMonth(1).plusMonths(1).plusMonths(count);
