@@ -36,6 +36,22 @@ describe('getSchedule', () => {
   });
 });
 
+describe('getScheduleRange', () => {
+  it('GETs the range with from/to and an optional scope', async () => {
+    const fetchFn = mockFetch(ok([{ id: 's1@2026-06-01#0' }]));
+    const result = await api.getScheduleRange('2026-06-01', '2026-06-08', 'person:e1');
+    expect(fetchFn).toHaveBeenCalledWith(
+      '/api/schedule/range?from=2026-06-01&to=2026-06-08&scope=person%3Ae1', { headers: {} });
+    expect(result).toEqual([{ id: 's1@2026-06-01#0' }]);
+  });
+
+  it('omits scope when not given', async () => {
+    const fetchFn = mockFetch(ok([]));
+    await api.getScheduleRange('2026-06-01', '2026-06-08');
+    expect(fetchFn.mock.calls[0][0]).toBe('/api/schedule/range?from=2026-06-01&to=2026-06-08');
+  });
+});
+
 describe('auth', () => {
   it('login stores the token and reports success', async () => {
     const fetchFn = mockFetch(ok({ token: 'abc', username: 'admin' }));

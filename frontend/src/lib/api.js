@@ -87,6 +87,16 @@ export function logout() { clearToken(); }
 // Full state: problem data + the solver's current best assignment + status.
 export const getSchedule = () => request(`${BASE}/schedule`);
 
+// Windowed read of the durable assignment slots in [from, to) (ISO dates),
+// optionally narrowed to one person/position (scope = 'person:<id>' | 'position:<id>').
+// Unlike getSchedule this spans history and any persisted future, not just the live
+// solve window — it powers the read-only Personnel/Positions calendars per range.
+export const getScheduleRange = (from, to, scope) => {
+  const params = new URLSearchParams({ from, to });
+  if (scope) params.set('scope', scope);
+  return request(`${BASE}/schedule/range?${params.toString()}`);
+};
+
 // Replace the problem (employees / positions / settings / overrides) and re-solve.
 // Any omitted field is left unchanged server-side.
 export const putProblem = (problem) => request(`${BASE}/problem`, { method: 'PUT', ...json(problem) });

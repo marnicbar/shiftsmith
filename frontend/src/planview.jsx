@@ -4,7 +4,7 @@
 // (the shifts a single employee is assigned). The per-position / per-person views
 // reuse the shared Calendar in read-only mode and draw the solver's *actual*
 // assignments rather than the editable availability/shift templates.
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SS } from './data.js';
 import { Ic } from './icons.jsx';
@@ -12,9 +12,41 @@ import { UI } from './ui.jsx';
 import { Theme } from './theme.js';
 import { Calendar, calendarDays } from './calendar.jsx';
 import { ShiftPlan, matchesDay } from './shiftplan.jsx';
+import { getScheduleRange } from './lib/api.js';
 
 const NOOP = () => {};
 const NEW_ITEM = () => ({});
+
+// Turn the backend's range slots into the `shiftTemplateId@date → [employee]` map the
+// event builders consume (mirrors App's live assignMap, so the two are interchangeable).
+export function slotsToAssign(slots = [], empById = {}) {
+  const m = {};
+  for (const s of slots) {
+    const k = `${s.shiftTemplateId}@${s.date}`;
+    const arr = (m[k] = m[k] || []);
+    if (s.employeeId && empById[s.employeeId]) arr[s.slotIndex] = empById[s.employeeId];
+  }
+  for (const k of Object.keys(m)) m[k] = m[k].filter(Boolean);
+  return m;
+}
+
+// Load the durable assignment slots for the visible calendar range and convert them to
+// an assign map, so a read-only view can show history beyond the live solve window. The
+// live `assign` (fresher, SSE-driven) is overlaid on top for the current window.
+function useRangeAssign(dayList, scope, empById) {
+  const [rangeAssign, setRangeAssign] = useState({});
+  const from = dayList[0];
+  const to = dayList.length ? SS.isoOf(SS.addDays(SS.parseISO(dayList[dayList.length - 1]), 1)) : null;
+  useEffect(() => {
+    if (!from || !to || !scope) { setRangeAssign({}); return undefined; }
+    let alive = true;
+    getScheduleRange(from, to, scope)
+      .then((slots) => { if (alive) setRangeAssign(slotsToAssign(slots || [], empById)); })
+      .catch(() => { if (alive) setRangeAssign({}); });
+    return () => { alive = false; };
+  }, [from, to, scope, empById]);
+  return rangeAssign;
+}
 
 // Hours a concrete (non-recurring) event spans, accounting for overnight (end < start).
 function evHours(ev) {
@@ -98,9 +130,14 @@ function PersonSchedule({ employees = [], positions = [], assign, selId, setSelI
     .sort((a, b) => SS.compareNames(a, b, nameOrder));
 
   const dayList = useMemo(() => calendarDays(view, anchor), [view, anchor]);
+  const empById = useMemo(() => Object.fromEntries(employees.map((e) => [e.id, e])), [employees]);
+  // Fetch the visible range from the durable store (so past months show history),
+  // then overlay the live window assignments on top.
+  const rangeAssign = useRangeAssign(dayList, emp ? `person:${emp.id}` : null, empById);
+  const effectiveAssign = useMemo(() => ({ ...rangeAssign, ...assign }), [rangeAssign, assign]);
   const events = useMemo(
-    () => (emp ? buildPersonEvents(emp, positions, dayList, assign) : []),
-    [emp, positions, dayList, assign],
+    () => (emp ? buildPersonEvents(emp, positions, dayList, effectiveAssign) : []),
+    [emp, positions, dayList, effectiveAssign],
   );
   const totalHours = events.reduce((a, ev) => a + evHours(ev), 0);
 
@@ -159,7 +196,7 @@ function PersonSchedule({ employees = [], positions = [], assign, selId, setSelI
 
 // --- per-position view ------------------------------------------------------
 
-function PositionSchedule({ positions = [], assign, selId, setSelId, nameOrder }) {
+function PositionSchedule({ positions = [], employees = [], assign, selId, setSelId, nameOrder }) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
   const [view, setView] = useState('week');
@@ -170,9 +207,13 @@ function PositionSchedule({ positions = [], assign, selId, setSelId, nameOrder }
   const list = positions.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()));
 
   const dayList = useMemo(() => calendarDays(view, anchor), [view, anchor]);
+  const empById = useMemo(() => Object.fromEntries(employees.map((e) => [e.id, e])), [employees]);
+  // History-aware range load for this position, with the live window overlaid on top.
+  const rangeAssign = useRangeAssign(dayList, pos ? `position:${pos.id}` : null, empById);
+  const effectiveAssign = useMemo(() => ({ ...rangeAssign, ...assign }), [rangeAssign, assign]);
   const events = useMemo(
-    () => (pos ? buildPositionEvents(pos, dayList, assign, { nameOrder, t }) : []),
-    [pos, dayList, assign, nameOrder, t],
+    () => (pos ? buildPositionEvents(pos, dayList, effectiveAssign, { nameOrder, t }) : []),
+    [pos, dayList, effectiveAssign, nameOrder, t],
   );
   const filled = events.reduce((a, e) => a + (e.crew ? e.crew.length : 0), 0);
   const open = events.reduce((a, e) => a + (e.open || 0), 0);
@@ -256,7 +297,7 @@ export function PlanView(props) {
       selId={selEmp} setSelId={setSelEmp} nameOrder={nameOrder} />;
   }
   if (scope === 'positions') {
-    return <PositionSchedule positions={positions} assign={assign}
+    return <PositionSchedule positions={positions} employees={employees} assign={assign}
       selId={selPos} setSelId={setSelPos} nameOrder={nameOrder} />;
   }
   return <ShiftPlan employees={employees} positions={positions} groupOrder={props.groupOrder}

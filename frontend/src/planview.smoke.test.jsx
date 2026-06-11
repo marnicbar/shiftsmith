@@ -4,6 +4,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { PlanView } from './planview.jsx';
 
+// The read-only calendars fetch the visible range from the durable store; stub it as
+// a never-settling call so these synchronous smoke assertions render off the live
+// `assign` prop (the overlay) without a real network request.
+vi.mock('./lib/api.js', () => ({ getScheduleRange: vi.fn(() => new Promise(() => {})) }));
+
 // Anchor the fixture shift on the real "today" so it falls inside the calendars'
 // default week view (which anchors on new Date()), making rendered-event
 // assertions deterministic regardless of when the suite runs.
