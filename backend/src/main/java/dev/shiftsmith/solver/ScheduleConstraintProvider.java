@@ -25,6 +25,14 @@ import java.util.Set;
  *          slots as it can without breaking a hard rule.
  * Soft   — preferred employees, preferred/undesired time blocks, preferred-hours
  *          targets and fair workload distribution.
+ *
+ * <p><b>History (issue #47, Phase 2).</b> Worked shifts from before the solve window
+ * are loaded as fixed facts ({@link ShiftAssignment#isHistory()}). They make the
+ * boundary aggregates correct — rest, consecutive days and weekly/monthly hours all
+ * count them — but they are <em>not</em> decisions: per-shift rules, coverage and
+ * preferences ignore them, and an aggregate is only penalised where a real window
+ * slot is involved (a purely historical breach can't be fixed, so it isn't blamed on
+ * the window).
  */
 public class ScheduleConstraintProvider implements ConstraintProvider {
 
@@ -59,11 +67,19 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
         return (int) Duration.between(a.getStart(), a.getEnd()).toMinutes();
     }
 
+    /** Minutes that count towards coverage/balance: a history slot contributes none. */
+    private int windowMinutes(ShiftAssignment a) {
+        return a.isHistory() ? 0 : minutesOf(a);
+    }
+
     // ---------------------------------------------------------------- hard
+    // Per-shift hard rules only judge real (window) decisions; a history slot's
+    // skills/vacation/availability already happened and can't be changed.
 
     Constraint requiredSkills(ConstraintFactory f) {
         return f.forEach(ShiftAssignment.class)
-                .filter(a -> a.getEmployee() != null
+                .filter(a -> !a.isHistory()
+                        && a.getEmployee() != null
                         && a.getRequiredSkills() != null
                         && !a.getEmployee().getSkills().containsAll(a.getRequiredSkills()))
                 .penalize(HardMediumSoftScore.ONE_HARD)
@@ -72,7 +88,7 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
 
     Constraint vacation(ConstraintFactory f) {
         return f.forEach(ShiftAssignment.class)
-                .filter(a -> a.getEmployee() != null && a.getEmployee().isOnVacation(a.getDate()))
+                .filter(a -> !a.isHistory() && a.getEmployee() != null && a.getEmployee().isOnVacation(a.getDate()))
                 .penalize(HardMediumSoftScore.ONE_HARD)
                 .asConstraint("Employee on vacation");
     }
@@ -84,7 +100,8 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
      */
     Constraint availability(ConstraintFactory f) {
         return f.forEach(ShiftAssignment.class)
-                .filter(a -> a.getEmployee() != null
+                .filter(a -> !a.isHistory()
+                        && a.getEmployee() != null
                         && !a.getEmployee().isAvailableFor(a.getDate(), a.getStartMinutes(), a.getEndMinutes()))
                 .penalize(HardMediumSoftScore.ONE_HARD)
                 .asConstraint("Outside availability");
@@ -94,7 +111,7 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
         return f.forEachUniquePair(ShiftAssignment.class,
                         Joiners.equal(ShiftAssignment::getEmployee),
                         Joiners.overlapping(ShiftAssignment::getStart, ShiftAssignment::getEnd))
-                .filter((a, b) -> a.getEmployee() != null)
+                .filter((a, b) -> a.getEmployee() != null && (!a.isHistory() || !b.isHistory()))
                 .penalize(HardMediumSoftScore.ONE_HARD)
                 .asConstraint("Overlapping shifts");
     }
@@ -105,6 +122,7 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
                 .filter((a, b) -> {
                     Employee e = a.getEmployee();
                     if (e == null) return false;
+                    if (a.isHistory() && b.isHistory()) return false;   // past-only pair: immutable
                     Integer rest = e.minLimit("restHours", a.getDate());
                     if (rest == null) return false;
                     long gap1 = Duration.between(a.getEnd(), b.getStart()).toMinutes();
@@ -140,37 +158,46 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
         return underMin(f, "monthHours", ShiftAssignment::getMonthStart, "Fewer than the monthly hour minimum");
     }
 
-    /** Penalise (in minutes) any overage above the metric's "at most" limit for the period. */
+    /**
+     * Penalise (in minutes) any overage above the metric's "at most" limit for the
+     * period. History hours count towards the total (so a partial boundary week/month
+     * is complete), but a period is only penalised when it contains a window slot —
+     * the solver can't undo a purely historical overage.
+     */
     private Constraint overMax(ConstraintFactory f, String metric,
                                java.util.function.Function<ShiftAssignment, LocalDate> bucket, String name) {
         return f.forEach(ShiftAssignment.class)
                 .filter(a -> a.getEmployee() != null)
-                .groupBy(ShiftAssignment::getEmployee, bucket, ConstraintCollectors.sum(this::minutesOf))
-                .filter((e, period, minutes) -> {
+                .groupBy(ShiftAssignment::getEmployee, bucket,
+                        ConstraintCollectors.sum(this::minutesOf),
+                        ConstraintCollectors.sum(this::windowMinutes))
+                .filter((e, period, minutes, windowMinutes) -> {
                     Integer max = e.maxLimit(metric, period);
-                    return max != null && minutes > max * 60;
+                    return windowMinutes > 0 && max != null && minutes > max * 60;
                 })
                 .penalize(HardMediumSoftScore.ONE_HARD,
-                        (e, period, minutes) -> minutes - e.maxLimit(metric, period) * 60)
+                        (e, period, minutes, windowMinutes) -> minutes - e.maxLimit(metric, period) * 60)
                 .asConstraint(name);
     }
 
     /**
-     * Penalise a shortfall below the metric's "at least" limit, but only for
-     * periods the employee actually works — an "at least" floor should not force
-     * work onto otherwise empty days/weeks (which could be infeasible).
+     * Penalise a shortfall below the metric's "at least" limit, but only for periods
+     * the employee actually works (an "at least" floor should not force work onto
+     * otherwise empty days/weeks) and that include a window slot to act on.
      */
     private Constraint underMin(ConstraintFactory f, String metric,
                                 java.util.function.Function<ShiftAssignment, LocalDate> bucket, String name) {
         return f.forEach(ShiftAssignment.class)
                 .filter(a -> a.getEmployee() != null)
-                .groupBy(ShiftAssignment::getEmployee, bucket, ConstraintCollectors.sum(this::minutesOf))
-                .filter((e, period, minutes) -> {
+                .groupBy(ShiftAssignment::getEmployee, bucket,
+                        ConstraintCollectors.sum(this::minutesOf),
+                        ConstraintCollectors.sum(this::windowMinutes))
+                .filter((e, period, minutes, windowMinutes) -> {
                     Integer min = e.minLimit(metric, period);
-                    return min != null && minutes > 0 && minutes < min * 60;
+                    return windowMinutes > 0 && min != null && minutes > 0 && minutes < min * 60;
                 })
                 .penalize(HardMediumSoftScore.ONE_HARD,
-                        (e, period, minutes) -> e.minLimit(metric, period) * 60 - minutes)
+                        (e, period, minutes, windowMinutes) -> e.minLimit(metric, period) * 60 - minutes)
                 .asConstraint(name);
     }
 
@@ -178,34 +205,49 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
     Constraint maxConsecutiveDays(ConstraintFactory f) {
         return f.forEach(ShiftAssignment.class)
                 .filter(a -> a.getEmployee() != null)
-                .groupBy(ShiftAssignment::getEmployee, ConstraintCollectors.toSet(ShiftAssignment::getDate))
-                .filter((e, days) -> {
+                .groupBy(ShiftAssignment::getEmployee,
+                        ConstraintCollectors.toSet(ShiftAssignment::getDate),
+                        ConstraintCollectors.conditionally(a -> !a.isHistory(),
+                                ConstraintCollectors.toSet(ShiftAssignment::getDate)))
+                .filter((e, days, windowDays) -> {
                     Integer max = e.maxLimit("consecDays", Collections.min(days));
-                    return max != null && longestRun(days) > max;
+                    return max != null && longestRunWithWindow(days, windowDays) > max;
                 })
                 .penalize(HardMediumSoftScore.ONE_HARD,
-                        (e, days) -> longestRun(days) - e.maxLimit("consecDays", Collections.min(days)))
+                        (e, days, windowDays) -> longestRunWithWindow(days, windowDays)
+                                - e.maxLimit("consecDays", Collections.min(days)))
                 .asConstraint("Too many consecutive days");
     }
 
-    private int longestRun(Set<LocalDate> daySet) {
-        List<LocalDate> days = new ArrayList<>(daySet);
+    /**
+     * Longest run of consecutive days that includes at least one window day. A run made
+     * up entirely of history is immovable and so doesn't count — only runs the solver
+     * can actually shorten are penalised.
+     */
+    private int longestRunWithWindow(Set<LocalDate> allDays, Set<LocalDate> windowDays) {
+        List<LocalDate> days = new ArrayList<>(allDays);
         Collections.sort(days);
-        int best = 1, run = 1;
-        for (int i = 1; i < days.size(); i++) {
-            if (days.get(i - 1).plusDays(1).equals(days.get(i))) run++;
-            else run = 1;
-            best = Math.max(best, run);
+        int best = 0;
+        int i = 0;
+        while (i < days.size()) {
+            int j = i;
+            boolean hasWindow = windowDays.contains(days.get(i));
+            while (j + 1 < days.size() && days.get(j).plusDays(1).equals(days.get(j + 1))) {
+                j++;
+                if (windowDays.contains(days.get(j))) hasWindow = true;
+            }
+            if (hasWindow) best = Math.max(best, j - i + 1);
+            i = j + 1;
         }
-        return days.isEmpty() ? 0 : best;
+        return best;
     }
 
     // -------------------------------------------------------------- medium
 
-    /** Reward every staffed slot so the solver maximises coverage. */
+    /** Reward every staffed window slot so the solver maximises coverage. */
     Constraint coverage(ConstraintFactory f) {
         return f.forEach(ShiftAssignment.class)
-                .filter(a -> a.getEmployee() != null)
+                .filter(a -> !a.isHistory() && a.getEmployee() != null)
                 .reward(HardMediumSoftScore.ONE_MEDIUM)
                 .asConstraint("Staff every shift");
     }
@@ -217,7 +259,7 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
 
     Constraint preferredEmployee(ConstraintFactory f) {
         return f.forEach(ShiftAssignment.class)
-                .filter(a -> a.getEmployee() != null && a.isPreferred(a.getEmployee()))
+                .filter(a -> !a.isHistory() && a.getEmployee() != null && a.isPreferred(a.getEmployee()))
                 .reward(HardMediumSoftScore.ONE_SOFT, a -> PREFERRED_EMPLOYEE_REWARD)
                 .asConstraint("Preferred employee for shift");
     }
@@ -225,7 +267,7 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
     /** Reward the hours of a shift that fall inside a preferred window. */
     Constraint preferredTimeBlock(ConstraintFactory f) {
         return f.forEach(ShiftAssignment.class)
-                .filter(a -> a.getEmployee() != null
+                .filter(a -> !a.isHistory() && a.getEmployee() != null
                         && a.getEmployee().preferredMinutes(a.getDate(), a.getStartMinutes(), a.getEndMinutes()) > 0)
                 .reward(HardMediumSoftScore.ONE_SOFT,
                         a -> Math.round(a.getEmployee().preferredMinutes(a.getDate(), a.getStartMinutes(), a.getEndMinutes()) / 60f))
@@ -235,7 +277,7 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
     /** Penalise the hours of a shift that fall inside an undesired window. */
     Constraint undesiredTimeBlock(ConstraintFactory f) {
         return f.forEach(ShiftAssignment.class)
-                .filter(a -> a.getEmployee() != null
+                .filter(a -> !a.isHistory() && a.getEmployee() != null
                         && a.getEmployee().undesiredMinutes(a.getDate(), a.getStartMinutes(), a.getEndMinutes()) > 0)
                 .penalize(HardMediumSoftScore.ONE_SOFT,
                         a -> Math.round(a.getEmployee().undesiredMinutes(a.getDate(), a.getStartMinutes(), a.getEndMinutes()) / 60f))
@@ -246,17 +288,19 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
     Constraint preferredHoursPerWeek(ConstraintFactory f) {
         return f.forEach(ShiftAssignment.class)
                 .filter(a -> a.getEmployee() != null)
-                .groupBy(ShiftAssignment::getEmployee, ShiftAssignment::getWeekStart, ConstraintCollectors.sum(this::minutesOf))
-                .filter((e, week, minutes) -> e.preferred("weekHours", week) != null)
+                .groupBy(ShiftAssignment::getEmployee, ShiftAssignment::getWeekStart,
+                        ConstraintCollectors.sum(this::minutesOf),
+                        ConstraintCollectors.sum(this::windowMinutes))
+                .filter((e, week, minutes, windowMinutes) -> windowMinutes > 0 && e.preferred("weekHours", week) != null)
                 .penalize(HardMediumSoftScore.ONE_SOFT,
-                        (e, week, minutes) -> Math.abs(minutes - e.preferred("weekHours", week) * 60) / 60)
+                        (e, week, minutes, windowMinutes) -> Math.abs(minutes - e.preferred("weekHours", week) * 60) / 60)
                 .asConstraint("Preferred weekly hours");
     }
 
-    /** Spread shifts evenly: penalising count squared favours balanced workloads. */
+    /** Spread window shifts evenly: penalising count squared favours balanced workloads. */
     Constraint balanceWorkload(ConstraintFactory f) {
         return f.forEach(ShiftAssignment.class)
-                .filter(a -> a.getEmployee() != null)
+                .filter(a -> !a.isHistory() && a.getEmployee() != null)
                 .groupBy(ShiftAssignment::getEmployee, ConstraintCollectors.count())
                 .penalize(HardMediumSoftScore.ONE_SOFT, (e, count) -> count * count)
                 .asConstraint("Balance workload");

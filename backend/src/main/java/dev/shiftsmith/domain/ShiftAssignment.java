@@ -43,6 +43,15 @@ public class ShiftAssignment {
     @PlanningPin
     private boolean pinned;
 
+    /**
+     * A worked shift from before the solve window, loaded as a fixed fact so the
+     * boundary constraints (rest, consecutive days, weekly/monthly hours) see real
+     * history (issue #47, Phase 2). History slots are always pinned; per-shift rules,
+     * coverage and preferences ignore them — only the aggregate/rest/consec
+     * calculations count them, and only where a window slot is involved.
+     */
+    private boolean history;
+
     @PlanningVariable(allowsUnassigned = true)
     private Employee employee;
 
@@ -133,6 +142,9 @@ public class ShiftAssignment {
 
     public boolean isPinned() { return pinned; }
     public void setPinned(boolean pinned) { this.pinned = pinned; }
+
+    public boolean isHistory() { return history; }
+    public void setHistory(boolean history) { this.history = history; }
 
     public Employee getEmployee() { return employee; }
     public void setEmployee(Employee employee) { this.employee = employee; }

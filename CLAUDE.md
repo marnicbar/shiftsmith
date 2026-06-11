@@ -138,6 +138,20 @@ unit + `horizonCount` units. So `week × 1` covers "this week and the next".
 `unimproved-spent-limit` (application.properties) pauses the solver once the
 solution is steady. Any `PUT /api/problem` restarts it.
 
+### Durable schedule & bounded lookback (issue #47, Phase 2)
+The solver's final best solution is persisted as `assignment` rows (`AssignmentStore`,
+`source = solver`) and reloaded on boot, so a restart shows the last roster
+immediately (`ScheduleService.persistSolved`/`reloadPersistedAssignments` overlay
+`currentAssignments`). Past `assignment` rows are the history: `SolverScope.lookbackStart`
+bounds the working set to `[lookbackStart, windowEnd)` — the window plus just the
+lead-in each boundary constraint needs (ISO-week/month bucket starts, `maxConsecDays`,
+`maxRestHours`) — and `ScheduleService` loads the worked shifts in
+`[lookbackStart, windowStart)` as fixed **history facts** (`ShiftAssignment.history`,
+pinned). History counts towards rest/consec/week/month at the boundary but is ignored
+by per-shift rules, coverage and preferences, and only charges a breach where a window
+slot shares it. Because `ProblemStore.save` upserts the FK targets (employee, position,
+shift_template) by id, this history survives document edits.
+
 ### Constraints (`ScheduleConstraintProvider`)
 Hard: required skills, vacation, availability (shift must fit an available window),
 overlaps, min rest, daily/weekly/monthly hour limits (time-varying), max consecutive

@@ -109,7 +109,50 @@ public class ScheduleService {
     // --- problem snapshot ------------------------------------------------
 
     private Schedule buildProblem() {
-        return buildProblem(employees, positions, settings, overrides);
+        Schedule problem = buildProblem(employees, positions, settings, overrides);
+        appendHistoryFacts(problem);
+        return problem;
+    }
+
+    /**
+     * Load the worked shifts in the bounded lookback ({@code [lookbackStart, windowStart)})
+     * and append them as fixed history facts so the boundary constraints (rest, consecutive
+     * days, weekly/monthly hours) are correct at the leading edge of the window.
+     */
+    private void appendHistoryFacts(Schedule problem) {
+        if (problem.getAssignments().isEmpty()) return;   // no window slots → nothing to bound
+        LocalDate today = LocalDate.now();
+        LocalDate windowStart = settings.horizonStart(today);
+        LocalDate lookbackStart = dev.shiftsmith.solver.SolverScope.lookbackStart(employees, settings, today);
+        if (!lookbackStart.isBefore(windowStart)) return; // no relevant boundary rules
+
+        Map<String, Employee> byId = new HashMap<>();
+        for (Employee e : employees) byId.put(e.getId(), e);
+
+        List<dev.shiftsmith.persistence.entity.AssignmentEntity> rows;
+        try {
+            rows = assignmentStore.loadHistoryRows(lookbackStart, windowStart);
+        } catch (Exception e) {
+            LOG.error("Could not load history for the solver lookback", e);
+            return;
+        }
+        for (var h : rows) {
+            Employee e = byId.get(h.employeeId);
+            if (e == null) continue;   // the person was removed; their past slot is now unstaffed
+            ShiftAssignment a = new ShiftAssignment();
+            a.setId(h.templateId + "@" + h.occurrenceDate + "#" + h.slotIndex);
+            a.setShiftTemplateId(h.templateId);
+            a.setSlotIndex(h.slotIndex);
+            a.setDate(h.occurrenceDate);
+            a.setStart(h.startTs);
+            a.setEnd(h.endTs);
+            a.setEmployee(e);
+            a.setPinned(true);
+            a.setHistory(true);
+            a.setRequiredSkills(java.util.Set.of());
+            a.setPreferredEmployeeIds(java.util.List.of());
+            problem.getAssignments().add(a);
+        }
     }
 
     private static Schedule buildProblem(List<Employee> employees, List<Position> positions,

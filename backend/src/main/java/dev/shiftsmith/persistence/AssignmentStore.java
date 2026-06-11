@@ -59,6 +59,17 @@ public class AssignmentStore {
     }
 
     /**
+     * Worked shifts in {@code [from, to)} (staffed rows only), fed to the solver as
+     * fixed history facts so the boundary constraints see real past hours/days. Both
+     * solver-produced and manually-pinned past rows count as worked history.
+     */
+    @Transactional
+    public List<AssignmentEntity> loadHistoryRows(LocalDate from, LocalDate to) {
+        return AssignmentEntity.list(
+                "occurrenceDate >= ?1 and occurrenceDate < ?2 and employeeId is not null", from, to);
+    }
+
+    /**
      * The staffed employee of every persisted slot in {@code [windowStart, windowEnd)},
      * keyed by {@link #slotId}. Used to overlay a freshly expanded schedule on boot so
      * the last solved roster is shown immediately, before the solver re-runs.

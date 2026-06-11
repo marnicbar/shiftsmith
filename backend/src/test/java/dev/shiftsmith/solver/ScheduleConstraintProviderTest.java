@@ -254,4 +254,89 @@ class ScheduleConstraintProviderTest {
         ShiftAssignment c = assignment("a3", day(0), 660, 720, e, "Bar");
         verifier.verifyThat(ScheduleConstraintProvider::balanceWorkload).given(e, a, b, c).penalizesBy(9); // 3^2
     }
+
+    // ------------------------------------------------- boundary lookback (#47 Phase 2)
+    // A worked shift from before the window is a fixed history fact: it counts towards
+    // the aggregate/rest/consec limits at the boundary, but per-shift rules, coverage and
+    // preferences ignore it, and a breach is only charged when a real window slot shares it.
+
+    private static ShiftAssignment history(ShiftAssignment a) {
+        a.setHistory(true);
+        a.setPinned(true);
+        return a;
+    }
+
+    @Test
+    void minRest_countsHistoryShiftLeadingIntoTheWindow() {
+        Employee e = employee("e1", "Bar");
+        e.getRules().add(rule("restHours", "min", 12));
+        ShiftAssignment past = history(assignment("h", day(-1), 600, 1320, e, "Bar")); // ends day(-1) 22:00
+        ShiftAssignment win = assignment("a", day(0), 360, 720, e, "Bar");             // day(0) 06:00 → 8h rest
+        verifier.verifyThat(ScheduleConstraintProvider::minRestBetweenShifts).given(e, past, win).penalizesBy(1);
+    }
+
+    @Test
+    void minRest_silentBetweenTwoHistoryShifts() {
+        Employee e = employee("e1", "Bar");
+        e.getRules().add(rule("restHours", "min", 12));
+        ShiftAssignment h1 = history(assignment("h1", day(-2), 600, 1320, e, "Bar")); // ends day(-2) 22:00
+        ShiftAssignment h2 = history(assignment("h2", day(-1), 360, 720, e, "Bar"));  // day(-1) 06:00 → 8h
+        verifier.verifyThat(ScheduleConstraintProvider::minRestBetweenShifts).given(e, h1, h2).penalizesBy(0);
+    }
+
+    @Test
+    void maxHoursPerWeek_countsHistoryHoursInTheBoundaryWeek() {
+        Employee e = employee("e1", "Bar");
+        e.getRules().add(rule("weekHours", "max", 9));
+        // Same ISO week (Mon-anchored): 6h history + 6h window = 12h, 3h (180 min) over.
+        ShiftAssignment past = history(assignment("h", day(0), 540, 900, e, "Bar")); // Mon, 6h
+        ShiftAssignment win = assignment("a", day(2), 540, 900, e, "Bar");           // Wed, 6h
+        verifier.verifyThat(ScheduleConstraintProvider::maxHoursPerWeek).given(e, past, win).penalizesBy(180);
+    }
+
+    @Test
+    void maxHoursPerWeek_silentForAPurelyHistoricalWeek() {
+        Employee e = employee("e1", "Bar");
+        e.getRules().add(rule("weekHours", "max", 9));
+        ShiftAssignment h1 = history(assignment("h1", day(0), 540, 900, e, "Bar")); // 6h
+        ShiftAssignment h2 = history(assignment("h2", day(2), 540, 900, e, "Bar")); // 6h → 12h, but no window slot
+        verifier.verifyThat(ScheduleConstraintProvider::maxHoursPerWeek).given(e, h1, h2).penalizesBy(0);
+    }
+
+    @Test
+    void maxConsecutiveDays_countsAHistoryRunLeadingIntoAWindowDay() {
+        Employee e = employee("e1", "Bar");
+        e.getRules().add(rule("consecDays", "max", 2));
+        ShiftAssignment h1 = history(assignment("h1", day(-2), 540, 660, e, "Bar"));
+        ShiftAssignment h2 = history(assignment("h2", day(-1), 540, 660, e, "Bar"));
+        ShiftAssignment win = assignment("a", day(0), 540, 660, e, "Bar"); // 3-day run incl. window, cap 2 → 1 over
+        verifier.verifyThat(ScheduleConstraintProvider::maxConsecutiveDays).given(e, h1, h2, win).penalizesBy(1);
+    }
+
+    @Test
+    void maxConsecutiveDays_silentForAPurelyHistoricalRun() {
+        Employee e = employee("e1", "Bar");
+        e.getRules().add(rule("consecDays", "max", 2));
+        // A 3-day historical run (no window day in it), plus a separate, isolated window day.
+        ShiftAssignment h1 = history(assignment("h1", day(-3), 540, 660, e, "Bar"));
+        ShiftAssignment h2 = history(assignment("h2", day(-2), 540, 660, e, "Bar"));
+        ShiftAssignment h3 = history(assignment("h3", day(-1), 540, 660, e, "Bar"));
+        ShiftAssignment win = assignment("a", day(1), 540, 660, e, "Bar"); // not adjacent to the run
+        verifier.verifyThat(ScheduleConstraintProvider::maxConsecutiveDays).given(e, h1, h2, h3, win).penalizesBy(0);
+    }
+
+    @Test
+    void coverage_ignoresHistorySlots() {
+        Employee e = availableAllDay(employee("e1", "Bar"), day(0));
+        ShiftAssignment past = history(assignment("h", day(-1), 540, 660, e, "Bar"));
+        ShiftAssignment win = assignment("a", day(0), 540, 660, e, "Bar");
+        verifier.verifyThat(ScheduleConstraintProvider::coverage).given(e, past, win).rewardsWith(1); // only the window slot
+    }
+
+    @Test
+    void requiredSkills_ignoresHistorySlots() {
+        Employee e = availableAllDay(employee("e1", "Floor"), day(-1));
+        ShiftAssignment past = history(assignment("h", day(-1), 540, 660, e, "Bar")); // lacks Bar, but it's history
+        verifier.verifyThat(ScheduleConstraintProvider::requiredSkills).given(e, past).penalizesBy(0);
+    }
 }
