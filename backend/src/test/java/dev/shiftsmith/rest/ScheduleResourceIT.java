@@ -44,6 +44,9 @@ class ScheduleResourceIT {
     @io.quarkus.test.common.http.TestHTTPResource
     java.net.URL baseUrl;
 
+    @jakarta.inject.Inject
+    dev.shiftsmith.persistence.AssignmentStore assignmentStore;
+
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -100,6 +103,29 @@ class ScheduleResourceIT {
                         .then().statusCode(200)
                         .body("staffed", is(1))
                         .body("assignments[0].employeeId", is("alice")));
+    }
+
+    /**
+     * Once the solver settles, its picks are persisted as {@code assignment} rows
+     * (issue #47, Phase 2) so the roster survives a restart. Drive the same trivial
+     * problem, wait for the final best solution, and assert the solved slot was
+     * written to the durable store keyed by its expanded slot id.
+     */
+    @Test
+    void solvedScheduleIsPersistedAsAssignmentRows() throws Exception {
+        authed().contentType(ContentType.JSON).body(trivialProblemJson())
+                .when().put("/api/problem")
+                .then().statusCode(204);
+
+        // settings = day × 1 → window is [today, today+2).
+        LocalDate today = LocalDate.now();
+        LocalDate from = today;
+        LocalDate to = today.plusDays(2);
+        await().atMost(Duration.ofSeconds(25)).pollInterval(Duration.ofMillis(500)).untilAsserted(() -> {
+            Map<String, String> persisted = assignmentStore.loadAssignedEmployees(from, to);
+            org.assertj.core.api.Assertions.assertThat(persisted)
+                    .containsEntry("bar@" + today + "#0", "alice");
+        });
     }
 
     @Test

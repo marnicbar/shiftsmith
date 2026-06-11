@@ -8,6 +8,7 @@ import dev.shiftsmith.domain.Position;
 import dev.shiftsmith.domain.Schedule;
 import dev.shiftsmith.domain.Settings;
 import dev.shiftsmith.domain.ShiftAssignment;
+import dev.shiftsmith.persistence.AssignmentStore;
 import dev.shiftsmith.persistence.PersistFailedException;
 import dev.shiftsmith.persistence.ProblemDocument;
 import dev.shiftsmith.persistence.ProblemStore;
@@ -54,6 +55,9 @@ public class ScheduleService {
     ProblemStore store;
 
     @Inject
+    AssignmentStore assignmentStore;
+
+    @Inject
     ScheduleBroadcaster broadcaster;
 
     private final List<Employee> employees = new ArrayList<>();
@@ -62,6 +66,13 @@ public class ScheduleService {
     private Map<String, List<String>> overrides = new HashMap<>();
 
     private volatile Schedule bestSolution;
+
+    /**
+     * The last solved roster, persisted as {@code assignment} rows and reloaded on
+     * boot, keyed by slot id. Overlays a freshly expanded schedule so the previous
+     * solution is shown immediately after a restart, before the solver re-runs.
+     */
+    private volatile Map<String, String> persistedAssignments = Map.of();
 
     /** Load the persisted problem (empty on a fresh database) and start solving at boot. */
     void onStart(@Observes StartupEvent ev) {
@@ -82,6 +93,9 @@ public class ScheduleService {
             catch (Exception e) { LOG.error("Could not persist initial empty problem", e); }
             LOG.info("Fresh database — starting with an empty problem");
         }
+        // Show the last solved roster immediately (overlaid on a fresh expansion) so a
+        // restart doesn't blank the schedule until the solver runs again.
+        reloadPersistedAssignments();
         // A document persisted before validation existed could still be poison. Never
         // let it abort startup: serve the loaded-but-unsolved state and let the next
         // valid edit fix it, instead of bricking every boot.
@@ -142,9 +156,11 @@ public class ScheduleService {
         } catch (Exception ignored) {}
         bestSolution = null;
         Schedule problem = buildProblem();
-        // Nothing to solve (no shifts) — keep the empty snapshot as the result.
+        // Nothing to solve (no shifts) — keep the empty snapshot as the result and
+        // clear any solver rows left over for an emptied window.
         if (problem.getAssignments().isEmpty()) {
             bestSolution = problem;
+            persistSolved(problem);
             broadcaster.fire();
             return;
         }
@@ -152,7 +168,11 @@ public class ScheduleService {
                 .withProblemId(JOB_ID)
                 .withProblem(problem)
                 .withBestSolutionEventConsumer(event -> { this.bestSolution = event.solution(); broadcaster.fire(); })
-                .withFinalBestSolutionEventConsumer(event -> { this.bestSolution = event.solution(); broadcaster.fire(); })
+                .withFinalBestSolutionEventConsumer(event -> {
+                    this.bestSolution = event.solution();
+                    persistSolved(event.solution());
+                    broadcaster.fire();
+                })
                 .withExceptionHandler((id, ex) -> LOG.errorf(ex, "Solver job %s failed", id))
                 .run();
         // Tell clients solving (re)started right away, before the first improvement.
@@ -207,22 +227,66 @@ public class ScheduleService {
         if (newPositions != null) { positions.clear(); positions.addAll(newPositions); }
         if (newSettings != null) { settings = newSettings; }
         if (newOverrides != null) { overrides = new HashMap<>(newOverrides); }
+        // The save cleared the prior solver rows; drop the now-stale overlay so the gap
+        // before the re-solve completes doesn't surface an outdated roster.
+        reloadPersistedAssignments();
         startSolving();
     }
 
-    /** Best solved assignments, overlaid on a fresh expansion of the current problem. */
+    /**
+     * Best solved assignments, overlaid on a fresh expansion of the current problem.
+     * The in-memory best solution wins; where it has nothing to say about a slot (e.g.
+     * just after a restart, before the solver has run), the last persisted solution is
+     * used so the schedule isn't shown blank.
+     */
     public synchronized List<ShiftAssignment> currentAssignments() {
         List<ShiftAssignment> fresh = ScheduleExpander.expand(
                 positions, employees, settings, overrides, LocalDate.now());
+        Map<String, Employee> byId = new HashMap<>();
+        for (Employee e : employees) byId.put(e.getId(), e);
+
         Schedule best = bestSolution;
+        Map<String, Employee> solved = new HashMap<>();
         if (best != null && best.getAssignments() != null) {
-            Map<String, Employee> solved = new HashMap<>();
             for (ShiftAssignment a : best.getAssignments()) solved.put(a.getId(), a.getEmployee());
-            for (ShiftAssignment a : fresh) {
-                if (!a.isPinned() && solved.containsKey(a.getId())) a.setEmployee(solved.get(a.getId()));
+        }
+        Map<String, String> persisted = persistedAssignments;
+        for (ShiftAssignment a : fresh) {
+            if (a.isPinned()) continue;
+            if (solved.containsKey(a.getId())) {
+                a.setEmployee(solved.get(a.getId()));        // live solver state is authoritative
+            } else if (persisted.containsKey(a.getId())) {
+                a.setEmployee(byId.get(persisted.get(a.getId())));  // fall back to the persisted roster
             }
         }
         return fresh;
+    }
+
+    /** Persist the solver's window slots so the roster survives a restart, then refresh the overlay. */
+    private void persistSolved(Schedule solution) {
+        if (solution == null || solution.getAssignments() == null) return;
+        LocalDate today = LocalDate.now();
+        LocalDate start = settings.horizonStart(today);
+        LocalDate end = settings.horizonEnd(today);
+        try {
+            assignmentStore.persistSolvedWindow(solution.getAssignments(), start, end);
+            persistedAssignments = assignmentStore.loadAssignedEmployees(start, end);
+        } catch (Exception e) {
+            // A persistence hiccup must not crash the solver thread; the in-memory best
+            // solution still serves the UI and the next solve will retry the write.
+            LOG.error("Could not persist the solved schedule", e);
+        }
+    }
+
+    /** Reload the persisted roster overlay for the current window. */
+    private void reloadPersistedAssignments() {
+        LocalDate today = LocalDate.now();
+        try {
+            persistedAssignments = assignmentStore.loadAssignedEmployees(
+                    settings.horizonStart(today), settings.horizonEnd(today));
+        } catch (Exception e) {
+            LOG.error("Could not load persisted assignments", e);
+        }
     }
 
     public Schedule getBestSolution() { return bestSolution; }
