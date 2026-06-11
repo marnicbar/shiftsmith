@@ -16,14 +16,17 @@ public class AuthStore {
      * Idempotently seed a fresh database: create the default account if no users
      * exist, and store the signing secret if none is present yet. The provided
      * secret is only used when the row is missing — an existing one is kept so
-     * tokens stay valid.
+     * tokens stay valid. {@code mustChangePassword} marks the seeded account as
+     * still carrying a publicly-known password that has to be rotated before the
+     * API will serve it.
      */
     @Transactional
-    public void seed(String username, String passwordHash, String secretB64) {
+    public void seed(String username, String passwordHash, String secretB64, boolean mustChangePassword) {
         if (UserAccount.count() == 0) {
             UserAccount u = new UserAccount();
             u.username = username;
             u.passwordHash = passwordHash;
+            u.mustChangePassword = mustChangePassword;
             u.persist();
         }
         AuthConfigEntity cfg = AuthConfigEntity.findById(AuthConfigEntity.SINGLETON_ID);
@@ -40,10 +43,20 @@ public class AuthStore {
         return Optional.ofNullable(UserAccount.findByUsername(username));
     }
 
+    /** Changing the password always clears the forced-rotation flag. */
     @Transactional
     public void updatePassword(String username, String newHash) {
         UserAccount u = UserAccount.findByUsername(username);
-        if (u != null) u.passwordHash = newHash;
+        if (u != null) {
+            u.passwordHash = newHash;
+            u.mustChangePassword = false;
+        }
+    }
+
+    @Transactional
+    public boolean mustChangePassword(String username) {
+        UserAccount u = UserAccount.findByUsername(username);
+        return u != null && u.mustChange();
     }
 
     @Transactional

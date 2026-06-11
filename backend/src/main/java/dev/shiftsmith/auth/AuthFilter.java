@@ -21,6 +21,11 @@ import java.util.Optional;
  * requests, or from a {@code ?token=} query parameter for the SSE stream (the
  * browser's {@code EventSource} cannot set headers). The authenticated username
  * is stashed as a request property for resources that need it.
+ *
+ * <p>If the authenticated account still carries a seeded, publicly-known
+ * password ({@code mustChangePassword}), every endpoint except the session
+ * check and the password-change call is blocked with 403 so a fresh deployment
+ * cannot be operated on a known credential until it is rotated.
  */
 @Provider
 @Priority(Priorities.AUTHENTICATION)
@@ -49,6 +54,16 @@ public class AuthFilter implements ContainerRequestFilter {
             return;
         }
         ctx.setProperty(USERNAME_PROPERTY, username.get());
+
+        // A seeded account on a known password may only reach the endpoints it
+        // needs to rotate that password; everything else is blocked until it does.
+        if (auth.mustChangePassword(username.get())
+                && !path.equals("api/auth/me")
+                && !path.equals("api/auth/change-password")) {
+            ctx.abortWith(Response.status(Response.Status.FORBIDDEN)
+                    .entity(new ApiError("Password change required"))
+                    .build());
+        }
     }
 
     private String extractToken(ContainerRequestContext ctx) {

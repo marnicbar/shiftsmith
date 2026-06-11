@@ -55,7 +55,9 @@
     "changeFailed": "Could not update password.",
     "currentIncorrect": "Current password is incorrect.",
     "tooShort": "New password must be at least 6 characters.",
-    "mismatch": "New passwords do not match."
+    "mismatch": "New passwords do not match.",
+    "forceTitle": "Choose a new password",
+    "forceSubtitle": "This account still uses the default password. Set a new one to continue."
   },
   "account": {
     "title": "Account",

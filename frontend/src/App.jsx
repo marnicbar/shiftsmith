@@ -11,7 +11,7 @@ import { Positions } from './positions.jsx';
 import { PlanView } from './planview.jsx';
 import { Dashboard } from './dashboard.jsx';
 import { SettingsView, AccountView } from './settings.jsx';
-import { Login } from './login.jsx';
+import { Login, ForcePasswordChange } from './login.jsx';
 import { tooLooseAgainst } from './rules.jsx';
 import * as api from './lib/api.js';
 
@@ -96,6 +96,9 @@ export default function App() {
   // Auth gate: 'checking' until we know, then 'in' (show the app) or 'out' (show login).
   const [authState, setAuthState] = useState('checking');
   const [authUser, setAuthUser] = useState(null);
+  // While set, the account is on a seeded password that must be rotated before
+  // the app loads — the backend blocks every other endpoint until it is.
+  const [mustChangePassword, setMustChangePassword] = useState(false);
 
   const lastSyncRef = useRef(null);
 
@@ -105,15 +108,16 @@ export default function App() {
     api.setUnauthorizedHandler(() => { setAuthState('out'); setAuthUser(null); setLoaded(false); });
     (async () => {
       const u = await api.me();
-      if (u) { setAuthUser(u); setAuthState('in'); } else { setAuthState('out'); }
+      if (u) { setAuthUser(u.username); setMustChangePassword(u.mustChangePassword); setAuthState('in'); }
+      else { setAuthState('out'); }
     })();
     return () => api.setUnauthorizedHandler(null);
   }, []);
 
-  const onLogin = useCallback((u) => { setAuthUser(u); setAuthState('in'); }, []);
+  const onLogin = useCallback((u, mustChange) => { setAuthUser(u); setMustChangePassword(!!mustChange); setAuthState('in'); }, []);
   const onLogout = useCallback(() => {
     api.logout();
-    setAuthState('out'); setAuthUser(null); setLoaded(false);
+    setAuthState('out'); setAuthUser(null); setMustChangePassword(false); setLoaded(false);
     setEmployees([]); setPositions([]); setOverrides({}); setSelEmp(null); setSelPos(null);
     lastSyncRef.current = null;
   }, []);
@@ -128,9 +132,10 @@ export default function App() {
     horizonStart: d.horizonStart, horizonEnd: d.horizonEnd,
   }), []);
 
-  // Initial load from the backend, once the session is established.
+  // Initial load from the backend, once the session is established (and the
+  // account isn't gated behind a forced password change).
   useEffect(() => {
-    if (authState !== 'in') return;
+    if (authState !== 'in' || mustChangePassword) return;
     (async () => {
       try {
         const d = await api.getSchedule();
@@ -146,7 +151,7 @@ export default function App() {
         setLoaded(true);
       } catch (e) { setError(e.message); }
     })();
-  }, [authState, setMeta]);
+  }, [authState, mustChangePassword, setMeta]);
 
   // Live updates: subscribe to the backend's SSE stream once loaded. The solver's
   // progress, our own edits and other clients' edits all arrive here, so the
@@ -252,6 +257,9 @@ export default function App() {
   }
   if (authState === 'out') {
     return <Login onSuccess={onLogin} />;
+  }
+  if (mustChangePassword) {
+    return <ForcePasswordChange username={authUser} onDone={() => setMustChangePassword(false)} />;
   }
 
   if (!loaded && !error) {

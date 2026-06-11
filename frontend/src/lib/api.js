@@ -53,14 +53,16 @@ export async function login(username, password, remember) {
   if (!res.ok) throw new Error(`login failed: ${res.status}`);
   const data = await res.json();
   setToken(data.token, remember);
-  return { ok: true, username: data.username };
+  return { ok: true, username: data.username, mustChangePassword: !!data.mustChangePassword };
 }
 
-// Validate a stored token on startup; returns the username or null.
+// Validate a stored token on startup; returns { username, mustChangePassword } or null.
 export async function me() {
   if (!getToken()) return null;
-  try { const d = await request(`${BASE}/auth/me`); return d?.username ?? null; }
-  catch { return null; }
+  try {
+    const d = await request(`${BASE}/auth/me`);
+    return d?.username ? { username: d.username, mustChangePassword: !!d.mustChangePassword } : null;
+  } catch { return null; }
 }
 
 export const changePassword = (currentPassword, newPassword) =>

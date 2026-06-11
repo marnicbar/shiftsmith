@@ -4,6 +4,7 @@ import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import javax.crypto.Mac;
@@ -33,6 +34,19 @@ public class AuthService {
     public static final String DEFAULT_USERNAME = "admin";
     public static final String DEFAULT_PASSWORD = "shiftsmith";
 
+    /**
+     * Initial admin credentials for a fresh database. When the password is
+     * supplied (via {@code SHIFTSMITH_ADMIN_PASSWORD}) the operator has chosen
+     * it, so the account is ready to use. When it is absent we fall back to the
+     * publicly-known {@link #DEFAULT_PASSWORD} but flag the account so the API
+     * refuses to serve it until the password is rotated.
+     */
+    @ConfigProperty(name = "shiftsmith.admin.username", defaultValue = DEFAULT_USERNAME)
+    String initialUsername;
+
+    @ConfigProperty(name = "shiftsmith.admin.password")
+    Optional<String> initialPassword;
+
     /** Token lifetimes: short-lived by default, long-lived when "remember me" is on. */
     private static final Duration TTL_DEFAULT = Duration.ofDays(1);
     private static final Duration TTL_REMEMBER = Duration.ofDays(30);
@@ -49,10 +63,28 @@ public class AuthService {
     void onStart(@Observes StartupEvent ev) {
         byte[] fresh = new byte[32];
         new SecureRandom().nextBytes(fresh);
-        store.seed(DEFAULT_USERNAME, PasswordHasher.hash(DEFAULT_PASSWORD),
-                Base64.getEncoder().encodeToString(fresh));
+
+        String username = (initialUsername == null || initialUsername.isBlank())
+                ? DEFAULT_USERNAME : initialUsername.trim();
+        boolean operatorChosen = initialPassword.map(p -> !p.isBlank()).orElse(false);
+        String password = operatorChosen ? initialPassword.get() : DEFAULT_PASSWORD;
+
+        store.seed(username, PasswordHasher.hash(password),
+                Base64.getEncoder().encodeToString(fresh), !operatorChosen);
         secret = Base64.getDecoder().decode(store.secret());
-        LOG.info("Auth ready (default account seeded if database was empty)");
+
+        if (!operatorChosen && store.mustChangePassword(username)) {
+            LOG.warnf("Auth ready, but account '%s' is still using the publicly-known default password. "
+                    + "Protected endpoints are blocked until it is changed (or set SHIFTSMITH_ADMIN_PASSWORD "
+                    + "to provision a password at deploy time).", username);
+        } else {
+            LOG.info("Auth ready (default account seeded if database was empty)");
+        }
+    }
+
+    /** Whether the user still has to rotate a seeded, publicly-known password. */
+    public boolean mustChangePassword(String username) {
+        return store.mustChangePassword(username);
     }
 
     /** Verify credentials and, on success, mint a signed token. */

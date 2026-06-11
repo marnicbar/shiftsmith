@@ -106,4 +106,14 @@ class ScheduleResourceIT {
     void apiRequiresAuthentication() {
         given().when().get("/api/schedule").then().statusCode(401);
     }
+
+    @Test
+    void meReportsTheForcedPasswordChangeFlag() {
+        // The test profile provisions the admin password, so the seeded account is
+        // operator-chosen and not gated behind a forced password change.
+        authed().when().get("/api/auth/me")
+                .then().statusCode(200)
+                .body("username", is("admin"))
+                .body("mustChangePassword", is(false));
+    }
 }
