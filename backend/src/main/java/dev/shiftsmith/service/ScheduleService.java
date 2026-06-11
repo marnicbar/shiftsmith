@@ -3,16 +3,20 @@ package dev.shiftsmith.service;
 import ai.timefold.solver.core.api.score.HardMediumSoftScore;
 import ai.timefold.solver.core.api.solver.SolverManager;
 import ai.timefold.solver.core.api.solver.SolverStatus;
+import dev.shiftsmith.domain.Block;
 import dev.shiftsmith.domain.Employee;
 import dev.shiftsmith.domain.Position;
+import dev.shiftsmith.domain.Rule;
 import dev.shiftsmith.domain.Schedule;
 import dev.shiftsmith.domain.Settings;
 import dev.shiftsmith.domain.ShiftAssignment;
+import dev.shiftsmith.domain.ShiftTemplate;
 import dev.shiftsmith.persistence.AssignmentStore;
 import dev.shiftsmith.persistence.PersistFailedException;
 import dev.shiftsmith.persistence.ProblemDocument;
 import dev.shiftsmith.persistence.ProblemStore;
 import dev.shiftsmith.realtime.ScheduleBroadcaster;
+import dev.shiftsmith.rest.dto.Page;
 import dev.shiftsmith.rest.dto.ScheduleDTO;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -237,6 +241,93 @@ public class ScheduleService {
     public List<Position> getPositions() { return positions; }
     public Settings getSettings() { return settings; }
     public Map<String, List<String>> getOverrides() { return overrides; }
+
+    // --- granular, windowed reads (issue #47, Phase 3) -------------------
+    // Synchronized snapshots of the in-memory problem (the canonical source) so the
+    // client can load only what a view needs; the schedule range additionally reads
+    // the durable assignment rows, spanning history beyond the live solve window.
+
+    public synchronized List<String> skills() {
+        return new ArrayList<>(settings.getSkills());
+    }
+
+    public synchronized Page<Employee> employeesPage(int page, int size) {
+        return Page.of(employees, page, size);
+    }
+
+    public synchronized Page<Position> positionsPage(int page, int size) {
+        return Page.of(positions, page, size);
+    }
+
+    public synchronized Optional<Employee> employee(String id) {
+        return employees.stream().filter(e -> e.getId().equals(id)).findFirst();
+    }
+
+    public synchronized Optional<Position> position(String id) {
+        return positions.stream().filter(p -> p.getId().equals(id)).findFirst();
+    }
+
+    /** An employee's availability blocks that project into {@code [from, to]} (inclusive). */
+    public synchronized Optional<List<Block>> employeeAvailability(String id, LocalDate from, LocalDate to) {
+        return employee(id).map(e -> {
+            List<Block> out = new ArrayList<>();
+            for (Block b : e.getBlocks()) {
+                if (blockProjectsInto(b, from, to)) out.add(b);
+            }
+            return out;
+        });
+    }
+
+    public synchronized Optional<List<Rule>> employeeRules(String id) {
+        return employee(id).map(e -> new ArrayList<>(e.getRules()));
+    }
+
+    public synchronized Optional<List<ShiftTemplate>> positionTemplates(String id) {
+        return position(id).map(p -> new ArrayList<>(p.getShifts()));
+    }
+
+    private static boolean blockProjectsInto(Block b, LocalDate from, LocalDate to) {
+        for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
+            if (b.occursOn(d)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * The persisted assignment slots whose occurrence falls in {@code [from, to)},
+     * optionally narrowed to one person ({@code person:<id>}) or position
+     * ({@code position:<id>}). Reads the durable {@code assignment} rows, so it spans
+     * history and any persisted future — not just the live solve window.
+     */
+    public List<ScheduleDTO.Slot> rangeSlots(LocalDate from, LocalDate to, String scope) {
+        Map<String, String> templatePosition;
+        synchronized (this) {
+            templatePosition = new HashMap<>();
+            for (Position p : positions) {
+                for (ShiftTemplate t : p.getShifts()) templatePosition.put(t.getId(), p.getId());
+            }
+        }
+        String personId = scopeValue(scope, "person");
+        String positionId = scopeValue(scope, "position");
+
+        List<ScheduleDTO.Slot> out = new ArrayList<>();
+        for (var a : assignmentStore.loadRange(from, to)) {
+            if (personId != null && !personId.equals(a.employeeId)) continue;
+            String pos = templatePosition.get(a.templateId);
+            if (positionId != null && !positionId.equals(pos)) continue;
+            out.add(new ScheduleDTO.Slot(
+                    AssignmentStore.slotId(a.templateId, a.occurrenceDate, a.slotIndex),
+                    pos, a.templateId, a.slotIndex, a.occurrenceDate, a.startTs, a.endTs, a.employeeId, a.pinned));
+        }
+        return out;
+    }
+
+    /** Extract {@code <id>} from a {@code "<kind>:<id>"} scope token, or null. */
+    private static String scopeValue(String scope, String kind) {
+        if (scope == null) return null;
+        String prefix = kind + ":";
+        return scope.startsWith(prefix) ? scope.substring(prefix.length()) : null;
+    }
 
     /**
      * Replace the whole problem from the frontend, persist it and re-solve. Null

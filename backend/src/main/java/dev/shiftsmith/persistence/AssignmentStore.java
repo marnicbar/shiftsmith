@@ -28,7 +28,7 @@ public class AssignmentStore {
     static final String SOLVER = "solver";
 
     /** Slot id as produced by {@code ScheduleExpander}: {@code <templateId>@<date>#<index>}. */
-    static String slotId(String templateId, LocalDate occurrenceDate, int slotIndex) {
+    public static String slotId(String templateId, LocalDate occurrenceDate, int slotIndex) {
         return templateId + "@" + occurrenceDate + "#" + slotIndex;
     }
 
@@ -67,6 +67,19 @@ public class AssignmentStore {
     public List<AssignmentEntity> loadHistoryRows(LocalDate from, LocalDate to) {
         return AssignmentEntity.list(
                 "occurrenceDate >= ?1 and occurrenceDate < ?2 and employeeId is not null", from, to);
+    }
+
+    /**
+     * Every persisted assignment row (staffed or not) whose occurrence falls in
+     * {@code [from, to)}, ordered for stable reads. Powers the windowed schedule read
+     * (issue #47, Phase 3): unlike the live snapshot it spans past history and any
+     * persisted future, not just the current solve window.
+     */
+    @Transactional
+    public List<AssignmentEntity> loadRange(LocalDate from, LocalDate to) {
+        return AssignmentEntity.list(
+                "occurrenceDate >= ?1 and occurrenceDate < ?2", io.quarkus.panache.common.Sort.by("occurrenceDate").and("templateId").and("slotIndex"),
+                from, to);
     }
 
     /**
