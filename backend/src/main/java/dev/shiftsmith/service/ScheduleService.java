@@ -8,6 +8,7 @@ import dev.shiftsmith.domain.Position;
 import dev.shiftsmith.domain.Schedule;
 import dev.shiftsmith.domain.Settings;
 import dev.shiftsmith.domain.ShiftAssignment;
+import dev.shiftsmith.persistence.PersistFailedException;
 import dev.shiftsmith.persistence.ProblemDocument;
 import dev.shiftsmith.persistence.ProblemStore;
 import dev.shiftsmith.realtime.ScheduleBroadcaster;
@@ -74,8 +75,11 @@ public class ScheduleService {
             LOG.infof("Loaded problem from database: %d employees, %d positions",
                     employees.size(), positions.size());
         } else {
-            // Fresh database: start empty (no demo data). The first edit persists.
-            persist();
+            // Fresh database: start empty (no demo data). Persist the empty baseline,
+            // but never let a write failure abort startup — we serve the in-memory
+            // state and the first successful edit persists it.
+            try { persist(snapshot()); }
+            catch (Exception e) { LOG.error("Could not persist initial empty problem", e); }
             LOG.info("Fresh database — starting with an empty problem");
         }
         // A document persisted before validation existed could still be poison. Never
@@ -115,11 +119,18 @@ public class ScheduleService {
         return d;
     }
 
-    private void persist() {
+    /**
+     * Persist the given document, surfacing failures instead of swallowing them so
+     * callers can react (e.g. answer a {@code 503}). A silent persist failure would
+     * let the client believe an edit was durable while the in-memory state diverged
+     * from the database, losing the edit on the next restart.
+     */
+    private void persist(ProblemDocument doc) {
         try {
-            store.save(snapshot());
+            store.save(doc);
         } catch (Exception e) {
             LOG.error("Failed to persist problem", e);
+            throw new PersistFailedException("Failed to persist the problem to the database", e);
         }
     }
 
@@ -180,11 +191,22 @@ public class ScheduleService {
         Map<String, List<String>> nextOverrides = newOverrides != null ? newOverrides : overrides;
         buildProblem(nextEmployees, nextPositions, nextSettings, nextOverrides);
 
+        // Persist the resolved candidate *before* committing it to memory. A failed
+        // write must not leave the in-memory state diverged from the database (the
+        // edit would be silently lost on the next restart while the client believed
+        // it durable). On failure persist() throws, the REST layer answers 503, and
+        // our state is left untouched so the client can safely retry.
+        ProblemDocument next = new ProblemDocument();
+        next.employees = new ArrayList<>(nextEmployees);
+        next.positions = new ArrayList<>(nextPositions);
+        next.settings = nextSettings;
+        next.overrides = new HashMap<>(nextOverrides);
+        persist(next);
+
         if (newEmployees != null) { employees.clear(); employees.addAll(newEmployees); }
         if (newPositions != null) { positions.clear(); positions.addAll(newPositions); }
         if (newSettings != null) { settings = newSettings; }
         if (newOverrides != null) { overrides = new HashMap<>(newOverrides); }
-        persist();
         startSolving();
     }
 
