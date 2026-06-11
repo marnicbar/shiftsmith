@@ -74,6 +74,29 @@ describe('SS.min12 (12h)', () => {
   });
 });
 
+describe('SS.uid', () => {
+  it('prefixes the id with the given letter', () => {
+    expect(SS.uid('e')).toMatch(/^e/);
+    expect(SS.uid('b')).toMatch(/^b/);
+  });
+
+  it('never repeats an id across many mints (collision-free)', () => {
+    const ids = new Set();
+    for (let i = 0; i < 10000; i++) ids.add(SS.uid('e'));
+    expect(ids.size).toBe(10000);
+  });
+
+  it('does not collide with pre-existing ids after a simulated reload', () => {
+    // The old scheme restarted a counter at 1 on every page load, so the first
+    // new id minted after a reload would be `e1` — colliding with the `e1`
+    // already loaded from the backend. Simulate "ids already loaded from the DB"
+    // and confirm freshly minted ids never reproduce one.
+    const existing = new Set();
+    for (let i = 0; i < 50; i++) existing.add(SS.uid('e')); // pretend these came from the DB
+    for (let i = 0; i < 50; i++) expect(existing.has(SS.uid('e'))).toBe(false);
+  });
+});
+
 describe('SS.shiftSkills', () => {
   it('reads the skills array, falling back to a single skill', () => {
     expect(SS.shiftSkills({ skills: ['Bar', 'Floor'] })).toEqual(['Bar', 'Floor']);

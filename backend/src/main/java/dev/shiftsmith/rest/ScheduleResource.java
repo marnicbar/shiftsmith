@@ -1,6 +1,7 @@
 package dev.shiftsmith.rest;
 
 import dev.shiftsmith.domain.CalendarOverlap;
+import dev.shiftsmith.domain.DuplicateId;
 import dev.shiftsmith.realtime.ScheduleBroadcaster;
 import dev.shiftsmith.rest.dto.ApiError;
 import dev.shiftsmith.rest.dto.ProblemDTO;
@@ -68,6 +69,12 @@ public class ScheduleResource {
     @PUT
     @Path("/problem")
     public Response replaceProblem(ProblemDTO dto) {
+        Optional<String> duplicate = DuplicateId.firstDuplicate(dto.employees, dto.positions);
+        if (duplicate.isPresent()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(new ApiError(duplicate.get()))
+                    .build();
+        }
         Optional<String> conflict = CalendarOverlap.firstConflict(dto.employees, dto.positions);
         if (conflict.isPresent()) {
             return Response.status(Response.Status.BAD_REQUEST)
