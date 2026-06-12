@@ -37,7 +37,9 @@ public class ReadResource {
     @GET
     @Path("/settings")
     public Response settings() {
-        return Response.ok(service.getSettings()).build();
+        return Response.ok(service.getSettings())
+                .tag(new jakarta.ws.rs.core.EntityTag(Long.toString(service.settingsVersion().orElse(0L))))
+                .build();
     }
 
     @GET
@@ -92,7 +94,12 @@ public class ReadResource {
     @GET
     @Path("/positions/{id}")
     public Response position(@PathParam("id") String id) {
-        return service.position(id).map(p -> Response.ok(p).build()).orElseGet(ReadResource::notFound);
+        return service.position(id)
+                .map(p -> Response.ok(p)
+                        .tag(new jakarta.ws.rs.core.EntityTag(
+                                Long.toString(service.positionVersion(id).orElse(0L))))
+                        .build())
+                .orElseGet(ReadResource::notFound);
     }
 
     @GET

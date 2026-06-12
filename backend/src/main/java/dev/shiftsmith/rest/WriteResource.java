@@ -3,7 +3,12 @@ package dev.shiftsmith.rest;
 import dev.shiftsmith.domain.CalendarOverlap;
 import dev.shiftsmith.domain.DuplicateId;
 import dev.shiftsmith.domain.Employee;
+import dev.shiftsmith.domain.Position;
+import dev.shiftsmith.domain.ProblemValidation;
+import dev.shiftsmith.domain.Settings;
 import dev.shiftsmith.persistence.EmployeeStore;
+import dev.shiftsmith.persistence.PositionStore;
+import dev.shiftsmith.persistence.SettingsStore;
 import dev.shiftsmith.rest.dto.ApiError;
 import dev.shiftsmith.service.ScheduleService;
 import jakarta.inject.Inject;
@@ -90,7 +95,88 @@ public class WriteResource {
         };
     }
 
+    // --- positions ------------------------------------------------------
+
+    @POST
+    @Path("/positions")
+    public Response createPosition(Position position) {
+        Response invalid = validatePosition(position);
+        if (invalid != null) return invalid;
+        PositionStore.Outcome outcome = service.createPosition(position);
+        if (outcome.result() == PositionStore.Result.DUPLICATE) {
+            return conflict("A position with id '" + position.getId() + "' already exists.");
+        }
+        return Response.status(Response.Status.CREATED).tag(etag(outcome.version())).entity(position).build();
+    }
+
+    @PUT
+    @Path("/positions/{id}")
+    public Response updatePosition(@PathParam("id") String id, @HeaderParam(HttpHeaders.IF_MATCH) String ifMatch,
+                                   Position position) {
+        if (position.getId() == null) position.setId(id);
+        if (!id.equals(position.getId())) return badRequest("The position id in the body must match the URL.");
+        Optional<Long> expected = parseVersion(ifMatch);
+        if (expected.isEmpty()) return missingIfMatch();
+        Response invalid = validatePosition(position);
+        if (invalid != null) return invalid;
+
+        PositionStore.Outcome outcome = service.updatePosition(position, expected.get());
+        return switch (outcome.result()) {
+            case OK -> Response.ok(position).tag(etag(outcome.version())).build();
+            case NOT_FOUND -> notFound();
+            case CONFLICT -> conflict("This position was modified by someone else; reload and retry.");
+            default -> conflict("Unexpected write outcome.");
+        };
+    }
+
+    @DELETE
+    @Path("/positions/{id}")
+    public Response deletePosition(@PathParam("id") String id, @HeaderParam(HttpHeaders.IF_MATCH) String ifMatch) {
+        Optional<Long> expected = parseVersion(ifMatch);
+        if (expected.isEmpty()) return missingIfMatch();
+        PositionStore.Outcome outcome = service.deletePosition(id, expected.get());
+        return switch (outcome.result()) {
+            case OK -> Response.noContent().build();
+            case NOT_FOUND -> notFound();
+            case CONFLICT -> conflict("This position was modified by someone else; reload and retry.");
+            default -> conflict("Unexpected write outcome.");
+        };
+    }
+
+    // --- settings (singleton) -------------------------------------------
+
+    @PUT
+    @Path("/settings")
+    public Response updateSettings(@HeaderParam(HttpHeaders.IF_MATCH) String ifMatch, Settings settings) {
+        Optional<Long> expected = parseVersion(ifMatch);
+        if (expected.isEmpty()) return missingIfMatch();
+        Optional<String> invalid = ProblemValidation.firstError(List.of(), List.of(), settings);
+        if (invalid.isPresent()) return badRequest(invalid.get());
+
+        SettingsStore.Outcome outcome = service.updateSettings(settings, expected.get());
+        return switch (outcome.result()) {
+            case OK -> Response.ok(settings).tag(etag(outcome.version())).build();
+            case NOT_FOUND -> notFound();
+            case CONFLICT -> conflict("Settings were modified by someone else; reload and retry.");
+        };
+    }
+
     // --- helpers --------------------------------------------------------
+
+    /** Reuse the same structural checks the bulk PUT runs, scoped to this one position. */
+    private static Response validatePosition(Position position) {
+        if (position.getId() == null || position.getId().isBlank()) {
+            return badRequest("A position is missing an id.");
+        }
+        List<Position> one = List.of(position);
+        Optional<String> dup = DuplicateId.firstDuplicate(List.of(), one);
+        if (dup.isPresent()) return badRequest(dup.get());
+        Optional<String> invalid = ProblemValidation.firstError(List.of(), one, null);
+        if (invalid.isPresent()) return badRequest(invalid.get());
+        Optional<String> overlap = CalendarOverlap.firstConflict(List.of(), one);
+        if (overlap.isPresent()) return badRequest(overlap.get());
+        return null;
+    }
 
     /** Reuse the same structural checks the bulk PUT runs, scoped to this one employee. */
     private static Response validate(Employee employee) {

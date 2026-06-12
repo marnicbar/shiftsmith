@@ -66,6 +66,12 @@ public class ScheduleService {
     EmployeeStore employeeStore;
 
     @Inject
+    dev.shiftsmith.persistence.PositionStore positionStore;
+
+    @Inject
+    dev.shiftsmith.persistence.SettingsStore settingsStore;
+
+    @Inject
     ScheduleBroadcaster broadcaster;
 
     private final List<Employee> employees = new ArrayList<>();
@@ -367,6 +373,51 @@ public class ScheduleService {
         EmployeeStore.Outcome outcome = employeeStore.delete(id, expectedVersion);
         if (outcome.result() == EmployeeStore.Result.OK) {
             employees.removeIf(e -> e.getId().equals(id));
+            startSolving();
+        }
+        return outcome;
+    }
+
+    public Optional<Long> positionVersion(String id) {
+        return positionStore.versionOf(id);
+    }
+
+    public synchronized dev.shiftsmith.persistence.PositionStore.Outcome createPosition(Position position) {
+        var outcome = positionStore.create(position);
+        if (outcome.result() == dev.shiftsmith.persistence.PositionStore.Result.OK) {
+            positions.add(position);
+            startSolving();
+        }
+        return outcome;
+    }
+
+    public synchronized dev.shiftsmith.persistence.PositionStore.Outcome updatePosition(Position position, long expectedVersion) {
+        var outcome = positionStore.update(position, expectedVersion);
+        if (outcome.result() == dev.shiftsmith.persistence.PositionStore.Result.OK) {
+            positions.removeIf(p -> p.getId().equals(position.getId()));
+            positions.add(position);
+            startSolving();
+        }
+        return outcome;
+    }
+
+    public synchronized dev.shiftsmith.persistence.PositionStore.Outcome deletePosition(String id, long expectedVersion) {
+        var outcome = positionStore.delete(id, expectedVersion);
+        if (outcome.result() == dev.shiftsmith.persistence.PositionStore.Result.OK) {
+            positions.removeIf(p -> p.getId().equals(id));
+            startSolving();
+        }
+        return outcome;
+    }
+
+    public Optional<Long> settingsVersion() {
+        return settingsStore.version();
+    }
+
+    public synchronized dev.shiftsmith.persistence.SettingsStore.Outcome updateSettings(Settings newSettings, long expectedVersion) {
+        var outcome = settingsStore.update(newSettings, expectedVersion);
+        if (outcome.result() == dev.shiftsmith.persistence.SettingsStore.Result.OK) {
+            settings = newSettings;
             startSolving();
         }
         return outcome;

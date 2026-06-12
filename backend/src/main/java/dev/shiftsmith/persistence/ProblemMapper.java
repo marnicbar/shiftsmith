@@ -163,7 +163,7 @@ public final class ProblemMapper {
         return re;
     }
 
-    private static ShiftTemplateEntity templateToEntity(ShiftTemplate st, String positionId) {
+    public static ShiftTemplateEntity templateToEntity(ShiftTemplate st, String positionId) {
         ShiftTemplateEntity te = new ShiftTemplateEntity();
         te.id = st.getId();
         te.positionId = positionId;
