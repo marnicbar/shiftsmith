@@ -90,15 +90,20 @@ The frontend owns the editor UI but the backend holds the canonical problem
    persists to the DB and re-solves),
 3. subscribes to `GET /api/stream` (SSE) for live updates while the solver runs.
 
-### Live updates (SSE)
-`GET /api/stream` is a Server-Sent Events endpoint. `ScheduleBroadcaster` fans
-out a lightweight "changed" tick whenever the solver finds a better solution, a
-problem edit lands, or the solver starts/stops; each subscriber rebuilds a fresh
-`ScheduleDTO` snapshot **off the solver thread** (`emitOn`) so the solver is
-never blocked. The browser's `EventSource` (`api.subscribeSchedule`) auto-
-reconnects, and a 25s heartbeat keeps the connection alive through proxies. This
-replaces the old `GET /api/schedule` polling loop and also propagates one
-client's edits to others live.
+### Live updates (SSE deltas, issue #47 Phase 5)
+`GET /api/stream` is a Server-Sent Events endpoint emitting small **typed change
+events** (`ChangeEvent`: `{type, id?, rev?, from?, to?}`), not full snapshots.
+`ScheduleBroadcaster` fans out an event whenever a resource is edited
+(`employee`/`position`/`settings` with id + new version), a pin changes
+(`assignment`), or the solver advances (`solver`); plus a `connected` frame and a
+25s `heartbeat`. The stream never rebuilds a `ScheduleDTO`, so the solver's frequent
+ticks no longer fan a full rebuild out to every subscriber (the #38 contention).
+Clients (`api.subscribeSchedule`, `lib/deltas.js`) refetch only the affected slice —
+the granular `GET /api/{employees,positions}/{id}` / `/settings` for problem edits
+(skipping their own edits via the `rev` hint), and a debounced `GET /api/schedule`
+for `solver`/`assignment` events. `EventSource` auto-reconnects; a drop flips a
+visible "reconnecting" state and a reconnect refetches to catch up. The deprecated
+bulk `PUT /api/problem` emits a coarse `reload` event (full refetch).
 
 ### Domain model
 - **Employee** — `skills`, calendar `blocks`, and working-time `rules`
