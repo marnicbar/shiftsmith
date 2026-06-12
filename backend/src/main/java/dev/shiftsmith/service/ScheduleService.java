@@ -12,6 +12,7 @@ import dev.shiftsmith.domain.Settings;
 import dev.shiftsmith.domain.ShiftAssignment;
 import dev.shiftsmith.domain.ShiftTemplate;
 import dev.shiftsmith.persistence.AssignmentStore;
+import dev.shiftsmith.persistence.EmployeeStore;
 import dev.shiftsmith.persistence.PersistFailedException;
 import dev.shiftsmith.persistence.ProblemDocument;
 import dev.shiftsmith.persistence.ProblemStore;
@@ -60,6 +61,9 @@ public class ScheduleService {
 
     @Inject
     AssignmentStore assignmentStore;
+
+    @Inject
+    EmployeeStore employeeStore;
 
     @Inject
     ScheduleBroadcaster broadcaster;
@@ -327,6 +331,45 @@ public class ScheduleService {
         if (scope == null) return null;
         String prefix = kind + ":";
         return scope.startsWith(prefix) ? scope.substring(prefix.length()) : null;
+    }
+
+    // --- granular, concurrency-safe writes (issue #47, Phase 4) ----------
+    // Each mutates exactly one employee in the durable rows (with an optimistic version
+    // check), mirrors the change into the in-memory problem and re-solves. Synchronized
+    // so the DB write, the in-memory update and the re-solve are one atomic step and
+    // concurrent writers are serialized — edits to different people never conflict, a
+    // same-person stale write is a 409.
+
+    public Optional<Long> employeeVersion(String id) {
+        return employeeStore.versionOf(id);
+    }
+
+    public synchronized EmployeeStore.Outcome createEmployee(Employee emp) {
+        EmployeeStore.Outcome outcome = employeeStore.create(emp);
+        if (outcome.result() == EmployeeStore.Result.OK) {
+            employees.add(emp);
+            startSolving();
+        }
+        return outcome;
+    }
+
+    public synchronized EmployeeStore.Outcome updateEmployee(Employee emp, long expectedVersion) {
+        EmployeeStore.Outcome outcome = employeeStore.update(emp, expectedVersion);
+        if (outcome.result() == EmployeeStore.Result.OK) {
+            employees.removeIf(e -> e.getId().equals(emp.getId()));
+            employees.add(emp);
+            startSolving();
+        }
+        return outcome;
+    }
+
+    public synchronized EmployeeStore.Outcome deleteEmployee(String id, long expectedVersion) {
+        EmployeeStore.Outcome outcome = employeeStore.delete(id, expectedVersion);
+        if (outcome.result() == EmployeeStore.Result.OK) {
+            employees.removeIf(e -> e.getId().equals(id));
+            startSolving();
+        }
+        return outcome;
     }
 
     /**

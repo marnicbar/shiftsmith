@@ -56,7 +56,14 @@ public class ReadResource {
     @GET
     @Path("/employees/{id}")
     public Response employee(@PathParam("id") String id) {
-        return service.employee(id).map(e -> Response.ok(e).build()).orElseGet(ReadResource::notFound);
+        return service.employee(id)
+                // Carry the row version as an ETag so the client can make a concurrency-safe
+                // edit with If-Match (issue #47, Phase 4).
+                .map(e -> Response.ok(e)
+                        .tag(new jakarta.ws.rs.core.EntityTag(
+                                Long.toString(service.employeeVersion(id).orElse(0L))))
+                        .build())
+                .orElseGet(ReadResource::notFound);
     }
 
     @GET

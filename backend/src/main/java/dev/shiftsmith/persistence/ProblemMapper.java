@@ -123,7 +123,7 @@ public final class ProblemMapper {
         return t;
     }
 
-    private static AvailabilityBlockEntity blockToEntity(Block b, String employeeId) {
+    public static AvailabilityBlockEntity blockToEntity(Block b, String employeeId) {
         AvailabilityBlockEntity be = new AvailabilityBlockEntity();
         be.id = b.getId();
         be.employeeId = employeeId;
@@ -140,7 +140,7 @@ public final class ProblemMapper {
         return be;
     }
 
-    private static WorkRuleEntity ruleToEntity(Rule r, String employeeId) {
+    public static WorkRuleEntity ruleToEntity(Rule r, String employeeId) {
         WorkRuleEntity re = new WorkRuleEntity();
         re.id = r.getId();
         re.employeeId = employeeId;
