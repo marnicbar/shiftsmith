@@ -39,6 +39,14 @@ public class PositionStore {
         return p == null ? Optional.empty() : Optional.of(p.version);
     }
 
+    /** Every position's current version, keyed by id (for the snapshot's ETag map). */
+    @Transactional
+    public java.util.Map<String, Long> allVersions() {
+        java.util.Map<String, Long> out = new java.util.HashMap<>();
+        for (PositionEntity p : PositionEntity.<PositionEntity>listAll()) out.put(p.id, p.version);
+        return out;
+    }
+
     @Transactional
     public Outcome create(Position position) {
         if (PositionEntity.findById(position.getId()) != null) return Outcome.of(Result.DUPLICATE);

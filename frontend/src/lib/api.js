@@ -98,8 +98,53 @@ export const getScheduleRange = (from, to, scope) => {
 };
 
 // Replace the problem (employees / positions / settings / overrides) and re-solve.
-// Any omitted field is left unchanged server-side.
+// Any omitted field is left unchanged server-side. Deprecated: kept as a fallback while
+// the granular writes below (issue #47, Phase 4) take over the per-edit sync.
 export const putProblem = (problem) => request(`${BASE}/problem`, { method: 'PUT', ...json(problem) });
+
+// --- Granular, concurrency-safe writes (issue #47, Phase 4) -----------------
+// Each returns { data, etag }; mutations carry the resource's expected version as an
+// If-Match header so a stale write is rejected (409) instead of silently overwriting.
+async function send(method, url, body, ifMatch) {
+  const headers = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (ifMatch != null) headers['If-Match'] = String(ifMatch);
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(url, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
+  if (res.status === 401) {
+    clearToken();
+    if (onUnauthorized) onUnauthorized();
+    const e = new Error(`${method} ${url} failed: 401`); e.status = 401; throw e;
+  }
+  if (!res.ok) {
+    let serverMessage = null;
+    try { const b = await res.json(); if (b && typeof b.error === 'string') serverMessage = b.error; } catch { /* no body */ }
+    const e = new Error(serverMessage || `${method} ${url} failed: ${res.status}`);
+    e.status = res.status; e.serverMessage = serverMessage; throw e;
+  }
+  const etag = res.headers.get('ETag');
+  const data = res.status === 204 ? null : await res.json().catch(() => null);
+  return { data, etag };
+}
+
+const enc = encodeURIComponent;
+
+export const createEmployee = (employee) => send('POST', `${BASE}/employees`, employee);
+export const updateEmployee = (employee, ifMatch) => send('PUT', `${BASE}/employees/${enc(employee.id)}`, employee, ifMatch);
+export const deleteEmployee = (id, ifMatch) => send('DELETE', `${BASE}/employees/${enc(id)}`, undefined, ifMatch);
+
+export const createPosition = (position) => send('POST', `${BASE}/positions`, position);
+export const updatePosition = (position, ifMatch) => send('PUT', `${BASE}/positions/${enc(position.id)}`, position, ifMatch);
+export const deletePosition = (id, ifMatch) => send('DELETE', `${BASE}/positions/${enc(id)}`, undefined, ifMatch);
+
+export const updateSettings = (settings, ifMatch) => send('PUT', `${BASE}/settings`, settings, ifMatch);
+
+// Pin an occurrence to an ordered employee-id list (null/short = pinned-empty); unpin drops it.
+export const pinOccurrence = (templateId, date, employeeIds) =>
+  send('PUT', `${BASE}/assignments/${enc(templateId)}/${date}`, employeeIds ?? []);
+export const unpinOccurrence = (templateId, date) =>
+  send('DELETE', `${BASE}/assignments/${enc(templateId)}/${date}`);
 
 // Solver lifecycle (auto-runs on every problem change; these are manual controls).
 export const startSolving = () => request(`${BASE}/solve`, { method: 'POST' });

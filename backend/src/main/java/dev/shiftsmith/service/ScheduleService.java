@@ -88,6 +88,11 @@ public class ScheduleService {
      */
     private volatile Map<String, String> persistedAssignments = Map.of();
 
+    /** Current per-resource row versions (ETags), surfaced in the snapshot for granular writes. */
+    private final Map<String, Long> employeeVersions = new HashMap<>();
+    private final Map<String, Long> positionVersions = new HashMap<>();
+    private long settingsVer;
+
     /** Load the persisted problem (empty on a fresh database) and start solving at boot. */
     void onStart(@Observes StartupEvent ev) {
         Optional<ProblemDocument> saved = store.load();
@@ -110,6 +115,7 @@ public class ScheduleService {
         // Show the last solved roster immediately (overlaid on a fresh expansion) so a
         // restart doesn't blank the schedule until the solver runs again.
         reloadPersistedAssignments();
+        refreshVersions();
         // A document persisted before validation existed could still be poison. Never
         // let it abort startup: serve the loaded-but-unsolved state and let the next
         // valid edit fix it, instead of bricking every boot.
@@ -354,6 +360,7 @@ public class ScheduleService {
         EmployeeStore.Outcome outcome = employeeStore.create(emp);
         if (outcome.result() == EmployeeStore.Result.OK) {
             employees.add(emp);
+            employeeVersions.put(emp.getId(), outcome.version());
             startSolving();
         }
         return outcome;
@@ -364,6 +371,7 @@ public class ScheduleService {
         if (outcome.result() == EmployeeStore.Result.OK) {
             employees.removeIf(e -> e.getId().equals(emp.getId()));
             employees.add(emp);
+            employeeVersions.put(emp.getId(), outcome.version());
             startSolving();
         }
         return outcome;
@@ -373,6 +381,7 @@ public class ScheduleService {
         EmployeeStore.Outcome outcome = employeeStore.delete(id, expectedVersion);
         if (outcome.result() == EmployeeStore.Result.OK) {
             employees.removeIf(e -> e.getId().equals(id));
+            employeeVersions.remove(id);
             startSolving();
         }
         return outcome;
@@ -386,6 +395,7 @@ public class ScheduleService {
         var outcome = positionStore.create(position);
         if (outcome.result() == dev.shiftsmith.persistence.PositionStore.Result.OK) {
             positions.add(position);
+            positionVersions.put(position.getId(), outcome.version());
             startSolving();
         }
         return outcome;
@@ -396,6 +406,7 @@ public class ScheduleService {
         if (outcome.result() == dev.shiftsmith.persistence.PositionStore.Result.OK) {
             positions.removeIf(p -> p.getId().equals(position.getId()));
             positions.add(position);
+            positionVersions.put(position.getId(), outcome.version());
             startSolving();
         }
         return outcome;
@@ -405,6 +416,7 @@ public class ScheduleService {
         var outcome = positionStore.delete(id, expectedVersion);
         if (outcome.result() == dev.shiftsmith.persistence.PositionStore.Result.OK) {
             positions.removeIf(p -> p.getId().equals(id));
+            positionVersions.remove(id);
             startSolving();
         }
         return outcome;
@@ -457,6 +469,7 @@ public class ScheduleService {
         var outcome = settingsStore.update(newSettings, expectedVersion);
         if (outcome.result() == dev.shiftsmith.persistence.SettingsStore.Result.OK) {
             settings = newSettings;
+            settingsVer = outcome.version();
             startSolving();
         }
         return outcome;
@@ -497,6 +510,7 @@ public class ScheduleService {
         // The save cleared the prior solver rows; drop the now-stale overlay so the gap
         // before the re-solve completes doesn't surface an outdated roster.
         reloadPersistedAssignments();
+        refreshVersions();
         startSolving();
     }
 
@@ -556,6 +570,19 @@ public class ScheduleService {
         }
     }
 
+    /** Refresh the whole version cache from the DB (after boot or a bulk replace). */
+    private synchronized void refreshVersions() {
+        try {
+            employeeVersions.clear();
+            employeeVersions.putAll(employeeStore.allVersions());
+            positionVersions.clear();
+            positionVersions.putAll(positionStore.allVersions());
+            settingsVer = settingsStore.version().orElse(0L);
+        } catch (Exception e) {
+            LOG.error("Could not refresh resource versions", e);
+        }
+    }
+
     public Schedule getBestSolution() { return bestSolution; }
 
     /**
@@ -580,6 +607,9 @@ public class ScheduleService {
         LocalDate today = LocalDate.now();
         dto.horizonStart = settings.horizonStart(today);
         dto.horizonEnd = settings.horizonEnd(today);
+
+        dto.versions = new ScheduleDTO.Versions(
+                new HashMap<>(employeeVersions), new HashMap<>(positionVersions), settingsVer);
 
         SolverStatus status = status();
         dto.solverStatus = status == null ? "NOT_SOLVING" : status.name();

@@ -14,6 +14,7 @@ import { SettingsView, AccountView } from './settings.jsx';
 import { Login, ForcePasswordChange } from './login.jsx';
 import { tooLooseAgainst } from './rules.jsx';
 import * as api from './lib/api.js';
+import { applyProblemChanges } from './lib/sync.js';
 
 const TABS = [
   { id: 'dashboard', labelKey: 'nav.dashboard', icon: 'grid' },
@@ -111,6 +112,9 @@ export default function App() {
   const [mustChangePassword, setMustChangePassword] = useState(false);
 
   const lastSyncRef = useRef(null);
+  // Per-resource versions (ETags) from the snapshot, threaded into granular writes so a
+  // stale edit is a 409 instead of a silent overwrite (issue #47, Phase 4).
+  const versionsRef = useRef({ employees: {}, positions: {}, settings: 0 });
 
   // On startup, validate any stored token. A 401 on any later request (e.g. an
   // expired token) drops us back to the login screen via the shared handler.
@@ -136,11 +140,31 @@ export default function App() {
   useEffect(() => { document.documentElement.style.setProperty('--ui-font', FONTS[prefs.font] || FONTS.Geist); }, [prefs.font]);
   useEffect(() => { if (prefs.lang && i18n.language !== prefs.lang) i18n.changeLanguage(prefs.lang); }, [prefs.lang]);
 
-  const setMeta = useCallback((d) => setSched({
-    assignments: d.assignments || [], solverStatus: d.solverStatus, score: d.score,
-    total: d.total, staffed: d.staffed, unassigned: d.unassigned,
-    horizonStart: d.horizonStart, horizonEnd: d.horizonEnd,
-  }), []);
+  const setMeta = useCallback((d) => {
+    // Keep the version map fresh from every snapshot (incl. other clients' edits over SSE).
+    if (d.versions) versionsRef.current = d.versions;
+    setSched({
+      assignments: d.assignments || [], solverStatus: d.solverStatus, score: d.score,
+      total: d.total, staffed: d.staffed, unassigned: d.unassigned,
+      horizonStart: d.horizonStart, horizonEnd: d.horizonEnd,
+    });
+  }, []);
+
+  // Load the whole problem from the backend (initial boot, and to recover from a
+  // concurrency conflict). Resets the sync baseline and version map.
+  const loadProblem = useCallback(async () => {
+    const d = await api.getSchedule();
+    setEmployees(d.employees); setPositions(d.positions);
+    setSettings(d.settings || { horizonUnit: 'week', horizonCount: 1 });
+    setOverrides(d.overrides || {});
+    setSelEmp(d.employees[0]?.id ?? null);
+    setSelPos(d.positions[0]?.id ?? null);
+    const g = []; (d.positions || []).forEach((p) => { if (p.group && !g.includes(p.group)) g.push(p.group); });
+    setGroupOrder(g);
+    setMeta(d);
+    versionsRef.current = d.versions || { employees: {}, positions: {}, settings: 0 };
+    lastSyncRef.current = JSON.stringify({ employees: d.employees, positions: d.positions, settings: d.settings, overrides: d.overrides || {} });
+  }, [setMeta]);
 
   // Initial load from the backend, once the session is established (and the
   // account isn't gated behind a forced password change).
@@ -148,21 +172,12 @@ export default function App() {
     if (authState !== 'in' || mustChangePassword) return;
     (async () => {
       try {
-        const d = await api.getSchedule();
-        setEmployees(d.employees); setPositions(d.positions);
-        setSettings(d.settings || { horizonUnit: 'week', horizonCount: 1 });
-        setOverrides(d.overrides || {});
-        setSelEmp(d.employees[0]?.id ?? null);
-        setSelPos(d.positions[0]?.id ?? null);
-        const g = []; (d.positions || []).forEach((p) => { if (p.group && !g.includes(p.group)) g.push(p.group); });
-        setGroupOrder(g);
-        setMeta(d);
-        lastSyncRef.current = JSON.stringify({ employees: d.employees, positions: d.positions, settings: d.settings, overrides: d.overrides || {} });
+        await loadProblem();
         setError(null);
         setLoaded(true);
       } catch (e) { reportError(e); }
     })();
-  }, [authState, mustChangePassword, setMeta, reportError]);
+  }, [authState, mustChangePassword, loadProblem, reportError]);
 
   // Live updates: subscribe to the backend's SSE stream once loaded. The solver's
   // progress, our own edits and other clients' edits all arrive here, so the
@@ -196,12 +211,24 @@ export default function App() {
     const attempt = (delay) => {
       timer = setTimeout(async () => {
         try {
-          await api.putProblem(problem);
+          // Translate the edit into granular, concurrency-safe calls (replacing the bulk
+          // PUT). Versions thread through versionsRef, mutated in place as writes land.
+          const prev = lastSyncRef.current
+            ? JSON.parse(lastSyncRef.current)
+            : { employees: [], positions: [], settings: {}, overrides: {} };
+          await applyProblemChanges(prev, problem, versionsRef.current);
           if (cancelled) return;
           lastSyncRef.current = ser;
           setError(null);
         } catch (e) {
           if (cancelled) return;
+          // A 409 means someone else changed this resource: reload and let the user redo
+          // their edit, rather than clobbering the other change or retrying a stale write.
+          if (e && e.status === 409) {
+            setNotice(t('app.reloadedAfterConflict'));
+            try { await loadProblem(); } catch (re) { reportError(re); }
+            return;
+          }
           reportError(e);
           const retriable = !e || !e.status || e.status >= 500;
           if (retriable) attempt(Math.min(delay * 2, 16000));
@@ -210,7 +237,7 @@ export default function App() {
     };
     attempt(600);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [loaded, employees, positions, settings, overrides, reportError, t]);
+  }, [loaded, employees, positions, settings, overrides, reportError, t, loadProblem]);
 
   const snap = SNAP_MAP[prefs.snapLabel] ?? 15;
   const newFlow = FLOW_MAP[prefs.newFlowLabel] ?? 'quick';

@@ -42,6 +42,14 @@ public class EmployeeStore {
         return e == null ? Optional.empty() : Optional.of(e.version);
     }
 
+    /** Every employee's current version, keyed by id (for the snapshot's ETag map). */
+    @Transactional
+    public java.util.Map<String, Long> allVersions() {
+        java.util.Map<String, Long> out = new java.util.HashMap<>();
+        for (EmployeeEntity e : EmployeeEntity.<EmployeeEntity>listAll()) out.put(e.id, e.version);
+        return out;
+    }
+
     @Transactional
     public Outcome create(Employee emp) {
         if (EmployeeEntity.findById(emp.getId()) != null) return Outcome.of(Result.DUPLICATE);

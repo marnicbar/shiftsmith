@@ -106,6 +106,48 @@ describe('auth', () => {
   });
 });
 
+describe('granular writes', () => {
+  const okEtag = (etag, status = 200, body = {}) => ({
+    ok: true, status, headers: { get: (h) => (h === 'ETag' ? etag : null) }, json: async () => body,
+  });
+
+  it('updateEmployee PUTs with If-Match and returns the new ETag', async () => {
+    api.setToken('tok', true);
+    const fetchFn = mockFetch(okEtag('"4"'));
+    const { etag } = await api.updateEmployee({ id: 'a b', firstName: 'X' }, 3);
+    const [url, options] = fetchFn.mock.calls[0];
+    expect(url).toBe('/api/employees/a%20b'); // id is URL-encoded
+    expect(options.method).toBe('PUT');
+    expect(options.headers['If-Match']).toBe('3');
+    expect(options.headers.Authorization).toBe('Bearer tok');
+    expect(etag).toBe('"4"');
+  });
+
+  it('deleteEmployee sends If-Match and no body', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 204, headers: { get: () => null }, json: async () => null });
+    await api.deleteEmployee('a', 2);
+    const [url, options] = fetchFn.mock.calls[0];
+    expect(url).toBe('/api/employees/a');
+    expect(options.method).toBe('DELETE');
+    expect(options.headers['If-Match']).toBe('2');
+    expect(options.body).toBeUndefined();
+  });
+
+  it('a 409 rejects with status 409', async () => {
+    mockFetch({ ok: false, status: 409, headers: { get: () => null }, json: async () => ({ error: 'conflict' }) });
+    await expect(api.updatePosition({ id: 'p' }, 1)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('pinOccurrence PUTs the employee-id array to the occurrence', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 204, headers: { get: () => null }, json: async () => null });
+    await api.pinOccurrence('t1', '2026-06-01', ['a']);
+    const [url, options] = fetchFn.mock.calls[0];
+    expect(url).toBe('/api/assignments/t1/2026-06-01');
+    expect(options.method).toBe('PUT');
+    expect(JSON.parse(options.body)).toEqual(['a']);
+  });
+});
+
 describe('putProblem', () => {
   it('PUTs JSON to /api/problem and returns null on 204', async () => {
     const fetchFn = mockFetch({ ok: true, status: 204, json: async () => { throw new Error('no body'); } });
