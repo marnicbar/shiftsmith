@@ -215,13 +215,13 @@ public final class ProblemMapper {
     }
 
     /** Slot start as a concrete timestamp (mirrors {@code ScheduleExpander}). */
-    static LocalDateTime occurrenceStart(ShiftTemplate st, LocalDate d) {
+    public static LocalDateTime occurrenceStart(ShiftTemplate st, LocalDate d) {
         int startMin = st.getStart();
         return d.atTime(startMin / 60, startMin % 60);
     }
 
     /** Slot end, rolling overnight/until-midnight ends into the next day (mirrors {@code ScheduleExpander}). */
-    static LocalDateTime occurrenceEnd(ShiftTemplate st, LocalDate d) {
+    public static LocalDateTime occurrenceEnd(ShiftTemplate st, LocalDate d) {
         int startMin = st.getStart();
         int endMin = st.getEnd();
         if (endMin >= 1440) return d.plusDays(1).atStartOfDay();

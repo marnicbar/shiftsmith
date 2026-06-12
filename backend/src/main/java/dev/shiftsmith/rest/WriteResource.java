@@ -143,6 +143,30 @@ public class WriteResource {
         };
     }
 
+    // --- assignment pins ------------------------------------------------
+
+    /**
+     * Pin one shift occurrence to the given employees (a manual override). The body is
+     * the ordered employee-id array (a null/short entry leaves that slot pinned-empty).
+     * Pins are explicit overrides, so this is a deliberate last-write-wins set — no
+     * If-Match — but it no longer rides on the bulk problem sync.
+     */
+    @PUT
+    @Path("/assignments/{templateId}/{date}")
+    public Response pin(@PathParam("templateId") String templateId, @PathParam("date") java.time.LocalDate date,
+                        List<String> employeeIds) {
+        boolean found = service.pinOccurrence(templateId, date, employeeIds == null ? List.of() : employeeIds);
+        return found ? Response.noContent().build()
+                : notFound();
+    }
+
+    @DELETE
+    @Path("/assignments/{templateId}/{date}")
+    public Response unpin(@PathParam("templateId") String templateId, @PathParam("date") java.time.LocalDate date) {
+        service.unpinOccurrence(templateId, date);
+        return Response.noContent().build();
+    }
+
     // --- settings (singleton) -------------------------------------------
 
     @PUT

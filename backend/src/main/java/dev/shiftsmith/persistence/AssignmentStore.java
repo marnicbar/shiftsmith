@@ -59,6 +59,39 @@ public class AssignmentStore {
     }
 
     /**
+     * Pin one occurrence (issue #47, Phase 4): replace every row for
+     * {@code (templateId, occurrenceDate)} with {@code manual} rows, one per headcount
+     * slot, staffed by {@code employeeIds} in order (a slot beyond the list, or a null
+     * entry, is a pinned-but-empty slot). This also clears any solver row that occupied
+     * those slots, so the pin takes over.
+     */
+    @Transactional
+    public void pinOccurrence(String templateId, LocalDate occurrenceDate, List<String> employeeIds,
+                              java.time.LocalDateTime startTs, java.time.LocalDateTime endTs, int headcount) {
+        AssignmentEntity.delete("templateId = ?1 and occurrenceDate = ?2", templateId, occurrenceDate);
+        int slots = Math.max(1, headcount);
+        for (int i = 0; i < slots; i++) {
+            AssignmentEntity ae = new AssignmentEntity();
+            ae.templateId = templateId;
+            ae.occurrenceDate = occurrenceDate;
+            ae.slotIndex = i;
+            ae.startTs = startTs;
+            ae.endTs = endTs;
+            ae.employeeId = (employeeIds != null && i < employeeIds.size()) ? employeeIds.get(i) : null;
+            ae.pinned = true;
+            ae.source = "manual";
+            ae.persist();
+        }
+    }
+
+    /** Unpin one occurrence: drop its manual rows so the solver controls those slots again. */
+    @Transactional
+    public void unpinOccurrence(String templateId, LocalDate occurrenceDate) {
+        AssignmentEntity.delete("templateId = ?1 and occurrenceDate = ?2 and source = ?3",
+                templateId, occurrenceDate, "manual");
+    }
+
+    /**
      * Worked shifts in {@code [from, to)} (staffed rows only), fed to the solver as
      * fixed history facts so the boundary constraints see real past hours/days. Both
      * solver-produced and manually-pinned past rows count as worked history.

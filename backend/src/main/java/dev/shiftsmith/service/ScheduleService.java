@@ -410,6 +410,45 @@ public class ScheduleService {
         return outcome;
     }
 
+    /**
+     * Pin one shift occurrence to the given employees (manual override), persist it and
+     * re-solve. Returns false if the template doesn't exist (a 404). The overrides map
+     * stays the in-memory source of pins; the manual {@code assignment} rows are written
+     * so the pin survives a restart.
+     */
+    public synchronized boolean pinOccurrence(String templateId, LocalDate date, List<String> employeeIds) {
+        ShiftTemplate template = findTemplate(templateId);
+        if (template == null) return false;
+        java.util.Set<String> known = new java.util.HashSet<>();
+        for (Employee e : employees) known.add(e.getId());
+        List<String> ids = new ArrayList<>();
+        for (String id : employeeIds) ids.add(known.contains(id) ? id : null);
+
+        assignmentStore.pinOccurrence(templateId, date, ids,
+                dev.shiftsmith.persistence.ProblemMapper.occurrenceStart(template, date),
+                dev.shiftsmith.persistence.ProblemMapper.occurrenceEnd(template, date),
+                template.getHeadcount());
+        overrides.put(templateId + "@" + date, new ArrayList<>(employeeIds));
+        startSolving();
+        return true;
+    }
+
+    /** Remove a manual pin from one occurrence (idempotent) and re-solve. */
+    public synchronized void unpinOccurrence(String templateId, LocalDate date) {
+        overrides.remove(templateId + "@" + date);
+        assignmentStore.unpinOccurrence(templateId, date);
+        startSolving();
+    }
+
+    private ShiftTemplate findTemplate(String templateId) {
+        for (Position p : positions) {
+            for (ShiftTemplate t : p.getShifts()) {
+                if (t.getId().equals(templateId)) return t;
+            }
+        }
+        return null;
+    }
+
     public Optional<Long> settingsVersion() {
         return settingsStore.version();
     }
