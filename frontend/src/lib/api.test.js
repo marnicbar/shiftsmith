@@ -211,14 +211,20 @@ describe('subscribeSchedule (SSE)', () => {
     vi.stubGlobal('EventSource', FakeEventSource);
   });
 
-  it('parses incoming frames and forwards them to onUpdate', () => {
-    const onUpdate = vi.fn();
-    api.subscribeSchedule(onUpdate);
+  it('parses incoming frames and forwards them to the event handler', () => {
+    const onEvent = vi.fn();
+    api.subscribeSchedule(onEvent);
     const es = instances[0];
     expect(es.url).toBe('/api/stream');
 
-    es.onmessage({ data: JSON.stringify({ total: 5 }) });
-    expect(onUpdate).toHaveBeenCalledWith({ total: 5 });
+    es.onmessage({ data: JSON.stringify({ type: 'employee', id: 'e1', rev: 2 }) });
+    expect(onEvent).toHaveBeenCalledWith({ type: 'employee', id: 'e1', rev: 2 });
+  });
+
+  it('wires the open handler so the client can show a live/reconnecting state', () => {
+    const onOpen = vi.fn();
+    api.subscribeSchedule(vi.fn(), vi.fn(), onOpen);
+    expect(instances[0].onopen).toBe(onOpen);
   });
 
   it('ignores malformed frames without throwing', () => {

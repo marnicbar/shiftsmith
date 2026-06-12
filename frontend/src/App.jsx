@@ -15,6 +15,7 @@ import { Login, ForcePasswordChange } from './login.jsx';
 import { tooLooseAgainst } from './rules.jsx';
 import * as api from './lib/api.js';
 import { applyProblemChanges } from './lib/sync.js';
+import { dispatchChange, etagNum, upsertById, removeById } from './lib/deltas.js';
 
 const TABS = [
   { id: 'dashboard', labelKey: 'nav.dashboard', icon: 'grid' },
@@ -103,6 +104,9 @@ export default function App() {
     else setError({ text: e?.message ?? String(e), validation: false });
   }, []);
   const [notice, setNotice] = useState(null);
+  // SSE liveness: false while the stream is dropped/reconnecting (shown to the user).
+  const [streamLive, setStreamLive] = useState(true);
+  const schedTimerRef = useRef(null);
 
   // Auth gate: 'checking' until we know, then 'in' (show the app) or 'out' (show login).
   const [authState, setAuthState] = useState('checking');
@@ -179,13 +183,71 @@ export default function App() {
     })();
   }, [authState, mustChangePassword, loadProblem, reportError]);
 
-  // Live updates: subscribe to the backend's SSE stream once loaded. The solver's
-  // progress, our own edits and other clients' edits all arrive here, so the
-  // timeline, score and status stay current without polling.
+  // Apply a remote change to one list resource, keeping both the live state and the
+  // sync baseline in step (so our own debounced sync doesn't echo it back). Only the
+  // affected entity is touched, preserving any unsynced local edits to others.
+  const applyRemoteList = useCallback((setList, kind, id, data) => {
+    setList((list) => (data ? upsertById(list, data) : removeById(list, id)));
+    const prev = JSON.parse(lastSyncRef.current || '{"employees":[],"positions":[],"settings":{},"overrides":{}}');
+    prev[kind] = data ? upsertById(prev[kind] || [], data) : removeById(prev[kind] || [], id);
+    lastSyncRef.current = JSON.stringify(prev);
+  }, []);
+
+  // Refetch one resource on its change event — unless the event's version matches what
+  // we already hold (it was our own edit). A 404 means it was deleted.
+  const refetchEntity = useCallback(async (kind, setList, id, rev) => {
+    const get = kind === 'employees' ? api.getEmployee : api.getPosition;
+    const bag = versionsRef.current[kind] || (versionsRef.current[kind] = {});
+    if (rev != null && bag[id] === rev) return;
+    try {
+      const { data, etag } = await get(id);
+      bag[id] = etagNum(etag);
+      applyRemoteList(setList, kind, id, data);
+    } catch (e) {
+      if (e && e.status === 404) { delete bag[id]; applyRemoteList(setList, kind, id, null); }
+      else reportError(e);
+    }
+  }, [applyRemoteList, reportError]);
+
+  const refetchSettings = useCallback(async (rev) => {
+    if (rev != null && versionsRef.current.settings === rev) return;
+    try {
+      const { data, etag } = await api.getSettings();
+      versionsRef.current.settings = etagNum(etag);
+      setSettings(data);
+      const prev = JSON.parse(lastSyncRef.current || '{"settings":{}}');
+      prev.settings = data; lastSyncRef.current = JSON.stringify(prev);
+    } catch (e) { reportError(e); }
+  }, [reportError]);
+
+  // The solver advanced or pins changed: refetch the live schedule (assignments + score
+  // + versions), debounced so the solver's rapid ticks coalesce into one fetch.
+  const refetchSchedule = useCallback(() => {
+    clearTimeout(schedTimerRef.current);
+    schedTimerRef.current = setTimeout(async () => {
+      try { setMeta(await api.getSchedule()); } catch { /* transient — the next event retries */ }
+    }, 400);
+  }, [setMeta]);
+
+  const handleEvent = useCallback((ev) => dispatchChange(ev, {
+    employee: (id, rev) => refetchEntity('employees', setEmployees, id, rev),
+    position: (id, rev) => refetchEntity('positions', setPositions, id, rev),
+    settings: refetchSettings,
+    schedule: refetchSchedule,
+    reload: () => loadProblem().catch(reportError),
+  }), [refetchEntity, refetchSettings, refetchSchedule, loadProblem, reportError]);
+
+  // Live updates: subscribe to the backend's typed SSE change events once loaded. Each
+  // event refetches only the affected slice; a (re)connect catches up via the schedule,
+  // a drop flips the visible "reconnecting" state.
   useEffect(() => {
     if (!loaded) return;
-    return api.subscribeSchedule(setMeta);
-  }, [loaded, setMeta]);
+    return api.subscribeSchedule(
+      handleEvent,
+      () => setStreamLive(false),
+      () => { setStreamLive(true); refetchSchedule(); },
+    );
+  }, [loaded, handleEvent, refetchSchedule]);
 
   // Debounced sync: push the problem to the backend whenever the user edits it.
   useEffect(() => {
@@ -390,6 +452,7 @@ export default function App() {
         </div>
       )}
       {notice && <div className="api-notice">{notice}<button className="notice-x" onClick={() => setNotice(null)} title={t('common.dismiss')}><Ic.x size={14}/></button></div>}
+      {!streamLive && <div className="api-notice" role="status">{t('app.reconnecting')}</div>}
 
       {tab === 'dashboard' && <Dashboard employees={employees} positions={positions} assign={assignMap} onOpenShift={openShift} />}
       {tab === 'personnel' && <Personnel employees={employees} setEmployees={setEmployees} skills={skills} settings={settings} selId={selEmp} setSelId={setSelEmp} snap={snap} newFlow={newFlow} nameOrder={prefs.nameOrder} />}

@@ -16,6 +16,7 @@ import dev.shiftsmith.persistence.EmployeeStore;
 import dev.shiftsmith.persistence.PersistFailedException;
 import dev.shiftsmith.persistence.ProblemDocument;
 import dev.shiftsmith.persistence.ProblemStore;
+import dev.shiftsmith.realtime.ChangeEvent;
 import dev.shiftsmith.realtime.ScheduleBroadcaster;
 import dev.shiftsmith.rest.dto.Page;
 import dev.shiftsmith.rest.dto.ScheduleDTO;
@@ -361,6 +362,7 @@ public class ScheduleService {
         if (outcome.result() == EmployeeStore.Result.OK) {
             employees.add(emp);
             employeeVersions.put(emp.getId(), outcome.version());
+            broadcaster.emit(ChangeEvent.entity("employee", emp.getId(), outcome.version()));
             startSolving();
         }
         return outcome;
@@ -372,6 +374,7 @@ public class ScheduleService {
             employees.removeIf(e -> e.getId().equals(emp.getId()));
             employees.add(emp);
             employeeVersions.put(emp.getId(), outcome.version());
+            broadcaster.emit(ChangeEvent.entity("employee", emp.getId(), outcome.version()));
             startSolving();
         }
         return outcome;
@@ -382,6 +385,7 @@ public class ScheduleService {
         if (outcome.result() == EmployeeStore.Result.OK) {
             employees.removeIf(e -> e.getId().equals(id));
             employeeVersions.remove(id);
+            broadcaster.emit(ChangeEvent.entity("employee", id, null));
             startSolving();
         }
         return outcome;
@@ -396,6 +400,7 @@ public class ScheduleService {
         if (outcome.result() == dev.shiftsmith.persistence.PositionStore.Result.OK) {
             positions.add(position);
             positionVersions.put(position.getId(), outcome.version());
+            broadcaster.emit(ChangeEvent.entity("position", position.getId(), outcome.version()));
             startSolving();
         }
         return outcome;
@@ -407,6 +412,7 @@ public class ScheduleService {
             positions.removeIf(p -> p.getId().equals(position.getId()));
             positions.add(position);
             positionVersions.put(position.getId(), outcome.version());
+            broadcaster.emit(ChangeEvent.entity("position", position.getId(), outcome.version()));
             startSolving();
         }
         return outcome;
@@ -417,6 +423,7 @@ public class ScheduleService {
         if (outcome.result() == dev.shiftsmith.persistence.PositionStore.Result.OK) {
             positions.removeIf(p -> p.getId().equals(id));
             positionVersions.remove(id);
+            broadcaster.emit(ChangeEvent.entity("position", id, null));
             startSolving();
         }
         return outcome;
@@ -441,6 +448,7 @@ public class ScheduleService {
                 dev.shiftsmith.persistence.ProblemMapper.occurrenceEnd(template, date),
                 template.getHeadcount());
         overrides.put(templateId + "@" + date, new ArrayList<>(employeeIds));
+        broadcaster.emit(ChangeEvent.assignment(date.toString(), date.toString()));
         startSolving();
         return true;
     }
@@ -449,6 +457,7 @@ public class ScheduleService {
     public synchronized void unpinOccurrence(String templateId, LocalDate date) {
         overrides.remove(templateId + "@" + date);
         assignmentStore.unpinOccurrence(templateId, date);
+        broadcaster.emit(ChangeEvent.assignment(date.toString(), date.toString()));
         startSolving();
     }
 
@@ -470,6 +479,7 @@ public class ScheduleService {
         if (outcome.result() == dev.shiftsmith.persistence.SettingsStore.Result.OK) {
             settings = newSettings;
             settingsVer = outcome.version();
+            broadcaster.emit(ChangeEvent.entity("settings", null, outcome.version()));
             startSolving();
         }
         return outcome;
@@ -511,6 +521,8 @@ public class ScheduleService {
         // before the re-solve completes doesn't surface an outdated roster.
         reloadPersistedAssignments();
         refreshVersions();
+        // Deprecated bulk path: a coarse "refetch everything" for any other clients.
+        broadcaster.emit(ChangeEvent.reload());
         startSolving();
     }
 

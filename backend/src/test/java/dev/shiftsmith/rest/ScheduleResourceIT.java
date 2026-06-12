@@ -146,12 +146,12 @@ class ScheduleResourceIT {
      * transactional DB lookup (the seeded-password check); on the {@code Multi}-
      * returning stream endpoint that filter ran on the reactive IO thread, where a
      * blocking JTA transaction is illegal, so the stream answered 500 and the
-     * browser's EventSource never received a frame — the UI only refreshed on a
-     * manual reload. The endpoint is now {@code @Blocking}; assert it actually opens
-     * (200, {@code text/event-stream}) and pushes at least the initial snapshot.
+     * browser's EventSource never received a frame. The endpoint is {@code @Blocking};
+     * assert it opens (200, {@code text/event-stream}) and pushes the initial typed
+     * change event (issue #47, Phase 5: deltas, not full snapshots).
      */
     @Test
-    void streamOpensAndPushesAnInitialSnapshot() throws Exception {
+    void streamOpensAndPushesAnInitialEvent() throws Exception {
         java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
         java.net.URI streamUri = baseUrl.toURI().resolve("/api/stream?token=" + token());
         java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder()
@@ -171,7 +171,38 @@ class ScheduleResourceIT {
         String firstFrame = java.util.concurrent.CompletableFuture.supplyAsync(() ->
                         res.body().filter(l -> l.startsWith("data:")).findFirst().orElse(""))
                 .get(15, java.util.concurrent.TimeUnit.SECONDS);
-        org.assertj.core.api.Assertions.assertThat(firstFrame).contains("solverStatus");
+        org.assertj.core.api.Assertions.assertThat(firstFrame).contains("\"type\":\"connected\"");
+    }
+
+    /**
+     * Phase 5: a granular edit emits a typed change event naming the affected resource,
+     * so another client refetches only that slice instead of the whole snapshot.
+     */
+    @Test
+    void streamEmitsATypedEventForAGranularEdit() throws Exception {
+        java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+        java.net.URI streamUri = baseUrl.toURI().resolve("/api/stream?token=" + token());
+        java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder()
+                .uri(streamUri).header("Accept", "text/event-stream").GET().build();
+        java.net.http.HttpResponse<java.util.stream.Stream<String>> res =
+                client.sendAsync(req, java.net.http.HttpResponse.BodyHandlers.ofLines())
+                        .get(15, java.util.concurrent.TimeUnit.SECONDS);
+        org.assertj.core.api.Assertions.assertThat(res.statusCode()).isEqualTo(200);
+
+        java.util.List<String> frames = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+        Thread reader = new Thread(() -> res.body().forEach(frames::add));
+        reader.setDaemon(true);
+        reader.start();
+        Thread.sleep(400); // let the subscription attach
+
+        Employee e = availableAllDay(employee("sse-emp", "Bar"), today);
+        e.getBlocks().get(0).setId("blk-sse-emp");
+        authed().contentType(ContentType.JSON).body(MAPPER.writeValueAsString(e))
+                .when().post("/api/employees").then().statusCode(201);
+
+        await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(200)).untilAsserted(() ->
+                org.assertj.core.api.Assertions.assertThat(frames.stream()
+                        .anyMatch(l -> l.contains("\"type\":\"employee\"") && l.contains("sse-emp"))).isTrue());
     }
 
     @Test

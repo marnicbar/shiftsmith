@@ -130,6 +130,12 @@ async function send(method, url, body, ifMatch) {
 
 const enc = encodeURIComponent;
 
+// Reads that also return the resource's ETag, so a delta can refetch one slice and
+// keep its version in step.
+export const getEmployee = (id) => send('GET', `${BASE}/employees/${enc(id)}`);
+export const getPosition = (id) => send('GET', `${BASE}/positions/${enc(id)}`);
+export const getSettings = () => send('GET', `${BASE}/settings`);
+
 export const createEmployee = (employee) => send('POST', `${BASE}/employees`, employee);
 export const updateEmployee = (employee, ifMatch) => send('PUT', `${BASE}/employees/${enc(employee.id)}`, employee, ifMatch);
 export const deleteEmployee = (id, ifMatch) => send('DELETE', `${BASE}/employees/${enc(id)}`, undefined, ifMatch);
@@ -150,18 +156,20 @@ export const unpinOccurrence = (templateId, date) =>
 export const startSolving = () => request(`${BASE}/solve`, { method: 'POST' });
 export const stopSolving = () => request(`${BASE}/solve`, { method: 'DELETE' });
 
-// Live updates over Server-Sent Events: the backend pushes a fresh schedule
-// snapshot whenever the solver improves the solution, the problem changes, or
-// the solver starts/stops. The browser's EventSource auto-reconnects on drop.
-// EventSource can't send headers, so the token rides along as a query parameter.
-// Returns an unsubscribe function that closes the stream.
-export function subscribeSchedule(onUpdate, onError) {
+// Live updates over Server-Sent Events: the backend pushes a small typed change event
+// (issue #47, Phase 5) whenever a resource is edited, a pin changes, or the solver
+// advances — the client refetches only the affected slice. The browser's EventSource
+// auto-reconnects on drop; `onOpen` fires on (re)connect so the client can catch up,
+// `onError` on a drop so it can show a "reconnecting" state. EventSource can't send
+// headers, so the token rides along as a query parameter. Returns an unsubscribe fn.
+export function subscribeSchedule(onEvent, onError, onOpen) {
   const token = getToken();
   const url = token ? `${BASE}/stream?token=${encodeURIComponent(token)}` : `${BASE}/stream`;
   const es = new EventSource(url);
   es.onmessage = (e) => {
-    try { onUpdate(JSON.parse(e.data)); } catch { /* ignore malformed frame */ }
+    try { onEvent(JSON.parse(e.data)); } catch { /* ignore malformed frame */ }
   };
+  if (onOpen) es.onopen = onOpen;
   if (onError) es.onerror = onError; // EventSource reconnects automatically
   return () => es.close();
 }

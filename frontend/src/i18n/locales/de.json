@@ -42,7 +42,8 @@
     "horizonTooLong": "Der Planungszeitraum ist zu lang ({{days}} Tage). Das Maximum sind {{max}} Tage (etwa zwei Jahre).",
     "tightenedRules": "Persönliche Regeln für {{names}} verschärft, um die neuen Systemgrenzen einzuhalten.",
     "namesMore": "{{names}} +{{count}} weitere",
-    "reloadedAfterConflict": "Jemand anderes hat dies geändert – der aktuelle Stand wurde neu geladen. Bitte wiederhole deine Änderung."
+    "reloadedAfterConflict": "Jemand anderes hat dies geändert – der aktuelle Stand wurde neu geladen. Bitte wiederhole deine Änderung.",
+    "reconnecting": "Verbindung zu Live-Updates wird wiederhergestellt…"
   },
   "auth": {
     "title": "Anmelden",
