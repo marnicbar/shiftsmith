@@ -2,6 +2,8 @@ package dev.shiftsmith.rest;
 
 import dev.shiftsmith.auth.AuthFilter;
 import dev.shiftsmith.auth.AuthService;
+import dev.shiftsmith.auth.CurrentUser;
+import dev.shiftsmith.auth.UserAccount;
 import dev.shiftsmith.rest.dto.ApiError;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -28,9 +30,13 @@ public class AuthResource {
     @Inject
     AuthService auth;
 
+    @Inject
+    CurrentUser currentUser;
+
     public record LoginRequest(String username, String password, boolean remember) {}
-    public record LoginResponse(String token, String username, boolean mustChangePassword) {}
-    public record MeResponse(String username, boolean mustChangePassword) {}
+    public record LoginResponse(String token, String username, boolean mustChangePassword,
+                                String role, String employeeId) {}
+    public record MeResponse(String username, boolean mustChangePassword, String role, String employeeId) {}
     public record ChangePasswordRequest(String currentPassword, String newPassword) {}
 
     @POST
@@ -45,8 +51,11 @@ public class AuthResource {
             return Response.status(Response.Status.UNAUTHORIZED)
                     .entity(new ApiError("Invalid username or password")).build();
         }
+        UserAccount account = auth.account(req.username()).orElse(null);
         return Response.ok(new LoginResponse(token.get(), req.username(),
-                auth.mustChangePassword(req.username()))).build();
+                auth.mustChangePassword(req.username()),
+                account == null ? null : account.role,
+                account == null ? null : account.employeeId)).build();
     }
 
     /** Confirms the caller's token is valid; used by the SPA on startup. */
@@ -54,7 +63,8 @@ public class AuthResource {
     @Path("/me")
     public MeResponse me(@Context ContainerRequestContext ctx) {
         String username = (String) ctx.getProperty(AuthFilter.USERNAME_PROPERTY);
-        return new MeResponse(username, auth.mustChangePassword(username));
+        return new MeResponse(username, auth.mustChangePassword(username),
+                currentUser.role(), currentUser.employeeId());
     }
 
     @POST

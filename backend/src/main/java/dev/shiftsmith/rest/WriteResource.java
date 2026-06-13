@@ -1,10 +1,13 @@
 package dev.shiftsmith.rest;
 
+import dev.shiftsmith.auth.CurrentUser;
+import dev.shiftsmith.domain.Block;
 import dev.shiftsmith.domain.CalendarOverlap;
 import dev.shiftsmith.domain.DuplicateId;
 import dev.shiftsmith.domain.Employee;
 import dev.shiftsmith.domain.Position;
 import dev.shiftsmith.domain.ProblemValidation;
+import dev.shiftsmith.domain.Rule;
 import dev.shiftsmith.domain.Settings;
 import dev.shiftsmith.persistence.EmployeeStore;
 import dev.shiftsmith.persistence.PositionStore;
@@ -33,9 +36,10 @@ import java.util.Optional;
  * {@code 409 Conflict} via HTTP conditional requests ({@code If-Match}/{@code ETag})
  * instead of the bulk {@code PUT /api/problem}'s last-write-wins (resolves #31).
  *
- * <p>Only the employee resource is wired here so far — the case the multi-user
- * direction needs first; positions/settings/assignments follow the same pattern. The
- * bulk {@code PUT} remains as a (now deprecated) compatibility layer.
+ * <p>Authorization (issue #47, Phase 6): the catalogue writes (employees, positions,
+ * settings, pins) require a manager/admin; an {@code employee} account may only edit
+ * its own calendar via {@code PUT /api/employees/{id}/availability|rules}. The bulk
+ * {@code PUT} remains as a (now deprecated) compatibility layer.
  */
 @Path("/api")
 @Produces(MediaType.APPLICATION_JSON)
@@ -45,9 +49,14 @@ public class WriteResource {
     @Inject
     ScheduleService service;
 
+    @Inject
+    CurrentUser user;
+
     @POST
     @Path("/employees")
     public Response createEmployee(Employee employee) {
+        Response denied = requireManager();
+        if (denied != null) return denied;
         Response invalid = validate(employee);
         if (invalid != null) return invalid;
         EmployeeStore.Outcome outcome = service.createEmployee(employee);
@@ -63,6 +72,8 @@ public class WriteResource {
     @Path("/employees/{id}")
     public Response updateEmployee(@PathParam("id") String id, @HeaderParam(HttpHeaders.IF_MATCH) String ifMatch,
                                    Employee employee) {
+        Response denied = requireManager();
+        if (denied != null) return denied;
         if (employee.getId() == null) employee.setId(id);
         if (!id.equals(employee.getId())) {
             return badRequest("The employee id in the body must match the URL.");
@@ -84,6 +95,8 @@ public class WriteResource {
     @DELETE
     @Path("/employees/{id}")
     public Response deleteEmployee(@PathParam("id") String id, @HeaderParam(HttpHeaders.IF_MATCH) String ifMatch) {
+        Response denied = requireManager();
+        if (denied != null) return denied;
         Optional<Long> expected = parseVersion(ifMatch);
         if (expected.isEmpty()) return missingIfMatch();
         EmployeeStore.Outcome outcome = service.deleteEmployee(id, expected.get());
@@ -100,6 +113,8 @@ public class WriteResource {
     @POST
     @Path("/positions")
     public Response createPosition(Position position) {
+        Response denied = requireManager();
+        if (denied != null) return denied;
         Response invalid = validatePosition(position);
         if (invalid != null) return invalid;
         PositionStore.Outcome outcome = service.createPosition(position);
@@ -113,6 +128,8 @@ public class WriteResource {
     @Path("/positions/{id}")
     public Response updatePosition(@PathParam("id") String id, @HeaderParam(HttpHeaders.IF_MATCH) String ifMatch,
                                    Position position) {
+        Response denied = requireManager();
+        if (denied != null) return denied;
         if (position.getId() == null) position.setId(id);
         if (!id.equals(position.getId())) return badRequest("The position id in the body must match the URL.");
         Optional<Long> expected = parseVersion(ifMatch);
@@ -132,6 +149,8 @@ public class WriteResource {
     @DELETE
     @Path("/positions/{id}")
     public Response deletePosition(@PathParam("id") String id, @HeaderParam(HttpHeaders.IF_MATCH) String ifMatch) {
+        Response denied = requireManager();
+        if (denied != null) return denied;
         Optional<Long> expected = parseVersion(ifMatch);
         if (expected.isEmpty()) return missingIfMatch();
         PositionStore.Outcome outcome = service.deletePosition(id, expected.get());
@@ -155,6 +174,8 @@ public class WriteResource {
     @Path("/assignments/{templateId}/{date}")
     public Response pin(@PathParam("templateId") String templateId, @PathParam("date") java.time.LocalDate date,
                         List<String> employeeIds) {
+        Response denied = requireManager();
+        if (denied != null) return denied;
         boolean found = service.pinOccurrence(templateId, date, employeeIds == null ? List.of() : employeeIds);
         return found ? Response.noContent().build()
                 : notFound();
@@ -163,8 +184,42 @@ public class WriteResource {
     @DELETE
     @Path("/assignments/{templateId}/{date}")
     public Response unpin(@PathParam("templateId") String templateId, @PathParam("date") java.time.LocalDate date) {
+        Response denied = requireManager();
+        if (denied != null) return denied;
         service.unpinOccurrence(templateId, date);
         return Response.noContent().build();
+    }
+
+    // --- employee self-service: availability + rules (issue #47, Phase 6) ------
+    // An employee account may edit only its own calendar here; a manager/admin may edit
+    // anyone's. Manager-only fields (skills/role/contract) are untouched — those go
+    // through the full employee write above.
+
+    @PUT
+    @Path("/employees/{id}/availability")
+    public Response availability(@PathParam("id") String id, List<Block> blocks) {
+        Response denied = requireCalendar(id);
+        if (denied != null) return denied;
+        List<Block> next = blocks == null ? List.of() : blocks;
+        Response invalid = validateAvailability(id, next);
+        if (invalid != null) return invalid;
+        return calendarOutcome(service.updateEmployeeAvailability(id, next));
+    }
+
+    @PUT
+    @Path("/employees/{id}/rules")
+    public Response rules(@PathParam("id") String id, List<Rule> rules) {
+        Response denied = requireCalendar(id);
+        if (denied != null) return denied;
+        return calendarOutcome(service.updateEmployeeRules(id, rules == null ? List.of() : rules));
+    }
+
+    private Response calendarOutcome(EmployeeStore.Outcome outcome) {
+        return switch (outcome.result()) {
+            case OK -> Response.ok().tag(etag(outcome.version())).build();
+            case NOT_FOUND -> notFound();
+            default -> conflict("This employee was modified by someone else; reload and retry.");
+        };
     }
 
     // --- settings (singleton) -------------------------------------------
@@ -172,6 +227,8 @@ public class WriteResource {
     @PUT
     @Path("/settings")
     public Response updateSettings(@HeaderParam(HttpHeaders.IF_MATCH) String ifMatch, Settings settings) {
+        Response denied = requireManager();
+        if (denied != null) return denied;
         Optional<Long> expected = parseVersion(ifMatch);
         if (expected.isEmpty()) return missingIfMatch();
         Optional<String> invalid = ProblemValidation.firstError(List.of(), List.of(), settings);
@@ -186,6 +243,29 @@ public class WriteResource {
     }
 
     // --- helpers --------------------------------------------------------
+
+    /** Catalogue writes require a manager/admin; otherwise 403. */
+    private Response requireManager() {
+        return user.isManager() ? null : forbidden();
+    }
+
+    /** Editing a calendar needs manager access, or to be that employee's own account. */
+    private Response requireCalendar(String employeeId) {
+        return user.canEditCalendar(employeeId) ? null : forbidden();
+    }
+
+    /** Structural checks on an availability set (overlaps, duplicate block ids). */
+    private static Response validateAvailability(String employeeId, List<Block> blocks) {
+        Employee tmp = new Employee();
+        tmp.setId(employeeId);
+        tmp.setBlocks(new java.util.ArrayList<>(blocks));
+        List<Employee> one = List.of(tmp);
+        Optional<String> dup = DuplicateId.firstDuplicate(one, List.of());
+        if (dup.isPresent()) return badRequest(dup.get());
+        Optional<String> overlap = CalendarOverlap.firstConflict(one, List.of());
+        if (overlap.isPresent()) return badRequest(overlap.get());
+        return null;
+    }
 
     /** Reuse the same structural checks the bulk PUT runs, scoped to this one position. */
     private static Response validatePosition(Position position) {
@@ -247,5 +327,10 @@ public class WriteResource {
 
     private static Response conflict(String message) {
         return Response.status(Response.Status.CONFLICT).entity(new ApiError(message)).build();
+    }
+
+    private static Response forbidden() {
+        return Response.status(Response.Status.FORBIDDEN)
+                .entity(new ApiError("You don't have permission to make this change.")).build();
     }
 }

@@ -78,6 +78,33 @@ public class EmployeeStore {
         return Outcome.ok(e.version);
     }
 
+    /**
+     * Replace just one employee's availability blocks (issue #47, Phase 6) — the
+     * calendar an employee account may self-edit, without touching manager-controlled
+     * fields (skills/role/contract). Bumps the employee version. No If-Match: a calendar
+     * edit is last-write-wins.
+     */
+    @Transactional
+    public Outcome updateAvailability(String id, java.util.List<Block> blocks) {
+        EmployeeEntity e = EmployeeEntity.findById(id);
+        if (e == null) return Outcome.of(Result.NOT_FOUND);
+        e.version = e.version + 1;
+        AvailabilityBlockEntity.delete("employeeId", id);
+        for (Block b : blocks) ProblemMapper.blockToEntity(b, id).persist();
+        return Outcome.ok(e.version);
+    }
+
+    /** Replace just one employee's personal working-time rules (issue #47, Phase 6). */
+    @Transactional
+    public Outcome updateRules(String id, java.util.List<Rule> rules) {
+        EmployeeEntity e = EmployeeEntity.findById(id);
+        if (e == null) return Outcome.of(Result.NOT_FOUND);
+        e.version = e.version + 1;
+        WorkRuleEntity.delete("employeeId", id);
+        for (Rule r : rules) ProblemMapper.ruleToEntity(r, id).persist();
+        return Outcome.ok(e.version);
+    }
+
     @Transactional
     public Outcome delete(String id, long expectedVersion) {
         EmployeeEntity e = EmployeeEntity.findById(id);

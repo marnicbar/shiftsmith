@@ -110,6 +110,19 @@ public class AuthService {
         return true;
     }
 
+    /** The account for a username (its role + linked employee), or empty. */
+    public Optional<UserAccount> account(String username) {
+        return store.find(username);
+    }
+
+    /**
+     * Provision a {@code manager}/{@code employee} account (issue #47, Phase 6). An
+     * employee account is linked to the person it represents via {@code employeeId}.
+     */
+    public boolean createUser(String username, String password, String role, String employeeId) {
+        return store.createUser(username, PasswordHasher.hash(password), role, employeeId);
+    }
+
     /** Validate a token's signature and expiry, returning the username it carries. */
     public Optional<String> verify(String token) {
         if (token == null || token.isBlank()) return Optional.empty();

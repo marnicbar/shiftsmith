@@ -391,6 +391,30 @@ public class ScheduleService {
         return outcome;
     }
 
+    /** Replace one employee's availability (the calendar an employee may self-edit), sync + re-solve. */
+    public synchronized EmployeeStore.Outcome updateEmployeeAvailability(String id, List<Block> blocks) {
+        EmployeeStore.Outcome outcome = employeeStore.updateAvailability(id, blocks);
+        if (outcome.result() == EmployeeStore.Result.OK) {
+            employees.stream().filter(e -> e.getId().equals(id)).findFirst().ifPresent(e -> e.setBlocks(blocks));
+            employeeVersions.put(id, outcome.version());
+            broadcaster.emit(ChangeEvent.entity("employee", id, outcome.version()));
+            startSolving();
+        }
+        return outcome;
+    }
+
+    /** Replace one employee's personal working-time rules, sync + re-solve. */
+    public synchronized EmployeeStore.Outcome updateEmployeeRules(String id, List<Rule> rules) {
+        EmployeeStore.Outcome outcome = employeeStore.updateRules(id, rules);
+        if (outcome.result() == EmployeeStore.Result.OK) {
+            employees.stream().filter(e -> e.getId().equals(id)).findFirst().ifPresent(e -> e.setRules(rules));
+            employeeVersions.put(id, outcome.version());
+            broadcaster.emit(ChangeEvent.entity("employee", id, outcome.version()));
+            startSolving();
+        }
+        return outcome;
+    }
+
     public Optional<Long> positionVersion(String id) {
         return positionStore.versionOf(id);
     }
