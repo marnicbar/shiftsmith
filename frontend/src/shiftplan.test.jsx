@@ -86,6 +86,19 @@ describe('availableFor', () => {
     const e = emp('e1', [], [block('vac', { allDay: true })]);
     expect(availableFor(e, sh(600, 720), MON)).toBe(false);
   });
+
+  it('an overnight window wraps past midnight and covers an overnight shift', () => {
+    // 22:00 → 02:00 next day (start > end) — mirrors backend Employee.isAvailableFor.
+    const e = emp('e1', [], [block('pref', { start: 1320, end: 120 })]);
+    expect(availableFor(e, sh(1320, 120), MON)).toBe(true);  // 22:00–02:00 fits exactly
+    expect(availableFor(e, sh(1380, 60), MON)).toBe(true);   // 23:00–01:00 fits inside
+    expect(availableFor(e, sh(1260, 120), MON)).toBe(false); // starts 21:00, before window
+  });
+
+  it('a daytime window does not cover an overnight shift that spills past midnight', () => {
+    const e = emp('e1', [], [block('pref', { start: 1080, end: 1440 })]); // 18:00–24:00
+    expect(availableFor(e, sh(1080, 120), MON)).toBe(false); // 18:00–02:00 spills past 24:00
+  });
 });
 
 describe('buildPlan', () => {
