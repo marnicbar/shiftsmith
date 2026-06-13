@@ -43,17 +43,26 @@ function prefScore(emp, shift, date) {
 // Mirrors backend Employee.isAvailableFor: pref/undes blocks define availability
 // (an empty calendar = unavailable); a shift may only be filled by someone if it
 // fits entirely within one window, with adjacent/overlapping windows merged.
-export function availableFor(emp, shift, date) {
-  const raw = [];
+// Append an employee's pref/undes minute ranges active on `date`, each shifted by
+// `offset` (1440 for the next day, so they merge across the midnight seam).
+function collectAvailRanges(emp, date, offset, raw) {
   for (const b of emp.blocks) {
     if (b.type !== 'pref' && b.type !== 'undes' || !matchesDay(b, date)) continue;
-    if (b.allDay) raw.push([0, 1440]);
-    else if (b.start < b.end) raw.push([b.start, b.end]);
-    // An overnight window (start > end) wraps past midnight into the next day
-    // (end + 1440) instead of being dropped, so it stays usable for an overnight
-    // shift — matching the backend's Employee.mergedRanges.
-    else if (b.start > b.end) raw.push([b.start, b.end + 1440]);
+    if (b.allDay) raw.push([offset, offset + 1440]);
+    else if (b.start < b.end) raw.push([offset + b.start, offset + b.end]);
+    // An overnight window (start > end) wraps past midnight (end + 1440) instead of
+    // being dropped, mirroring the backend's Employee.collectRanges.
+    else if (b.start > b.end) raw.push([offset + b.start, offset + b.end + 1440]);
   }
+}
+export function availableFor(emp, shift, date) {
+  // The shift's end is wrapped past midnight for an overnight shift; when it spills
+  // into the next day, fold that day's windows in at +1440 so two adjacent day
+  // blocks across the seam act as one window (a single block can't cross midnight).
+  const sEnd = wrapEnd(shift.start, shift.end);
+  const raw = [];
+  collectAvailRanges(emp, date, 0, raw);
+  if (sEnd > 1440) collectAvailRanges(emp, SS.isoOf(SS.addDays(SS.parseISO(date), 1)), 1440, raw);
   raw.sort((a, b) => a[0] - b[0]);
   const merged = [];
   for (const r of raw) {
@@ -61,9 +70,6 @@ export function availableFor(emp, shift, date) {
     if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
     else merged.push([r[0], r[1]]);
   }
-  // The shift's end is wrapped the same way, so an overnight shift is matched
-  // against the wrapped window rather than its raw (smaller-than-start) end.
-  const sEnd = wrapEnd(shift.start, shift.end);
   return merged.some((w) => w[0] <= shift.start && sEnd <= w[1]);
 }
 // Spacing (in whole hours) between hour ticks on the timeline. It must divide 24

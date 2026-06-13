@@ -99,6 +99,17 @@ describe('availableFor', () => {
     const e = emp('e1', [], [block('pref', { start: 1080, end: 1440 })]); // 18:00–24:00
     expect(availableFor(e, sh(1080, 120), MON)).toBe(false); // 18:00–02:00 spills past 24:00
   });
+
+  it('two adjacent day windows across midnight cover an overnight shift', () => {
+    // Overnight availability is entered as two adjacent day blocks (one reaching
+    // midnight, one starting at midnight); they merge across the seam.
+    const e = emp('e1', [], [
+      block('pref', { start: 1080, end: 1440 }),        // Mon 18:00–24:00
+      block('pref', { date: TUE, start: 0, end: 360 }), // Tue 00:00–06:00
+    ]);
+    expect(availableFor(e, sh(1080, 360), MON)).toBe(true);  // 18:00–06:00 spans the seam
+    expect(availableFor(e, sh(1020, 360), MON)).toBe(false); // starts 17:00, before Mon window
+  });
 });
 
 describe('buildPlan', () => {
