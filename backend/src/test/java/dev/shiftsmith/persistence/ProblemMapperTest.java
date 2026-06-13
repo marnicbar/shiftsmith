@@ -3,200 +3,150 @@ package dev.shiftsmith.persistence;
 import dev.shiftsmith.domain.Block;
 import dev.shiftsmith.domain.Change;
 import dev.shiftsmith.domain.Employee;
-import dev.shiftsmith.domain.Position;
 import dev.shiftsmith.domain.Rule;
-import dev.shiftsmith.domain.Settings;
-import dev.shiftsmith.domain.ShiftAssignment;
 import dev.shiftsmith.domain.ShiftTemplate;
-import dev.shiftsmith.service.ScheduleExpander;
+import dev.shiftsmith.persistence.entity.AssignmentEntity;
+import dev.shiftsmith.persistence.entity.EmployeeEntity;
+import dev.shiftsmith.persistence.entity.PositionEntity;
+import dev.shiftsmith.persistence.entity.SettingsEntity;
+import dev.shiftsmith.persistence.entity.SkillEntity;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The Phase 1 round-trip guarantee (issue #47): translating a problem document into
- * the normalized entity graph and back reproduces the same solver-visible problem.
- *
- * <p>Pure object mapping — no database — so it runs in the standard {@code mvn test}
- * suite. It asserts the document survives field-for-field where it matters and, most
- * importantly, that expanding the round-tripped problem yields the identical concrete
- * slots (the same data a {@code ScheduleDTO} is built from).
+ * Issue #47: rehydrating the whole problem from the normalized rows ({@code Tables} →
+ * {@link LoadedProblem}) reproduces the solver-visible domain — recurrence, retained
+ * rule changes, the global/personal rule split, the skill order, and the overrides
+ * rebuilt from pinned assignment rows. Pure object mapping, no database. The reverse
+ * direction (domain → entity) is exercised here via the same per-field builders the
+ * write stores use ({@code blockToEntity}/{@code ruleToEntity}/{@code templateToEntity}).
  */
 class ProblemMapperTest {
 
     private static final LocalDate MON = LocalDate.of(2026, 6, 1); // a Monday
 
-    private ProblemDocument richDocument() {
-        ProblemDocument doc = new ProblemDocument();
+    private ProblemMapper.Tables richTables() {
+        ProblemMapper.Tables t = new ProblemMapper.Tables();
 
-        Settings settings = new Settings("week", 1);
-        settings.setSkills(List.of("Bar", "Kitchen"));
-        Rule globalWeek = rule("g-week", "weekHours", "max", 40);
-        globalWeek.getChanges().add(change("c-g", MON.plusDays(7), "set", "weekHours", "max", 36));
-        settings.setGlobalRules(List.of(globalWeek));
-        doc.settings = settings;
+        SettingsEntity se = new SettingsEntity();
+        se.id = SettingsEntity.SINGLETON_ID;
+        se.horizonUnit = "week";
+        se.horizonCount = 1;
+        t.settings = se;
+        t.skills.add(skill("Bar", 0));
+        t.skills.add(skill("Kitchen", 1));
 
-        Employee alice = new Employee();
-        alice.setId("alice");
-        alice.setFirstName("Alice");
-        alice.setLastName("Adams");
-        alice.setRole("server");
-        alice.setContract(80);
-        alice.setSkills(Set.of("Bar"));
-        alice.getBlocks().add(window("pref", MON, 480, 1200, "none"));
-        Block weekly = window("undes", MON, 1080, 1320, "weekly");
-        weekly.setUntil(MON.plusDays(60));
-        weekly.setDays(Set.of(2, 4));
-        weekly.setExcept(Set.of(MON.plusDays(2)));
-        alice.getBlocks().add(weekly);
-        Block vac = window("vac", MON, 0, 0, "none");
+        // Global rule with a retained scheduled change (weekHours max 40 → 36 from MON+7).
+        Rule gWeek = rule("g-week", "weekHours", "max", 40);
+        gWeek.getChanges().add(change("c-g", MON.plusDays(7), "weekHours", "max", 36));
+        t.rules.add(ProblemMapper.ruleToEntity(gWeek, null));
+
+        // Alice: skills, a pref window, a recurring undesired window (days {2,4}, except MON+2),
+        // a multi-day vacation span, and a personal day-hours rule with a scheduled change.
+        t.employees.add(employee("alice", "Alice", "Adams", "server", 80, Set.of("Bar")));
+        t.blocks.add(ProblemMapper.blockToEntity(window("pref", MON, 480, 1200, "none", null, null, null), "alice"));
+        Block weekly = window("undes", MON, 1080, 1320, "weekly", MON.plusDays(60), Set.of(2, 4), Set.of(MON.plusDays(2)));
+        t.blocks.add(ProblemMapper.blockToEntity(weekly, "alice"));
+        Block vac = window("vac", MON, 0, 0, "none", null, null, null);
         vac.setAllDay(true);
         vac.setEndDate(MON.plusDays(3));
-        alice.getBlocks().add(vac);
+        t.blocks.add(ProblemMapper.blockToEntity(vac, "alice"));
         Rule dayMax = rule("a-day", "dayHours", "max", 8);
-        dayMax.getChanges().add(change("a-c", MON.plusDays(1), "set", "dayHours", "max", 10));
-        alice.getRules().add(dayMax);
+        dayMax.getChanges().add(change("a-c", MON.plusDays(1), "dayHours", "max", 10));
+        t.rules.add(ProblemMapper.ruleToEntity(dayMax, "alice"));
 
-        Employee bob = new Employee();
-        bob.setId("bob");
-        bob.setFirstName("Bob");
-        bob.setSkills(Set.of("Kitchen"));
-        bob.getBlocks().add(window("pref", MON, 0, 1440, "none"));
+        t.employees.add(employee("bob", "Bob", "", "", 0, Set.of("Kitchen")));
 
-        doc.employees = List.of(alice, bob);
+        PositionEntity p = new PositionEntity();
+        p.id = "p1"; p.name = "Bar"; p.color = 3; p.group = "front"; p.skills = new HashSet<>(Set.of("Bar"));
+        t.positions.add(p);
+        ShiftTemplate t1 = new ShiftTemplate();
+        t1.setId("t1"); t1.setName("Evening"); t1.setDate(MON); t1.setStart(1020); t1.setEnd(1440);
+        t1.setHeadcount(2); t1.setRepeat("weekly"); t1.setDays(Set.of(0)); t1.setSkills(new HashSet<>(Set.of("Bar")));
+        t.templates.add(ProblemMapper.templateToEntity(t1, "p1"));
 
-        Position p = new Position();
-        p.setId("p1");
-        p.setName("Bar");
-        p.setColor(3);
-        p.setGroup("front");
-        p.setSkills(Set.of("Bar"));
-        ShiftTemplate t = new ShiftTemplate();
-        t.setId("t1");
-        t.setName("Evening");
-        t.setDate(MON);
-        t.setStart(1020);
-        t.setEnd(1440);
-        t.setHeadcount(2);
-        t.setRepeat("weekly");
-        t.setDays(Set.of(0));
-        t.setUntil(MON.plusDays(60));
-        t.setExcept(Set.of(MON.plusDays(7)));
-        t.setSkills(Set.of("Bar"));
-        t.setPreferred(List.of("bob", "alice"));
-        p.getShifts().add(t);
-        doc.positions = List.of(p);
-
-        Map<String, List<String>> overrides = new HashMap<>();
-        overrides.put("t1@" + MON, List.of("alice")); // pins both slots of the headcount-2 occurrence
-        doc.overrides = overrides;
-        return doc;
+        // Pinned occurrence: slot 0 = alice, slot 1 = pinned-but-empty.
+        t.assignments.add(pin("t1", MON, 0, "alice"));
+        t.assignments.add(pin("t1", MON, 1, null));
+        return t;
     }
 
     @Test
-    void roundTripPreservesSettingsSkillsAndGlobalRules() {
-        ProblemDocument back = ProblemMapper.toDocument(ProblemMapper.toTables(richDocument()));
-
-        assertThat(back.settings.getHorizonUnit()).isEqualTo("week");
-        assertThat(back.settings.getHorizonCount()).isEqualTo(1);
-        assertThat(back.settings.getSkills()).containsExactly("Bar", "Kitchen");
-
-        assertThat(back.settings.getGlobalRules()).hasSize(1);
-        Rule g = back.settings.getGlobalRules().get(0);
-        assertThat(g.getMetric()).isEqualTo("weekHours");
-        assertThat(g.getOp()).isEqualTo("max");
-        // The change is retained, not collapsed: resolves to 40 before, 36 from the change date.
-        assertThat(g.effectiveAt(MON).value()).isEqualTo(40);
+    void rehydratesSettingsSkillsAndGlobalRules() {
+        LoadedProblem p = ProblemMapper.toLoadedProblem(richTables());
+        assertThat(p.settings().getHorizonUnit()).isEqualTo("week");
+        assertThat(p.settings().getSkills()).containsExactly("Bar", "Kitchen"); // ordered by ordinal
+        assertThat(p.settings().getGlobalRules()).hasSize(1);
+        Rule g = p.settings().getGlobalRules().get(0);
+        assertThat(g.effectiveAt(MON).value()).isEqualTo(40);            // retained change, resolved per-date
         assertThat(g.effectiveAt(MON.plusDays(7)).value()).isEqualTo(36);
     }
 
     @Test
-    void roundTripPreservesEmployeesAvailabilityAndRules() {
-        ProblemDocument back = ProblemMapper.toDocument(ProblemMapper.toTables(richDocument()));
-
-        assertThat(back.employees).extracting(Employee::getId).containsExactly("alice", "bob");
-        Employee alice = back.employees.stream().filter(e -> e.getId().equals("alice")).findFirst().orElseThrow();
+    void rehydratesEmployeesAvailabilityAndRules() {
+        LoadedProblem p = ProblemMapper.toLoadedProblem(richTables());
+        assertThat(p.employees()).extracting(Employee::getId).containsExactly("alice", "bob");
+        Employee alice = p.employees().stream().filter(e -> e.getId().equals("alice")).findFirst().orElseThrow();
         assertThat(alice.getFirstName()).isEqualTo("Alice");
-        assertThat(alice.getLastName()).isEqualTo("Adams");
-        assertThat(alice.getRole()).isEqualTo("server");
         assertThat(alice.getContract()).isEqualTo(80);
         assertThat(alice.getSkills()).containsExactly("Bar");
 
-        // Availability (pref window), the recurring undesired window with selected days +
-        // exception, and the multi-day vacation span must all survive intact.
         assertThat(alice.isAvailableFor(MON, 480, 1200)).isTrue();
-        assertThat(alice.preferredMinutes(MON, 600, 660)).isEqualTo(60);
-        assertThat(alice.undesiredMinutes(MON.plusDays(2), 1080, 1320)).isZero();   // exception day
-        assertThat(alice.undesiredMinutes(MON.plusDays(4), 1080, 1320)).isEqualTo(240); // Wednesday in days {2,4}
+        assertThat(alice.undesiredMinutes(MON.plusDays(2), 1080, 1320)).isZero();      // exception day
+        assertThat(alice.undesiredMinutes(MON.plusDays(4), 1080, 1320)).isEqualTo(240); // Wed in days {2,4}
         assertThat(alice.isOnVacation(MON.plusDays(3))).isTrue();
-        assertThat(alice.isOnVacation(MON.plusDays(4))).isFalse();
-
-        // Personal time-varying rule with its scheduled change.
         assertThat(alice.maxLimit("dayHours", MON)).isEqualTo(8);
-        assertThat(alice.maxLimit("dayHours", MON.plusDays(1))).isEqualTo(10);
+        assertThat(alice.maxLimit("dayHours", MON.plusDays(1))).isEqualTo(10);          // scheduled change
     }
 
     @Test
-    void roundTripExpandsToIdenticalSlots() {
-        ProblemDocument original = richDocument();
-        ProblemDocument back = ProblemMapper.toDocument(ProblemMapper.toTables(original));
-
-        Map<String, String> before = expandToSlotMap(original);
-        Map<String, String> after = expandToSlotMap(back);
-        assertThat(after).isEqualTo(before);
-        // The pinned occurrence: slot 0 staffed by alice, slot 1 pinned-but-empty.
-        assertThat(before).containsEntry("t1@" + MON + "#0", "alice");
-        assertThat(before).containsEntry("t1@" + MON + "#1", "<pinned:null>");
+    void rebuildsOverridesFromPinnedAssignmentRows() {
+        LoadedProblem p = ProblemMapper.toLoadedProblem(richTables());
+        assertThat(p.overrides()).containsEntry("t1@" + MON, java.util.Arrays.asList("alice", null));
     }
 
-    /** Expand a document and key each slot id → assigned employee (marking pins). */
-    private Map<String, String> expandToSlotMap(ProblemDocument doc) {
-        List<ShiftAssignment> slots = ScheduleExpander.expand(
-                doc.positions, doc.employees, doc.settings, doc.overrides, MON);
-        Map<String, String> map = new LinkedHashMap<>();
-        for (ShiftAssignment a : slots) {
-            String who = a.getEmployee() != null ? a.getEmployee().getId()
-                    : (a.isPinned() ? "<pinned:null>" : null);
-            map.put(a.getId(), who);
-        }
-        return map;
+    // --- builders -------------------------------------------------------
+
+    private static SkillEntity skill(String name, int ordinal) {
+        SkillEntity s = new SkillEntity(); s.name = name; s.ordinal = ordinal; return s;
     }
 
-    private static Block window(String type, LocalDate date, int start, int end, String repeat) {
+    private static EmployeeEntity employee(String id, String fn, String ln, String role, int contract, Set<String> skills) {
+        EmployeeEntity e = new EmployeeEntity();
+        e.id = id; e.firstName = fn; e.lastName = ln; e.role = role; e.contract = contract;
+        e.skills = new HashSet<>(skills);
+        return e;
+    }
+
+    private static AssignmentEntity pin(String templateId, LocalDate date, int slot, String employeeId) {
+        AssignmentEntity a = new AssignmentEntity();
+        a.templateId = templateId; a.occurrenceDate = date; a.slotIndex = slot; a.employeeId = employeeId;
+        a.startTs = date.atTime(17, 0); a.endTs = date.plusDays(1).atStartOfDay();
+        a.pinned = true; a.source = "manual";
+        return a;
+    }
+
+    private static Block window(String type, LocalDate date, int start, int end, String repeat,
+                                LocalDate until, Set<Integer> days, Set<LocalDate> except) {
         Block b = new Block();
         b.setId("blk-" + type + "-" + date + "-" + start);
-        b.setType(type);
-        b.setDate(date);
-        b.setStart(start);
-        b.setEnd(end);
-        b.setRepeat(repeat);
+        b.setType(type); b.setDate(date); b.setStart(start); b.setEnd(end); b.setRepeat(repeat);
+        b.setUntil(until); b.setDays(days); b.setExcept(except);
         return b;
     }
 
     private static Rule rule(String id, String metric, String op, int value) {
-        Rule r = new Rule();
-        r.setId(id);
-        r.setMetric(metric);
-        r.setOp(op);
-        r.setValue(value);
-        return r;
+        Rule r = new Rule(); r.setId(id); r.setMetric(metric); r.setOp(op); r.setValue(value); return r;
     }
 
-    private static Change change(String id, LocalDate date, String kind, String metric, String op, int value) {
-        Change c = new Change();
-        c.setId(id);
-        c.setDate(date);
-        c.setKind(kind);
-        c.setMetric(metric);
-        c.setOp(op);
-        c.setValue(value);
-        return c;
+    private static Change change(String id, LocalDate date, String metric, String op, int value) {
+        Change c = new Change(); c.setId(id); c.setDate(date); c.setKind("set");
+        c.setMetric(metric); c.setOp(op); c.setValue(value); return c;
     }
 }

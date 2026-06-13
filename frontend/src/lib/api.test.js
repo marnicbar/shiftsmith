@@ -148,21 +148,6 @@ describe('granular writes', () => {
   });
 });
 
-describe('putProblem', () => {
-  it('PUTs JSON to /api/problem and returns null on 204', async () => {
-    const fetchFn = mockFetch({ ok: true, status: 204, json: async () => { throw new Error('no body'); } });
-    const problem = { employees: [], positions: [] };
-    const result = await api.putProblem(problem);
-
-    expect(result).toBeNull();
-    const [url, options] = fetchFn.mock.calls[0];
-    expect(url).toBe('/api/problem');
-    expect(options.method).toBe('PUT');
-    expect(options.headers['Content-Type']).toBe('application/json');
-    expect(JSON.parse(options.body)).toEqual(problem);
-  });
-});
-
 describe('solver lifecycle', () => {
   it('startSolving POSTs and stopSolving DELETEs /api/solve', async () => {
     const fetchFn = mockFetch({ ok: true, status: 204, json: async () => null });
@@ -179,9 +164,9 @@ describe('error handling', () => {
     await expect(api.getSchedule()).rejects.toThrow(/500/);
   });
 
-  it('surfaces the server error message and status on a rejected PUT', async () => {
+  it('surfaces the server error message and status on a rejected request', async () => {
     mockFetch({ ok: false, status: 400, json: async () => ({ error: 'The solve window is too long' }) });
-    await expect(api.putProblem({})).rejects.toMatchObject({
+    await expect(api.getSchedule()).rejects.toMatchObject({
       message: 'The solve window is too long',
       serverMessage: 'The solve window is too long',
       status: 400,
@@ -190,7 +175,7 @@ describe('error handling', () => {
 
   it('falls back to the status when the error body carries no message', async () => {
     mockFetch({ ok: false, status: 400, json: async () => ({}) });
-    await expect(api.putProblem({})).rejects.toMatchObject({ status: 400, serverMessage: null });
+    await expect(api.getSchedule()).rejects.toMatchObject({ status: 400, serverMessage: null });
   });
 });
 

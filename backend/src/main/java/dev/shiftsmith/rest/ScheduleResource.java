@@ -1,13 +1,7 @@
 package dev.shiftsmith.rest;
 
-import dev.shiftsmith.domain.CalendarOverlap;
-import dev.shiftsmith.domain.DuplicateId;
-import dev.shiftsmith.domain.ProblemValidation;
-import dev.shiftsmith.persistence.PersistFailedException;
 import dev.shiftsmith.realtime.ChangeEvent;
 import dev.shiftsmith.realtime.ScheduleBroadcaster;
-import dev.shiftsmith.rest.dto.ApiError;
-import dev.shiftsmith.rest.dto.ProblemDTO;
 import dev.shiftsmith.rest.dto.ScheduleDTO;
 import dev.shiftsmith.service.ScheduleService;
 import io.smallrye.common.annotation.Blocking;
@@ -20,7 +14,6 @@ import jakarta.ws.rs.core.Response;
 import org.jboss.resteasy.reactive.RestStreamElementType;
 
 import java.time.Duration;
-import java.util.Optional;
 
 @Path("/api")
 @Produces(MediaType.APPLICATION_JSON)
@@ -86,41 +79,6 @@ public class ScheduleResource {
         return Multi.createBy().concatenating().streams(
                 initial,
                 Multi.createBy().merging().streams(updates, heartbeat));
-    }
-
-    /** Replace the problem (employees / positions / settings / overrides) and re-solve. */
-    @PUT
-    @Path("/problem")
-    public Response replaceProblem(ProblemDTO dto) {
-        Optional<String> duplicate = DuplicateId.firstDuplicate(dto.employees, dto.positions);
-        if (duplicate.isPresent()) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new ApiError(duplicate.get()))
-                    .build();
-        }
-        Optional<String> conflict = CalendarOverlap.firstConflict(dto.employees, dto.positions);
-        if (conflict.isPresent()) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new ApiError(conflict.get()))
-                    .build();
-        }
-        Optional<String> invalid = ProblemValidation.firstError(dto.employees, dto.positions, dto.settings);
-        if (invalid.isPresent()) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(new ApiError(invalid.get()))
-                    .build();
-        }
-        try {
-            service.replaceProblem(dto.employees, dto.positions, dto.settings, dto.overrides);
-        } catch (PersistFailedException e) {
-            // The write to the database failed: the edit was *not* saved and our state
-            // is unchanged. Tell the client so it doesn't treat the edit as durable —
-            // the frontend retries 5xx with backoff.
-            return Response.status(Response.Status.SERVICE_UNAVAILABLE)
-                    .entity(new ApiError("Could not save changes — the database is unavailable. Please retry."))
-                    .build();
-        }
-        return Response.noContent().build();
     }
 
     @POST

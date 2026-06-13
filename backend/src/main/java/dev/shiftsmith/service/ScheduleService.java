@@ -13,8 +13,7 @@ import dev.shiftsmith.domain.ShiftAssignment;
 import dev.shiftsmith.domain.ShiftTemplate;
 import dev.shiftsmith.persistence.AssignmentStore;
 import dev.shiftsmith.persistence.EmployeeStore;
-import dev.shiftsmith.persistence.PersistFailedException;
-import dev.shiftsmith.persistence.ProblemDocument;
+import dev.shiftsmith.persistence.LoadedProblem;
 import dev.shiftsmith.persistence.ProblemStore;
 import dev.shiftsmith.realtime.ChangeEvent;
 import dev.shiftsmith.realtime.ScheduleBroadcaster;
@@ -94,23 +93,22 @@ public class ScheduleService {
     private final Map<String, Long> positionVersions = new HashMap<>();
     private long settingsVer;
 
-    /** Load the persisted problem (empty on a fresh database) and start solving at boot. */
+    /** Rehydrate the persisted problem (empty on a fresh database) and start solving at boot. */
     void onStart(@Observes StartupEvent ev) {
-        Optional<ProblemDocument> saved = store.load();
+        Optional<LoadedProblem> saved = store.load();
         if (saved.isPresent()) {
-            ProblemDocument d = saved.get();
-            if (d.employees != null) { employees.addAll(d.employees); }
-            if (d.positions != null) { positions.addAll(d.positions); }
-            if (d.settings != null) { settings = d.settings; }
-            if (d.overrides != null) { overrides = new HashMap<>(d.overrides); }
+            LoadedProblem d = saved.get();
+            employees.addAll(d.employees());
+            positions.addAll(d.positions());
+            if (d.settings() != null) { settings = d.settings(); }
+            if (d.overrides() != null) { overrides = new HashMap<>(d.overrides()); }
             LOG.infof("Loaded problem from database: %d employees, %d positions",
                     employees.size(), positions.size());
         } else {
-            // Fresh database: start empty (no demo data). Persist the empty baseline,
-            // but never let a write failure abort startup — we serve the in-memory
-            // state and the first successful edit persists it.
-            try { persist(snapshot()); }
-            catch (Exception e) { LOG.error("Could not persist initial empty problem", e); }
+            // Fresh database: start empty (no demo data), seeding the settings row so the
+            // granular settings writes have a target.
+            try { store.ensureEmptySettings(); }
+            catch (Exception e) { LOG.error("Could not seed initial settings", e); }
             LOG.info("Fresh database — starting with an empty problem");
         }
         // Show the last solved roster immediately (overlaid on a fresh expansion) so a
@@ -186,30 +184,6 @@ public class ScheduleService {
                 positions, employees, settings, overrides, LocalDate.now());
         // Deep-ish copy of employees is unnecessary: the solver only reads them.
         return new Schedule(new ArrayList<>(employees), assignments);
-    }
-
-    private ProblemDocument snapshot() {
-        ProblemDocument d = new ProblemDocument();
-        d.employees = new ArrayList<>(employees);
-        d.positions = new ArrayList<>(positions);
-        d.settings = settings;
-        d.overrides = new HashMap<>(overrides);
-        return d;
-    }
-
-    /**
-     * Persist the given document, surfacing failures instead of swallowing them so
-     * callers can react (e.g. answer a {@code 503}). A silent persist failure would
-     * let the client believe an edit was durable while the in-memory state diverged
-     * from the database, losing the edit on the next restart.
-     */
-    private void persist(ProblemDocument doc) {
-        try {
-            store.save(doc);
-        } catch (Exception e) {
-            LOG.error("Failed to persist problem", e);
-            throw new PersistFailedException("Failed to persist the problem to the database", e);
-        }
     }
 
     // --- solver lifecycle ------------------------------------------------
@@ -507,47 +481,6 @@ public class ScheduleService {
             startSolving();
         }
         return outcome;
-    }
-
-    /**
-     * Replace the whole problem from the frontend, persist it and re-solve. Null
-     * fields are left unchanged so partial syncs (e.g. settings only) are cheap.
-     */
-    public synchronized void replaceProblem(List<Employee> newEmployees, List<Position> newPositions,
-                                            Settings newSettings, Map<String, List<String>> newOverrides) {
-        // Resolve the candidate state (a null field leaves the current value untouched)
-        // and trial-build it *before* committing. Expansion is what catches anything the
-        // REST validator didn't, so by building first we never persist a document that
-        // would throw — which would otherwise re-throw on the next boot and brick startup.
-        List<Employee> nextEmployees = newEmployees != null ? newEmployees : employees;
-        List<Position> nextPositions = newPositions != null ? newPositions : positions;
-        Settings nextSettings = newSettings != null ? newSettings : settings;
-        Map<String, List<String>> nextOverrides = newOverrides != null ? newOverrides : overrides;
-        buildProblem(nextEmployees, nextPositions, nextSettings, nextOverrides);
-
-        // Persist the resolved candidate *before* committing it to memory. A failed
-        // write must not leave the in-memory state diverged from the database (the
-        // edit would be silently lost on the next restart while the client believed
-        // it durable). On failure persist() throws, the REST layer answers 503, and
-        // our state is left untouched so the client can safely retry.
-        ProblemDocument next = new ProblemDocument();
-        next.employees = new ArrayList<>(nextEmployees);
-        next.positions = new ArrayList<>(nextPositions);
-        next.settings = nextSettings;
-        next.overrides = new HashMap<>(nextOverrides);
-        persist(next);
-
-        if (newEmployees != null) { employees.clear(); employees.addAll(newEmployees); }
-        if (newPositions != null) { positions.clear(); positions.addAll(newPositions); }
-        if (newSettings != null) { settings = newSettings; }
-        if (newOverrides != null) { overrides = new HashMap<>(newOverrides); }
-        // The save cleared the prior solver rows; drop the now-stale overlay so the gap
-        // before the re-solve completes doesn't surface an outdated roster.
-        reloadPersistedAssignments();
-        refreshVersions();
-        // Deprecated bulk path: a coarse "refetch everything" for any other clients.
-        broadcaster.emit(ChangeEvent.reload());
-        startSolving();
     }
 
     /**

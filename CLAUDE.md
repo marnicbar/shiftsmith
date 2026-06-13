@@ -60,24 +60,23 @@ rows** so it survives restarts. On boot it rehydrates from the DB; an empty
 database starts with an empty problem (no demo data).
 
 ### Persistence (`persistence` package)
-The editable problem is stored in **normalized tables** (issue #47, Phase 1):
+The problem is stored in **normalized, time-indexed tables** (issue #47):
 `settings`, `skill`, `employee`(+`employee_skill`), `availability_block`
 (+`availability_block_exception`), `work_rule`(+`work_rule_change`, with a NULL
 `employee_id` for a global rule), `position`(+`position_skill`),
 `shift_template`(+`_skill`/`_exception`/`_preferred`), and the core `assignment`
-table (one row per concrete slot; in this phase it holds the manual pins migrated
-from the old `overrides` map). Schema is owned by **Flyway** (`db/migration`,
+table (one row per concrete slot: manual pins are `source=manual`, the solver's
+durable output is `source=solver`). Schema is owned by **Flyway** (`db/migration`,
 `migrate-at-start`, `baseline-on-migrate`); Hibernate only `validate`s it (no
 auto-DDL). The two models stay separate: the Timefold-annotated domain classes
 (`domain/`) and the JPA entities (`persistence/entity/`), bridged by the pure,
-unit-tested `ProblemMapper`. `ProblemStore.load()/save()` still speak the
-document-shaped `ProblemDocument` (the in-memory/API shape) but read/write rows
-underneath; on first boot after the migration an existing single-row JSONB
-`problem` document is backfilled into rows once (guarded by the normalized side
-being empty). The legacy `problem`/`ProblemEntity` blob path is kept only as that
-backfill source and is removed in a later phase. Granular per-resource APIs,
-windowed reads, optimistic concurrency, SSE deltas and bounded solver scope are
-the subsequent phases of #47.
+unit-tested `ProblemMapper`. There is **no document blob and no whole-document
+write**: on boot `ProblemStore.load()` rehydrates the whole problem from the rows
+into a `LoadedProblem` (empty DB seeds an empty `settings` row); every write goes
+through the granular per-resource stores (`EmployeeStore`/`PositionStore`/
+`SettingsStore`/`AssignmentStore`), each with a row `version` for optimistic
+concurrency (`If-Match`/ETag → 409). Per-row reads/writes, windowed reads, SSE
+deltas, bounded solver scope and per-employee authorization are the rest of #47.
 - Dev (`mvn quarkus:dev`): Quarkus Dev Services auto-starts a throwaway Postgres
   (needs Docker). Prod/compose: connects to the `db` service via
   `QUARKUS_DATASOURCE_*` env (see `application.properties` `%prod` keys).
@@ -85,10 +84,13 @@ the subsequent phases of #47.
 ### Backend is the source of truth
 The frontend owns the editor UI but the backend holds the canonical problem
 (employees, positions, settings, manual overrides) and the solver. The frontend:
-1. loads everything from `GET /api/schedule` on startup,
-2. debounce-syncs the whole problem to `PUT /api/problem` on every edit (which
-   persists to the DB and re-solves),
-3. subscribes to `GET /api/stream` (SSE) for live updates while the solver runs.
+1. loads everything from `GET /api/schedule` on startup (incl. a per-resource
+   `versions`/ETag map),
+2. debounce-diffs each edit into **granular, concurrency-safe calls** (`lib/sync.js`:
+   `diffProblem` → `POST/PUT/DELETE /api/{employees,positions}/{id}`, `PUT /api/settings`,
+   `PUT/DELETE /api/assignments/{templateId}/{date}`), threading each resource's
+   version with `If-Match`; a `409` reloads (there is no bulk `PUT /api/problem`),
+3. subscribes to `GET /api/stream` (SSE) for live delta updates while the solver runs.
 
 ### Live updates (SSE deltas, issue #47 Phase 5)
 `GET /api/stream` is a Server-Sent Events endpoint emitting small **typed change
@@ -141,7 +143,7 @@ unit + `horizonCount` units. So `week × 1` covers "this week and the next".
 `solverManager.solveBuilder()...run()` streams best solutions via
 `withBestSolutionEventConsumer` (each also fires an SSE tick);
 `unimproved-spent-limit` (application.properties) pauses the solver once the
-solution is steady. Any `PUT /api/problem` restarts it.
+solution is steady. Any granular write (or a pin change) restarts it.
 
 ### Durable schedule & bounded lookback (issue #47, Phase 2)
 The solver's final best solution is persisted as `assignment` rows (`AssignmentStore`,

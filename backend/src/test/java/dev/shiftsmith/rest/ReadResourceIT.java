@@ -5,10 +5,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.shiftsmith.domain.Employee;
 import dev.shiftsmith.domain.Position;
-import dev.shiftsmith.domain.Settings;
-import dev.shiftsmith.domain.ShiftTemplate;
 import dev.shiftsmith.persistence.entity.AssignmentEntity;
-import dev.shiftsmith.rest.dto.ProblemDTO;
 import dev.shiftsmith.support.EnabledIfDockerAvailable;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
@@ -17,7 +14,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Map;
 
 import static dev.shiftsmith.support.Fixtures.availableAllDay;
@@ -26,12 +22,15 @@ import static dev.shiftsmith.support.Fixtures.position;
 import static dev.shiftsmith.support.Fixtures.rule;
 import static dev.shiftsmith.support.Fixtures.template;
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 
 /**
  * Phase 3 of issue #47: the granular, windowed read endpoints. Boots the real stack
- * against PostgreSQL (Dev Services / local), so it is gated on a database.
+ * against PostgreSQL, so it is gated on a database. The data is seeded through the
+ * granular write endpoints and asserted by presence (ids are namespaced) since the
+ * database is shared across @QuarkusTest classes.
  */
 @QuarkusTest
 @EnabledIfDockerAvailable
@@ -53,28 +52,29 @@ class ReadResourceIT {
         return given().header("Authorization", "Bearer " + token());
     }
 
-    /** Push a small two-person, one-position problem so the read endpoints have data. */
+    /** Seed (idempotently) a two-person, one-position problem through the granular writes. */
     @BeforeEach
     void seedProblem() throws Exception {
-        Employee alice = availableAllDay(employee("alice", "Bar"), today);
-        alice.getBlocks().get(0).setId("blk-alice");
+        String settingsEtag = authed().when().get("/api/settings").then().statusCode(200).extract().header("ETag");
+        authed().contentType(ContentType.JSON).header("If-Match", settingsEtag)
+                .body("{\"horizonUnit\":\"day\",\"horizonCount\":1,\"skills\":[\"Bar\",\"Kitchen\"],\"globalRules\":[]}")
+                .when().put("/api/settings").then().statusCode(200);
+
+        Employee alice = availableAllDay(employee("rr-alice", "Bar"), today);
+        alice.getBlocks().get(0).setId("blk-rr-alice");
         alice.getRules().add(rule("weekHours", "max", 40));
-        Employee bob = availableAllDay(employee("bob", "Kitchen"), today);
-        bob.getBlocks().get(0).setId("blk-bob");
+        authed().contentType(ContentType.JSON).body(MAPPER.writeValueAsString(alice))
+                .when().post("/api/employees"); // 201 first time, 409 after — both fine
 
-        ShiftTemplate t = template("t1", today, 1020, 1440, 1, "Bar"); // 17:00–24:00
-        Position p = position("p1", "Bar");
-        p.getShifts().add(t);
+        Employee bob = availableAllDay(employee("rr-bob", "Kitchen"), today);
+        bob.getBlocks().get(0).setId("blk-rr-bob");
+        authed().contentType(ContentType.JSON).body(MAPPER.writeValueAsString(bob))
+                .when().post("/api/employees");
 
-        ProblemDTO dto = new ProblemDTO();
-        dto.employees = List.of(alice, bob);
-        dto.positions = List.of(p);
-        dto.settings = new Settings("day", 1);
-        dto.settings.setSkills(List.of("Bar", "Kitchen"));
-        dto.overrides = Map.of();
-
-        authed().contentType(ContentType.JSON).body(MAPPER.writeValueAsString(dto))
-                .when().put("/api/problem").then().statusCode(204);
+        Position p = position("rr-p1", "Bar");
+        p.getShifts().add(template("rr-t1", today, 1020, 1440, 1, "Bar"));
+        authed().contentType(ContentType.JSON).body(MAPPER.writeValueAsString(p))
+                .when().post("/api/positions");
     }
 
     @Test
@@ -87,32 +87,33 @@ class ReadResourceIT {
     void employeesArePagedAndFetchableById() {
         authed().when().get("/api/employees?page=0&size=1")
                 .then().statusCode(200)
-                .body("total", is(2))
+                .body("total", greaterThanOrEqualTo(2))
                 .body("size", is(1))
                 .body("items.size()", is(1));
 
-        authed().when().get("/api/employees/alice").then().statusCode(200).body("id", is("alice"));
+        authed().when().get("/api/employees/rr-alice").then().statusCode(200).body("id", is("rr-alice"));
         authed().when().get("/api/employees/nobody").then().statusCode(404);
     }
 
     @Test
     void employeeAvailabilityAndRules() {
-        authed().when().get("/api/employees/alice/availability?from=" + today + "&to=" + today)
+        authed().when().get("/api/employees/rr-alice/availability?from=" + today + "&to=" + today)
                 .then().statusCode(200).body("size()", is(1)); // the all-day pref block
 
-        authed().when().get("/api/employees/alice/rules")
+        authed().when().get("/api/employees/rr-alice/rules")
                 .then().statusCode(200).body("[0].metric", is("weekHours"));
 
         // Missing range params are a 400.
-        authed().when().get("/api/employees/alice/availability").then().statusCode(400);
+        authed().when().get("/api/employees/rr-alice/availability").then().statusCode(400);
     }
 
     @Test
     void positionsAndTheirTemplates() {
-        authed().when().get("/api/positions?page=0&size=10").then().statusCode(200).body("total", is(1));
-        authed().when().get("/api/positions/p1").then().statusCode(200).body("name", is("Bar"));
-        authed().when().get("/api/positions/p1/shift-templates")
-                .then().statusCode(200).body("[0].id", is("t1"));
+        authed().when().get("/api/positions?page=0&size=10").then().statusCode(200)
+                .body("total", greaterThanOrEqualTo(1));
+        authed().when().get("/api/positions/rr-p1").then().statusCode(200).body("name", is("Bar"));
+        authed().when().get("/api/positions/rr-p1/shift-templates")
+                .then().statusCode(200).body("[0].id", is("rr-t1"));
     }
 
     @Test
@@ -121,12 +122,12 @@ class ReadResourceIT {
         LocalDate past = today.minusDays(10);
         QuarkusTransaction.requiringNew().run(() -> {
             AssignmentEntity ae = new AssignmentEntity();
-            ae.templateId = "t1";
+            ae.templateId = "rr-t1";
             ae.occurrenceDate = past;
             ae.slotIndex = 0;
             ae.startTs = past.atTime(17, 0);
             ae.endTs = past.plusDays(1).atStartOfDay();
-            ae.employeeId = "alice";
+            ae.employeeId = "rr-alice";
             ae.pinned = false;
             ae.source = "solver";
             ae.persist();
@@ -134,20 +135,20 @@ class ReadResourceIT {
 
         String from = today.minusDays(15).toString();
         String to = today.plusDays(1).toString();
-        String slot = "t1@" + past + "#0";
+        String slot = "rr-t1@" + past + "#0";
 
         authed().when().get("/api/schedule/range?from=" + from + "&to=" + to)
                 .then().statusCode(200)
-                .body("findAll { it.id == '" + slot + "' }.employeeId", hasItem("alice"))
-                .body("findAll { it.id == '" + slot + "' }.positionId", hasItem("p1"));
+                .body("findAll { it.id == '" + slot + "' }.employeeId", hasItem("rr-alice"))
+                .body("findAll { it.id == '" + slot + "' }.positionId", hasItem("rr-p1"));
 
         // person scope keeps alice's slot, position scope keeps p1's slot...
-        authed().when().get("/api/schedule/range?from=" + from + "&to=" + to + "&scope=person:alice")
+        authed().when().get("/api/schedule/range?from=" + from + "&to=" + to + "&scope=person:rr-alice")
                 .then().statusCode(200).body("id", hasItem(slot));
-        authed().when().get("/api/schedule/range?from=" + from + "&to=" + to + "&scope=position:p1")
+        authed().when().get("/api/schedule/range?from=" + from + "&to=" + to + "&scope=position:rr-p1")
                 .then().statusCode(200).body("id", hasItem(slot));
         // ...but a different person sees nothing of it.
-        authed().when().get("/api/schedule/range?from=" + from + "&to=" + to + "&scope=person:bob")
+        authed().when().get("/api/schedule/range?from=" + from + "&to=" + to + "&scope=person:rr-bob")
                 .then().statusCode(200).body("findAll { it.id == '" + slot + "' }.size()", is(0));
 
         authed().when().get("/api/schedule/range").then().statusCode(400); // range required

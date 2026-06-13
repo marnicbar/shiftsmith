@@ -97,11 +97,6 @@ export const getScheduleRange = (from, to, scope) => {
   return request(`${BASE}/schedule/range?${params.toString()}`);
 };
 
-// Replace the problem (employees / positions / settings / overrides) and re-solve.
-// Any omitted field is left unchanged server-side. Deprecated: kept as a fallback while
-// the granular writes below (issue #47, Phase 4) take over the per-edit sync.
-export const putProblem = (problem) => request(`${BASE}/problem`, { method: 'PUT', ...json(problem) });
-
 // --- Granular, concurrency-safe writes (issue #47, Phase 4) -----------------
 // Each returns { data, etag }; mutations carry the resource's expected version as an
 // If-Match header so a stale write is rejected (409) instead of silently overwriting.

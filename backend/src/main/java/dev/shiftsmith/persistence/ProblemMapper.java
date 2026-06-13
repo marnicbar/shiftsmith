@@ -31,23 +31,19 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Pure, side-effect-free translation between the legacy {@link ProblemDocument}
- * (the deeply-nested editable problem) and the normalized JPA entity graph
- * ({@code dev.shiftsmith.persistence.entity}). Keeping the mapping free of any
- * persistence context makes it unit-testable on plain objects — the Phase 1
- * round-trip guarantee (issue #47): {@code doc → tables → doc} reproduces the same
- * solver-visible problem.
- *
- * <p>The legacy {@code overrides} map ({@code "<templateId>@<date>" → [employeeIds]})
- * is materialized into {@link AssignmentEntity} rows: one pinned, {@code manual} row
- * per headcount slot of the pinned occurrence (mirroring {@code ScheduleExpander}).
- * Orphan overrides whose template no longer exists are dropped (issue #39).
+ * Pure, side-effect-free translation between the normalized JPA entity graph
+ * ({@code dev.shiftsmith.persistence.entity}) and the Timefold domain objects.
+ * {@link #toLoadedProblem} rehydrates the whole problem from rows on boot; the
+ * per-field builders ({@link #blockToEntity}, {@link #ruleToEntity},
+ * {@link #templateToEntity}) are used by the granular per-resource write stores.
+ * Keeping the mapping free of any persistence context makes it unit-testable on
+ * plain objects.
  */
 public final class ProblemMapper {
 
     private ProblemMapper() {}
 
-    /** A flat snapshot of every normalized row that makes up one problem document. */
+    /** A flat snapshot of the normalized rows that make up one problem, read for rehydration. */
     public static final class Tables {
         public SettingsEntity settings;
         public final List<SkillEntity> skills = new ArrayList<>();
@@ -60,68 +56,7 @@ public final class ProblemMapper {
         public final List<AssignmentEntity> assignments = new ArrayList<>();
     }
 
-    // --- Document → entities --------------------------------------------------
-
-    public static Tables toTables(ProblemDocument doc) {
-        Tables t = new Tables();
-        Settings settings = doc.settings != null ? doc.settings : new Settings();
-
-        SettingsEntity se = new SettingsEntity();
-        se.id = SettingsEntity.SINGLETON_ID;
-        se.horizonUnit = settings.getHorizonUnit();
-        se.horizonCount = settings.getHorizonCount();
-        t.settings = se;
-
-        int ordinal = 0;
-        for (String name : settings.getSkills()) {
-            SkillEntity sk = new SkillEntity();
-            sk.name = name;
-            sk.ordinal = ordinal++;
-            t.skills.add(sk);
-        }
-        for (Rule r : settings.getGlobalRules()) {
-            t.rules.add(ruleToEntity(r, null));
-        }
-
-        if (doc.employees != null) {
-            for (Employee e : doc.employees) {
-                EmployeeEntity ee = new EmployeeEntity();
-                ee.id = e.getId();
-                ee.firstName = e.getFirstName();
-                ee.lastName = e.getLastName();
-                ee.role = e.getRole();
-                ee.contract = e.getContract();
-                ee.skills = e.getSkills() == null ? new HashSet<>() : new HashSet<>(e.getSkills());
-                t.employees.add(ee);
-                for (Block b : e.getBlocks()) t.blocks.add(blockToEntity(b, e.getId()));
-                for (Rule r : e.getRules()) t.rules.add(ruleToEntity(r, e.getId()));
-            }
-        }
-
-        Map<String, ShiftTemplate> templateById = new HashMap<>();
-        if (doc.positions != null) {
-            for (Position p : doc.positions) {
-                PositionEntity pe = new PositionEntity();
-                pe.id = p.getId();
-                pe.name = p.getName();
-                pe.color = p.getColor();
-                pe.group = p.getGroup();
-                pe.skills = p.getSkills() == null ? new HashSet<>() : new HashSet<>(p.getSkills());
-                t.positions.add(pe);
-                for (ShiftTemplate st : p.getShifts()) {
-                    templateById.put(st.getId(), st);
-                    t.templates.add(templateToEntity(st, p.getId()));
-                }
-            }
-        }
-
-        if (doc.overrides != null) {
-            for (Map.Entry<String, List<String>> entry : doc.overrides.entrySet()) {
-                t.assignments.addAll(overrideToAssignments(entry.getKey(), entry.getValue(), templateById));
-            }
-        }
-        return t;
-    }
+    // --- domain → entity (used by the granular write stores) ------------------
 
     public static AvailabilityBlockEntity blockToEntity(Block b, String employeeId) {
         AvailabilityBlockEntity be = new AvailabilityBlockEntity();
@@ -181,39 +116,6 @@ public final class ProblemMapper {
         return te;
     }
 
-    private static List<AssignmentEntity> overrideToAssignments(
-            String key, List<String> pins, Map<String, ShiftTemplate> templateById) {
-        List<AssignmentEntity> out = new ArrayList<>();
-        int at = key.lastIndexOf('@');
-        if (at < 0) return out;
-        String templateId = key.substring(0, at);
-        LocalDate date;
-        try {
-            date = LocalDate.parse(key.substring(at + 1));
-        } catch (RuntimeException e) {
-            return out;
-        }
-        ShiftTemplate st = templateById.get(templateId);
-        if (st == null) return out; // orphan override — its template is gone (issue #39)
-
-        LocalDateTime start = occurrenceStart(st, date);
-        LocalDateTime end = occurrenceEnd(st, date);
-        int headcount = Math.max(1, st.getHeadcount());
-        for (int i = 0; i < headcount; i++) {
-            AssignmentEntity ae = new AssignmentEntity();
-            ae.templateId = templateId;
-            ae.occurrenceDate = date;
-            ae.slotIndex = i;
-            ae.startTs = start;
-            ae.endTs = end;
-            ae.employeeId = (pins != null && i < pins.size()) ? pins.get(i) : null;
-            ae.pinned = true;
-            ae.source = "manual";
-            out.add(ae);
-        }
-        return out;
-    }
-
     /** Slot start as a concrete timestamp (mirrors {@code ScheduleExpander}). */
     public static LocalDateTime occurrenceStart(ShiftTemplate st, LocalDate d) {
         int startMin = st.getStart();
@@ -229,11 +131,9 @@ public final class ProblemMapper {
         return d.atTime(endMin / 60, endMin % 60);
     }
 
-    // --- entities → Document --------------------------------------------------
+    // --- entities → domain (rehydration on boot) ------------------------------
 
-    public static ProblemDocument toDocument(Tables t) {
-        ProblemDocument doc = new ProblemDocument();
-
+    public static LoadedProblem toLoadedProblem(Tables t) {
         Settings s = new Settings();
         if (t.settings != null) {
             s.setHorizonUnit(t.settings.horizonUnit);
@@ -246,7 +146,6 @@ public final class ProblemMapper {
                 .filter(r -> r.employeeId == null)
                 .map(ProblemMapper::ruleToDomain)
                 .collect(toMutableList()));
-        doc.settings = s;
 
         Map<String, List<AvailabilityBlockEntity>> blocksByEmployee = groupBy(t.blocks, b -> b.employeeId);
         Map<String, List<WorkRuleEntity>> rulesByEmployee = groupBy(
@@ -273,7 +172,6 @@ public final class ProblemMapper {
             e.setRules(rules);
             employees.add(e);
         }
-        doc.employees = employees;
 
         Map<String, List<ShiftTemplateEntity>> templatesByPosition = groupBy(t.templates, te -> te.positionId);
         List<Position> positions = new ArrayList<>();
@@ -291,10 +189,8 @@ public final class ProblemMapper {
             p.setShifts(shifts);
             positions.add(p);
         }
-        doc.positions = positions;
 
-        doc.overrides = assignmentsToOverrides(t.assignments);
-        return doc;
+        return new LoadedProblem(employees, positions, s, assignmentsToOverrides(t.assignments));
     }
 
     private static Block blockToDomain(AvailabilityBlockEntity be) {
@@ -362,7 +258,7 @@ public final class ProblemMapper {
     private static Map<String, List<String>> assignmentsToOverrides(List<AssignmentEntity> assignments) {
         Map<String, Map<Integer, String>> bySlot = new LinkedHashMap<>();
         for (AssignmentEntity a : assignments) {
-            if (!a.pinned) continue; // Phase 1 stores only pins here; solver rows arrive in Phase 2
+            if (!a.pinned) continue; // only manual pins are overrides; solver rows are the schedule
             String key = a.templateId + "@" + a.occurrenceDate;
             bySlot.computeIfAbsent(key, k -> new HashMap<>()).put(a.slotIndex, a.employeeId);
         }
