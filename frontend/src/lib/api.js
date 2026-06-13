@@ -87,26 +87,84 @@ export function logout() { clearToken(); }
 // Full state: problem data + the solver's current best assignment + status.
 export const getSchedule = () => request(`${BASE}/schedule`);
 
-// Replace the problem (employees / positions / settings / overrides) and re-solve.
-// Any omitted field is left unchanged server-side.
-export const putProblem = (problem) => request(`${BASE}/problem`, { method: 'PUT', ...json(problem) });
+// Windowed read of the durable assignment slots in [from, to) (ISO dates),
+// optionally narrowed to one person/position (scope = 'person:<id>' | 'position:<id>').
+// Unlike getSchedule this spans history and any persisted future, not just the live
+// solve window — it powers the read-only Personnel/Positions calendars per range.
+export const getScheduleRange = (from, to, scope) => {
+  const params = new URLSearchParams({ from, to });
+  if (scope) params.set('scope', scope);
+  return request(`${BASE}/schedule/range?${params.toString()}`);
+};
+
+// --- Granular, concurrency-safe writes (issue #47, Phase 4) -----------------
+// Each returns { data, etag }; mutations carry the resource's expected version as an
+// If-Match header so a stale write is rejected (409) instead of silently overwriting.
+async function send(method, url, body, ifMatch) {
+  const headers = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (ifMatch != null) headers['If-Match'] = String(ifMatch);
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(url, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
+  if (res.status === 401) {
+    clearToken();
+    if (onUnauthorized) onUnauthorized();
+    const e = new Error(`${method} ${url} failed: 401`); e.status = 401; throw e;
+  }
+  if (!res.ok) {
+    let serverMessage = null;
+    try { const b = await res.json(); if (b && typeof b.error === 'string') serverMessage = b.error; } catch { /* no body */ }
+    const e = new Error(serverMessage || `${method} ${url} failed: ${res.status}`);
+    e.status = res.status; e.serverMessage = serverMessage; throw e;
+  }
+  const etag = res.headers.get('ETag');
+  const data = res.status === 204 ? null : await res.json().catch(() => null);
+  return { data, etag };
+}
+
+const enc = encodeURIComponent;
+
+// Reads that also return the resource's ETag, so a delta can refetch one slice and
+// keep its version in step.
+export const getEmployee = (id) => send('GET', `${BASE}/employees/${enc(id)}`);
+export const getPosition = (id) => send('GET', `${BASE}/positions/${enc(id)}`);
+export const getSettings = () => send('GET', `${BASE}/settings`);
+
+export const createEmployee = (employee) => send('POST', `${BASE}/employees`, employee);
+export const updateEmployee = (employee, ifMatch) => send('PUT', `${BASE}/employees/${enc(employee.id)}`, employee, ifMatch);
+export const deleteEmployee = (id, ifMatch) => send('DELETE', `${BASE}/employees/${enc(id)}`, undefined, ifMatch);
+
+export const createPosition = (position) => send('POST', `${BASE}/positions`, position);
+export const updatePosition = (position, ifMatch) => send('PUT', `${BASE}/positions/${enc(position.id)}`, position, ifMatch);
+export const deletePosition = (id, ifMatch) => send('DELETE', `${BASE}/positions/${enc(id)}`, undefined, ifMatch);
+
+export const updateSettings = (settings, ifMatch) => send('PUT', `${BASE}/settings`, settings, ifMatch);
+
+// Pin an occurrence to an ordered employee-id list (null/short = pinned-empty); unpin drops it.
+export const pinOccurrence = (templateId, date, employeeIds) =>
+  send('PUT', `${BASE}/assignments/${enc(templateId)}/${date}`, employeeIds ?? []);
+export const unpinOccurrence = (templateId, date) =>
+  send('DELETE', `${BASE}/assignments/${enc(templateId)}/${date}`);
 
 // Solver lifecycle (auto-runs on every problem change; these are manual controls).
 export const startSolving = () => request(`${BASE}/solve`, { method: 'POST' });
 export const stopSolving = () => request(`${BASE}/solve`, { method: 'DELETE' });
 
-// Live updates over Server-Sent Events: the backend pushes a fresh schedule
-// snapshot whenever the solver improves the solution, the problem changes, or
-// the solver starts/stops. The browser's EventSource auto-reconnects on drop.
-// EventSource can't send headers, so the token rides along as a query parameter.
-// Returns an unsubscribe function that closes the stream.
-export function subscribeSchedule(onUpdate, onError) {
+// Live updates over Server-Sent Events: the backend pushes a small typed change event
+// (issue #47, Phase 5) whenever a resource is edited, a pin changes, or the solver
+// advances — the client refetches only the affected slice. The browser's EventSource
+// auto-reconnects on drop; `onOpen` fires on (re)connect so the client can catch up,
+// `onError` on a drop so it can show a "reconnecting" state. EventSource can't send
+// headers, so the token rides along as a query parameter. Returns an unsubscribe fn.
+export function subscribeSchedule(onEvent, onError, onOpen) {
   const token = getToken();
   const url = token ? `${BASE}/stream?token=${encodeURIComponent(token)}` : `${BASE}/stream`;
   const es = new EventSource(url);
   es.onmessage = (e) => {
-    try { onUpdate(JSON.parse(e.data)); } catch { /* ignore malformed frame */ }
+    try { onEvent(JSON.parse(e.data)); } catch { /* ignore malformed frame */ }
   };
+  if (onOpen) es.onopen = onOpen;
   if (onError) es.onerror = onError; // EventSource reconnects automatically
   return () => es.close();
 }

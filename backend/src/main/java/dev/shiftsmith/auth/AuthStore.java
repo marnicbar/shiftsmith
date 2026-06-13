@@ -27,6 +27,7 @@ public class AuthStore {
             u.username = username;
             u.passwordHash = passwordHash;
             u.mustChangePassword = mustChangePassword;
+            u.role = "admin";   // the seeded account has full access
             u.persist();
         }
         AuthConfigEntity cfg = AuthConfigEntity.findById(AuthConfigEntity.SINGLETON_ID);
@@ -41,6 +42,24 @@ public class AuthStore {
     @Transactional
     public Optional<UserAccount> find(String username) {
         return Optional.ofNullable(UserAccount.findByUsername(username));
+    }
+
+    /**
+     * Provision an account with a role and (for an employee) the person it represents
+     * (issue #47, Phase 6). Idempotent on the username — an existing account is left
+     * untouched. Returns true when a new account was created.
+     */
+    @Transactional
+    public boolean createUser(String username, String passwordHash, String role, String employeeId) {
+        if (UserAccount.findByUsername(username) != null) return false;
+        UserAccount u = new UserAccount();
+        u.username = username;
+        u.passwordHash = passwordHash;
+        u.role = role;
+        u.employeeId = employeeId;
+        u.mustChangePassword = false;
+        u.persist();
+        return true;
     }
 
     /** Changing the password always clears the forced-rotation flag. */

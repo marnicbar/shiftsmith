@@ -14,6 +14,8 @@ import { SettingsView, AccountView } from './settings.jsx';
 import { Login, ForcePasswordChange } from './login.jsx';
 import { tooLooseAgainst } from './rules.jsx';
 import * as api from './lib/api.js';
+import { applyProblemChanges } from './lib/sync.js';
+import { dispatchChange, etagNum, upsertById, removeById } from './lib/deltas.js';
 
 const TABS = [
   { id: 'dashboard', labelKey: 'nav.dashboard', icon: 'grid' },
@@ -102,6 +104,9 @@ export default function App() {
     else setError({ text: e?.message ?? String(e), validation: false });
   }, []);
   const [notice, setNotice] = useState(null);
+  // SSE liveness: false while the stream is dropped/reconnecting (shown to the user).
+  const [streamLive, setStreamLive] = useState(true);
+  const schedTimerRef = useRef(null);
 
   // Auth gate: 'checking' until we know, then 'in' (show the app) or 'out' (show login).
   const [authState, setAuthState] = useState('checking');
@@ -111,6 +116,9 @@ export default function App() {
   const [mustChangePassword, setMustChangePassword] = useState(false);
 
   const lastSyncRef = useRef(null);
+  // Per-resource versions (ETags) from the snapshot, threaded into granular writes so a
+  // stale edit is a 409 instead of a silent overwrite (issue #47, Phase 4).
+  const versionsRef = useRef({ employees: {}, positions: {}, settings: 0 });
 
   // On startup, validate any stored token. A 401 on any later request (e.g. an
   // expired token) drops us back to the login screen via the shared handler.
@@ -136,11 +144,31 @@ export default function App() {
   useEffect(() => { document.documentElement.style.setProperty('--ui-font', FONTS[prefs.font] || FONTS.Geist); }, [prefs.font]);
   useEffect(() => { if (prefs.lang && i18n.language !== prefs.lang) i18n.changeLanguage(prefs.lang); }, [prefs.lang]);
 
-  const setMeta = useCallback((d) => setSched({
-    assignments: d.assignments || [], solverStatus: d.solverStatus, score: d.score,
-    total: d.total, staffed: d.staffed, unassigned: d.unassigned,
-    horizonStart: d.horizonStart, horizonEnd: d.horizonEnd,
-  }), []);
+  const setMeta = useCallback((d) => {
+    // Keep the version map fresh from every snapshot (incl. other clients' edits over SSE).
+    if (d.versions) versionsRef.current = d.versions;
+    setSched({
+      assignments: d.assignments || [], solverStatus: d.solverStatus, score: d.score,
+      total: d.total, staffed: d.staffed, unassigned: d.unassigned,
+      horizonStart: d.horizonStart, horizonEnd: d.horizonEnd,
+    });
+  }, []);
+
+  // Load the whole problem from the backend (initial boot, and to recover from a
+  // concurrency conflict). Resets the sync baseline and version map.
+  const loadProblem = useCallback(async () => {
+    const d = await api.getSchedule();
+    setEmployees(d.employees); setPositions(d.positions);
+    setSettings(d.settings || { horizonUnit: 'week', horizonCount: 1 });
+    setOverrides(d.overrides || {});
+    setSelEmp(d.employees[0]?.id ?? null);
+    setSelPos(d.positions[0]?.id ?? null);
+    const g = []; (d.positions || []).forEach((p) => { if (p.group && !g.includes(p.group)) g.push(p.group); });
+    setGroupOrder(g);
+    setMeta(d);
+    versionsRef.current = d.versions || { employees: {}, positions: {}, settings: 0 };
+    lastSyncRef.current = JSON.stringify({ employees: d.employees, positions: d.positions, settings: d.settings, overrides: d.overrides || {} });
+  }, [setMeta]);
 
   // Initial load from the backend, once the session is established (and the
   // account isn't gated behind a forced password change).
@@ -148,29 +176,78 @@ export default function App() {
     if (authState !== 'in' || mustChangePassword) return;
     (async () => {
       try {
-        const d = await api.getSchedule();
-        setEmployees(d.employees); setPositions(d.positions);
-        setSettings(d.settings || { horizonUnit: 'week', horizonCount: 1 });
-        setOverrides(d.overrides || {});
-        setSelEmp(d.employees[0]?.id ?? null);
-        setSelPos(d.positions[0]?.id ?? null);
-        const g = []; (d.positions || []).forEach((p) => { if (p.group && !g.includes(p.group)) g.push(p.group); });
-        setGroupOrder(g);
-        setMeta(d);
-        lastSyncRef.current = JSON.stringify({ employees: d.employees, positions: d.positions, settings: d.settings, overrides: d.overrides || {} });
+        await loadProblem();
         setError(null);
         setLoaded(true);
       } catch (e) { reportError(e); }
     })();
-  }, [authState, mustChangePassword, setMeta, reportError]);
+  }, [authState, mustChangePassword, loadProblem, reportError]);
 
-  // Live updates: subscribe to the backend's SSE stream once loaded. The solver's
-  // progress, our own edits and other clients' edits all arrive here, so the
-  // timeline, score and status stay current without polling.
+  // Apply a remote change to one list resource, keeping both the live state and the
+  // sync baseline in step (so our own debounced sync doesn't echo it back). Only the
+  // affected entity is touched, preserving any unsynced local edits to others.
+  const applyRemoteList = useCallback((setList, kind, id, data) => {
+    setList((list) => (data ? upsertById(list, data) : removeById(list, id)));
+    const prev = JSON.parse(lastSyncRef.current || '{"employees":[],"positions":[],"settings":{},"overrides":{}}');
+    prev[kind] = data ? upsertById(prev[kind] || [], data) : removeById(prev[kind] || [], id);
+    lastSyncRef.current = JSON.stringify(prev);
+  }, []);
+
+  // Refetch one resource on its change event — unless the event's version matches what
+  // we already hold (it was our own edit). A 404 means it was deleted.
+  const refetchEntity = useCallback(async (kind, setList, id, rev) => {
+    const get = kind === 'employees' ? api.getEmployee : api.getPosition;
+    const bag = versionsRef.current[kind] || (versionsRef.current[kind] = {});
+    if (rev != null && bag[id] === rev) return;
+    try {
+      const { data, etag } = await get(id);
+      bag[id] = etagNum(etag);
+      applyRemoteList(setList, kind, id, data);
+    } catch (e) {
+      if (e && e.status === 404) { delete bag[id]; applyRemoteList(setList, kind, id, null); }
+      else reportError(e);
+    }
+  }, [applyRemoteList, reportError]);
+
+  const refetchSettings = useCallback(async (rev) => {
+    if (rev != null && versionsRef.current.settings === rev) return;
+    try {
+      const { data, etag } = await api.getSettings();
+      versionsRef.current.settings = etagNum(etag);
+      setSettings(data);
+      const prev = JSON.parse(lastSyncRef.current || '{"settings":{}}');
+      prev.settings = data; lastSyncRef.current = JSON.stringify(prev);
+    } catch (e) { reportError(e); }
+  }, [reportError]);
+
+  // The solver advanced or pins changed: refetch the live schedule (assignments + score
+  // + versions), debounced so the solver's rapid ticks coalesce into one fetch.
+  const refetchSchedule = useCallback(() => {
+    clearTimeout(schedTimerRef.current);
+    schedTimerRef.current = setTimeout(async () => {
+      try { setMeta(await api.getSchedule()); } catch { /* transient — the next event retries */ }
+    }, 400);
+  }, [setMeta]);
+
+  const handleEvent = useCallback((ev) => dispatchChange(ev, {
+    employee: (id, rev) => refetchEntity('employees', setEmployees, id, rev),
+    position: (id, rev) => refetchEntity('positions', setPositions, id, rev),
+    settings: refetchSettings,
+    schedule: refetchSchedule,
+    reload: () => loadProblem().catch(reportError),
+  }), [refetchEntity, refetchSettings, refetchSchedule, loadProblem, reportError]);
+
+  // Live updates: subscribe to the backend's typed SSE change events once loaded. Each
+  // event refetches only the affected slice; a (re)connect catches up via the schedule,
+  // a drop flips the visible "reconnecting" state.
   useEffect(() => {
     if (!loaded) return;
-    return api.subscribeSchedule(setMeta);
-  }, [loaded, setMeta]);
+    return api.subscribeSchedule(
+      handleEvent,
+      () => setStreamLive(false),
+      () => { setStreamLive(true); refetchSchedule(); },
+    );
+  }, [loaded, handleEvent, refetchSchedule]);
 
   // Debounced sync: push the problem to the backend whenever the user edits it.
   useEffect(() => {
@@ -196,12 +273,24 @@ export default function App() {
     const attempt = (delay) => {
       timer = setTimeout(async () => {
         try {
-          await api.putProblem(problem);
+          // Translate the edit into granular, concurrency-safe calls (replacing the bulk
+          // PUT). Versions thread through versionsRef, mutated in place as writes land.
+          const prev = lastSyncRef.current
+            ? JSON.parse(lastSyncRef.current)
+            : { employees: [], positions: [], settings: {}, overrides: {} };
+          await applyProblemChanges(prev, problem, versionsRef.current);
           if (cancelled) return;
           lastSyncRef.current = ser;
           setError(null);
         } catch (e) {
           if (cancelled) return;
+          // A 409 means someone else changed this resource: reload and let the user redo
+          // their edit, rather than clobbering the other change or retrying a stale write.
+          if (e && e.status === 409) {
+            setNotice(t('app.reloadedAfterConflict'));
+            try { await loadProblem(); } catch (re) { reportError(re); }
+            return;
+          }
           reportError(e);
           const retriable = !e || !e.status || e.status >= 500;
           if (retriable) attempt(Math.min(delay * 2, 16000));
@@ -210,7 +299,7 @@ export default function App() {
     };
     attempt(600);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [loaded, employees, positions, settings, overrides, reportError, t]);
+  }, [loaded, employees, positions, settings, overrides, reportError, t, loadProblem]);
 
   const snap = SNAP_MAP[prefs.snapLabel] ?? 15;
   const newFlow = FLOW_MAP[prefs.newFlowLabel] ?? 'quick';
@@ -363,6 +452,7 @@ export default function App() {
         </div>
       )}
       {notice && <div className="api-notice">{notice}<button className="notice-x" onClick={() => setNotice(null)} title={t('common.dismiss')}><Ic.x size={14}/></button></div>}
+      {!streamLive && <div className="api-notice" role="status">{t('app.reconnecting')}</div>}
 
       {tab === 'dashboard' && <Dashboard employees={employees} positions={positions} assign={assignMap} onOpenShift={openShift} />}
       {tab === 'personnel' && <Personnel employees={employees} setEmployees={setEmployees} skills={skills} settings={settings} selId={selEmp} setSelId={setSelEmp} snap={snap} newFlow={newFlow} nameOrder={prefs.nameOrder} />}

@@ -2,13 +2,37 @@
 // per-position and per-person calendars. They turn the solver's assignment map
 // (shiftId@date → [employee]) into concrete, read-only calendar events.
 import { describe, it, expect } from 'vitest';
-import { buildPositionEvents, buildPersonEvents } from './planview.jsx';
+import { buildPositionEvents, buildPersonEvents, slotsToAssign } from './planview.jsx';
 
 const MON = '2026-06-01'; // Monday
 const TUE = '2026-06-02';
 const WED = '2026-06-03';
 
 const emp = (id) => ({ id, firstName: id, lastName: '', skills: [] });
+
+describe('slotsToAssign', () => {
+  const empById = { a: emp('a'), b: emp('b') };
+
+  it('groups range slots into the shiftTemplateId@date → [employee] map', () => {
+    const slots = [
+      { shiftTemplateId: 's1', date: MON, slotIndex: 0, employeeId: 'a' },
+      { shiftTemplateId: 's1', date: MON, slotIndex: 1, employeeId: 'b' },
+      { shiftTemplateId: 's2', date: TUE, slotIndex: 0, employeeId: 'a' },
+    ];
+    const assign = slotsToAssign(slots, empById);
+    expect(assign[`s1@${MON}`]).toEqual([empById.a, empById.b]);
+    expect(assign[`s2@${TUE}`]).toEqual([empById.a]);
+  });
+
+  it('places assignees by slot index and drops empty/unknown slots', () => {
+    const slots = [
+      { shiftTemplateId: 's1', date: MON, slotIndex: 1, employeeId: 'b' }, // gap at index 0
+      { shiftTemplateId: 's1', date: MON, slotIndex: 0, employeeId: null }, // unstaffed
+      { shiftTemplateId: 's1', date: MON, slotIndex: 2, employeeId: 'ghost' }, // not in empById
+    ];
+    expect(slotsToAssign(slots, empById)[`s1@${MON}`]).toEqual([empById.b]); // holes filtered out
+  });
+});
 const shift = (id, over = {}) => ({ id, name: id, date: MON, start: 540, end: 1020, headcount: 1, repeat: 'none', ...over });
 const position = (over = {}) => ({ id: 'p1', name: 'Bar', color: 200, shifts: [], ...over });
 

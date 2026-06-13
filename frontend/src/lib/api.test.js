@@ -36,6 +36,22 @@ describe('getSchedule', () => {
   });
 });
 
+describe('getScheduleRange', () => {
+  it('GETs the range with from/to and an optional scope', async () => {
+    const fetchFn = mockFetch(ok([{ id: 's1@2026-06-01#0' }]));
+    const result = await api.getScheduleRange('2026-06-01', '2026-06-08', 'person:e1');
+    expect(fetchFn).toHaveBeenCalledWith(
+      '/api/schedule/range?from=2026-06-01&to=2026-06-08&scope=person%3Ae1', { headers: {} });
+    expect(result).toEqual([{ id: 's1@2026-06-01#0' }]);
+  });
+
+  it('omits scope when not given', async () => {
+    const fetchFn = mockFetch(ok([]));
+    await api.getScheduleRange('2026-06-01', '2026-06-08');
+    expect(fetchFn.mock.calls[0][0]).toBe('/api/schedule/range?from=2026-06-01&to=2026-06-08');
+  });
+});
+
 describe('auth', () => {
   it('login stores the token and reports success', async () => {
     const fetchFn = mockFetch(ok({ token: 'abc', username: 'admin' }));
@@ -90,18 +106,45 @@ describe('auth', () => {
   });
 });
 
-describe('putProblem', () => {
-  it('PUTs JSON to /api/problem and returns null on 204', async () => {
-    const fetchFn = mockFetch({ ok: true, status: 204, json: async () => { throw new Error('no body'); } });
-    const problem = { employees: [], positions: [] };
-    const result = await api.putProblem(problem);
+describe('granular writes', () => {
+  const okEtag = (etag, status = 200, body = {}) => ({
+    ok: true, status, headers: { get: (h) => (h === 'ETag' ? etag : null) }, json: async () => body,
+  });
 
-    expect(result).toBeNull();
+  it('updateEmployee PUTs with If-Match and returns the new ETag', async () => {
+    api.setToken('tok', true);
+    const fetchFn = mockFetch(okEtag('"4"'));
+    const { etag } = await api.updateEmployee({ id: 'a b', firstName: 'X' }, 3);
     const [url, options] = fetchFn.mock.calls[0];
-    expect(url).toBe('/api/problem');
+    expect(url).toBe('/api/employees/a%20b'); // id is URL-encoded
     expect(options.method).toBe('PUT');
-    expect(options.headers['Content-Type']).toBe('application/json');
-    expect(JSON.parse(options.body)).toEqual(problem);
+    expect(options.headers['If-Match']).toBe('3');
+    expect(options.headers.Authorization).toBe('Bearer tok');
+    expect(etag).toBe('"4"');
+  });
+
+  it('deleteEmployee sends If-Match and no body', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 204, headers: { get: () => null }, json: async () => null });
+    await api.deleteEmployee('a', 2);
+    const [url, options] = fetchFn.mock.calls[0];
+    expect(url).toBe('/api/employees/a');
+    expect(options.method).toBe('DELETE');
+    expect(options.headers['If-Match']).toBe('2');
+    expect(options.body).toBeUndefined();
+  });
+
+  it('a 409 rejects with status 409', async () => {
+    mockFetch({ ok: false, status: 409, headers: { get: () => null }, json: async () => ({ error: 'conflict' }) });
+    await expect(api.updatePosition({ id: 'p' }, 1)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('pinOccurrence PUTs the employee-id array to the occurrence', async () => {
+    const fetchFn = mockFetch({ ok: true, status: 204, headers: { get: () => null }, json: async () => null });
+    await api.pinOccurrence('t1', '2026-06-01', ['a']);
+    const [url, options] = fetchFn.mock.calls[0];
+    expect(url).toBe('/api/assignments/t1/2026-06-01');
+    expect(options.method).toBe('PUT');
+    expect(JSON.parse(options.body)).toEqual(['a']);
   });
 });
 
@@ -121,9 +164,9 @@ describe('error handling', () => {
     await expect(api.getSchedule()).rejects.toThrow(/500/);
   });
 
-  it('surfaces the server error message and status on a rejected PUT', async () => {
+  it('surfaces the server error message and status on a rejected request', async () => {
     mockFetch({ ok: false, status: 400, json: async () => ({ error: 'The solve window is too long' }) });
-    await expect(api.putProblem({})).rejects.toMatchObject({
+    await expect(api.getSchedule()).rejects.toMatchObject({
       message: 'The solve window is too long',
       serverMessage: 'The solve window is too long',
       status: 400,
@@ -132,7 +175,7 @@ describe('error handling', () => {
 
   it('falls back to the status when the error body carries no message', async () => {
     mockFetch({ ok: false, status: 400, json: async () => ({}) });
-    await expect(api.putProblem({})).rejects.toMatchObject({ status: 400, serverMessage: null });
+    await expect(api.getSchedule()).rejects.toMatchObject({ status: 400, serverMessage: null });
   });
 });
 
@@ -153,14 +196,20 @@ describe('subscribeSchedule (SSE)', () => {
     vi.stubGlobal('EventSource', FakeEventSource);
   });
 
-  it('parses incoming frames and forwards them to onUpdate', () => {
-    const onUpdate = vi.fn();
-    api.subscribeSchedule(onUpdate);
+  it('parses incoming frames and forwards them to the event handler', () => {
+    const onEvent = vi.fn();
+    api.subscribeSchedule(onEvent);
     const es = instances[0];
     expect(es.url).toBe('/api/stream');
 
-    es.onmessage({ data: JSON.stringify({ total: 5 }) });
-    expect(onUpdate).toHaveBeenCalledWith({ total: 5 });
+    es.onmessage({ data: JSON.stringify({ type: 'employee', id: 'e1', rev: 2 }) });
+    expect(onEvent).toHaveBeenCalledWith({ type: 'employee', id: 'e1', rev: 2 });
+  });
+
+  it('wires the open handler so the client can show a live/reconnecting state', () => {
+    const onOpen = vi.fn();
+    api.subscribeSchedule(vi.fn(), vi.fn(), onOpen);
+    expect(instances[0].onopen).toBe(onOpen);
   });
 
   it('ignores malformed frames without throwing', () => {

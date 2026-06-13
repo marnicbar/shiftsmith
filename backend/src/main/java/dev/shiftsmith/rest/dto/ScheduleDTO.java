@@ -26,6 +26,12 @@ public class ScheduleDTO {
 
     public record Score(long hard, long medium, long soft) {}
 
+    /**
+     * Per-resource row versions (ETags) so the client can make concurrency-safe granular
+     * writes (issue #47, Phase 4) without a separate read for each one.
+     */
+    public record Versions(Map<String, Long> employees, Map<String, Long> positions, long settings) {}
+
     public List<Employee> employees;
     public List<Position> positions;
     public Settings settings;
@@ -33,6 +39,7 @@ public class ScheduleDTO {
     public List<Slot> assignments;
     public String solverStatus;
     public Score score;
+    public Versions versions;
     public LocalDate horizonStart;
     public LocalDate horizonEnd;
     public int total;

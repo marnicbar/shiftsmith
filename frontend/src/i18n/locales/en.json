@@ -41,7 +41,9 @@
     "invalidInput": "Couldn't save your changes: {{error}}",
     "horizonTooLong": "The schedule horizon is too long ({{days}} days). The maximum is {{max}} days (about two years).",
     "tightenedRules": "Tightened personal rules for {{names}} to satisfy the new system limits.",
-    "namesMore": "{{names}} +{{count}} more"
+    "namesMore": "{{names}} +{{count}} more",
+    "reloadedAfterConflict": "Someone else changed this — reloaded the latest. Please redo your edit.",
+    "reconnecting": "Reconnecting to live updates…"
   },
   "auth": {
     "title": "Sign in",

@@ -36,6 +36,9 @@ public class AuthFilter implements ContainerRequestFilter {
     @Inject
     AuthService auth;
 
+    @Inject
+    CurrentUser currentUser;
+
     @Override
     public void filter(ContainerRequestContext ctx) {
         String path = ctx.getUriInfo().getPath();
@@ -55,9 +58,14 @@ public class AuthFilter implements ContainerRequestFilter {
         }
         ctx.setProperty(USERNAME_PROPERTY, username.get());
 
+        // Resolve the account once: its role + linked person drive write authorization
+        // (issue #47, Phase 6), and its forced-rotation flag is checked below.
+        Optional<UserAccount> account = auth.account(username.get());
+        account.ifPresent(a -> currentUser.set(a.username, a.role, a.employeeId));
+
         // A seeded account on a known password may only reach the endpoints it
         // needs to rotate that password; everything else is blocked until it does.
-        if (auth.mustChangePassword(username.get())
+        if (account.map(UserAccount::mustChange).orElse(false)
                 && !path.equals("api/auth/me")
                 && !path.equals("api/auth/change-password")) {
             ctx.abortWith(Response.status(Response.Status.FORBIDDEN)

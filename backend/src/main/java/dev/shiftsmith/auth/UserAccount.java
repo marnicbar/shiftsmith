@@ -35,8 +35,21 @@ public class UserAccount extends PanacheEntityBase {
      */
     public Boolean mustChangePassword;
 
+    /** Access role: {@code admin} | {@code manager} | {@code employee} (issue #47, Phase 6). */
+    @Column(nullable = false, length = 16)
+    public String role = "employee";
+
+    /** The person this login represents (for an {@code employee} account), or null. */
+    @Column(name = "employee_id")
+    public String employeeId;
+
     public boolean mustChange() {
         return Boolean.TRUE.equals(mustChangePassword);
+    }
+
+    /** Full access (admin or manager) vs. self-service (employee). */
+    public boolean isManager() {
+        return "admin".equals(role) || "manager".equals(role);
     }
 
     public static UserAccount findByUsername(String username) {

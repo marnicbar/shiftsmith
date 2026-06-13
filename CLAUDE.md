@@ -55,16 +55,28 @@ and their tests — in lock-step.
 React SPA → Quarkus REST → Timefold Solver, with PostgreSQL for persistence. In
 dev the Vite server proxies `/api/*` to Quarkus; in the production image Quarkus
 serves the built SPA itself (same origin, no proxy). `ScheduleService` keeps the working problem in memory (the
-solver needs it there) but **persists it to Postgres as a single JSONB
-document** so it survives restarts. On boot it rehydrates from the DB; an empty
+solver needs it there) but **persists it to Postgres as normalized, time-indexed
+rows** so it survives restarts. On boot it rehydrates from the DB; an empty
 database starts with an empty problem (no demo data).
 
 ### Persistence (`persistence` package)
-The whole editable problem (employees, positions, settings, overrides) is stored
-as one JSONB row via `ProblemEntity` (`@JdbcTypeCode(SqlTypes.JSON)`) behind
-`ProblemStore`. It's a document, not normalised tables: the model is deeply
-nested, synced atomically, and several domain classes carry Timefold annotations
-that don't mix with JPA. `ProblemDocument` is the serialized shape.
+The problem is stored in **normalized, time-indexed tables** (issue #47):
+`settings`, `skill`, `employee`(+`employee_skill`), `availability_block`
+(+`availability_block_exception`), `work_rule`(+`work_rule_change`, with a NULL
+`employee_id` for a global rule), `position`(+`position_skill`),
+`shift_template`(+`_skill`/`_exception`/`_preferred`), and the core `assignment`
+table (one row per concrete slot: manual pins are `source=manual`, the solver's
+durable output is `source=solver`). Schema is owned by **Flyway** (`db/migration`,
+`migrate-at-start`, `baseline-on-migrate`); Hibernate only `validate`s it (no
+auto-DDL). The two models stay separate: the Timefold-annotated domain classes
+(`domain/`) and the JPA entities (`persistence/entity/`), bridged by the pure,
+unit-tested `ProblemMapper`. There is **no document blob and no whole-document
+write**: on boot `ProblemStore.load()` rehydrates the whole problem from the rows
+into a `LoadedProblem` (empty DB seeds an empty `settings` row); every write goes
+through the granular per-resource stores (`EmployeeStore`/`PositionStore`/
+`SettingsStore`/`AssignmentStore`), each with a row `version` for optimistic
+concurrency (`If-Match`/ETag → 409). Per-row reads/writes, windowed reads, SSE
+deltas, bounded solver scope and per-employee authorization are the rest of #47.
 - Dev (`mvn quarkus:dev`): Quarkus Dev Services auto-starts a throwaway Postgres
   (needs Docker). Prod/compose: connects to the `db` service via
   `QUARKUS_DATASOURCE_*` env (see `application.properties` `%prod` keys).
@@ -72,20 +84,28 @@ that don't mix with JPA. `ProblemDocument` is the serialized shape.
 ### Backend is the source of truth
 The frontend owns the editor UI but the backend holds the canonical problem
 (employees, positions, settings, manual overrides) and the solver. The frontend:
-1. loads everything from `GET /api/schedule` on startup,
-2. debounce-syncs the whole problem to `PUT /api/problem` on every edit (which
-   persists to the DB and re-solves),
-3. subscribes to `GET /api/stream` (SSE) for live updates while the solver runs.
+1. loads everything from `GET /api/schedule` on startup (incl. a per-resource
+   `versions`/ETag map),
+2. debounce-diffs each edit into **granular, concurrency-safe calls** (`lib/sync.js`:
+   `diffProblem` → `POST/PUT/DELETE /api/{employees,positions}/{id}`, `PUT /api/settings`,
+   `PUT/DELETE /api/assignments/{templateId}/{date}`), threading each resource's
+   version with `If-Match`; a `409` reloads (there is no bulk `PUT /api/problem`),
+3. subscribes to `GET /api/stream` (SSE) for live delta updates while the solver runs.
 
-### Live updates (SSE)
-`GET /api/stream` is a Server-Sent Events endpoint. `ScheduleBroadcaster` fans
-out a lightweight "changed" tick whenever the solver finds a better solution, a
-problem edit lands, or the solver starts/stops; each subscriber rebuilds a fresh
-`ScheduleDTO` snapshot **off the solver thread** (`emitOn`) so the solver is
-never blocked. The browser's `EventSource` (`api.subscribeSchedule`) auto-
-reconnects, and a 25s heartbeat keeps the connection alive through proxies. This
-replaces the old `GET /api/schedule` polling loop and also propagates one
-client's edits to others live.
+### Live updates (SSE deltas, issue #47 Phase 5)
+`GET /api/stream` is a Server-Sent Events endpoint emitting small **typed change
+events** (`ChangeEvent`: `{type, id?, rev?, from?, to?}`), not full snapshots.
+`ScheduleBroadcaster` fans out an event whenever a resource is edited
+(`employee`/`position`/`settings` with id + new version), a pin changes
+(`assignment`), or the solver advances (`solver`); plus a `connected` frame and a
+25s `heartbeat`. The stream never rebuilds a `ScheduleDTO`, so the solver's frequent
+ticks no longer fan a full rebuild out to every subscriber (the #38 contention).
+Clients (`api.subscribeSchedule`, `lib/deltas.js`) refetch only the affected slice —
+the granular `GET /api/{employees,positions}/{id}` / `/settings` for problem edits
+(skipping their own edits via the `rev` hint), and a debounced `GET /api/schedule`
+for `solver`/`assignment` events. `EventSource` auto-reconnects; a drop flips a
+visible "reconnecting" state and a reconnect refetches to catch up. The deprecated
+bulk `PUT /api/problem` emits a coarse `reload` event (full refetch).
 
 ### Domain model
 - **Employee** — `skills`, calendar `blocks`, and working-time `rules`
@@ -123,7 +143,21 @@ unit + `horizonCount` units. So `week × 1` covers "this week and the next".
 `solverManager.solveBuilder()...run()` streams best solutions via
 `withBestSolutionEventConsumer` (each also fires an SSE tick);
 `unimproved-spent-limit` (application.properties) pauses the solver once the
-solution is steady. Any `PUT /api/problem` restarts it.
+solution is steady. Any granular write (or a pin change) restarts it.
+
+### Durable schedule & bounded lookback (issue #47, Phase 2)
+The solver's final best solution is persisted as `assignment` rows (`AssignmentStore`,
+`source = solver`) and reloaded on boot, so a restart shows the last roster
+immediately (`ScheduleService.persistSolved`/`reloadPersistedAssignments` overlay
+`currentAssignments`). Past `assignment` rows are the history: `SolverScope.lookbackStart`
+bounds the working set to `[lookbackStart, windowEnd)` — the window plus just the
+lead-in each boundary constraint needs (ISO-week/month bucket starts, `maxConsecDays`,
+`maxRestHours`) — and `ScheduleService` loads the worked shifts in
+`[lookbackStart, windowStart)` as fixed **history facts** (`ShiftAssignment.history`,
+pinned). History counts towards rest/consec/week/month at the boundary but is ignored
+by per-shift rules, coverage and preferences, and only charges a breach where a window
+slot shares it. Because `ProblemStore.save` upserts the FK targets (employee, position,
+shift_template) by id, this history survives document edits.
 
 ### Constraints (`ScheduleConstraintProvider`)
 Hard: required skills, vacation, availability (shift must fit an available window),
