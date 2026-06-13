@@ -21,8 +21,8 @@ import java.time.LocalDate;
  * the schedule range additionally reads the durable {@code assignment} rows, so it
  * spans history and any persisted future beyond the live solve window.
  *
- * <p>The bulk {@code GET /api/schedule} and the SSE stream are unchanged and still
- * power the live Overview while the frontend migrates to these reads.
+ * <p>The bulk {@code GET /api/schedule} and the SSE stream still power the live
+ * Overview while the frontend migrates to these reads.
  */
 @Path("/api")
 @Produces(MediaType.APPLICATION_JSON)

@@ -6,21 +6,21 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Server-side sanity check on a {@code PUT /api/problem} payload — the last guard
- * before a document is persisted and handed to the solver.
+ * Server-side sanity check on a written resource — the last guard before an
+ * employee/position/settings edit is persisted and handed to the solver.
  *
  * <p>The frontend constrains its inputs, but a stale, replayed, or hand-crafted
  * request can carry values the UI would never produce: an out-of-range shift time
  * that makes {@link ScheduleExpander} throw {@code DateTimeException}, an absurd
  * {@code headcount} that allocates billions of slots (OOM), or a giant
  * {@code horizonCount} that turns the day-by-day expansion into a multi-million
- * iteration loop (DoS). Worse, the poison document is committed to the JSONB row
- * <em>before</em> expansion runs, so the same exception re-fires inside the boot
- * observer and bricks every subsequent start.
+ * iteration loop (DoS). Rejecting these before the write keeps a poison value out
+ * of the database, where it would otherwise re-fire the same exception inside the
+ * boot observer.
  *
  * <p>This mirrors {@link DuplicateId} and {@link CalendarOverlap} as a 400-able
  * check the UI can't bypass: a single human-readable message on the first problem
- * found, or empty when the payload is safe to persist.
+ * found, or empty when the input is safe to persist.
  */
 public final class ProblemValidation {
 

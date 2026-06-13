@@ -9,7 +9,7 @@ import java.util.Optional;
  * Server-side guard against calendar entries that occupy the same minute.
  *
  * <p>Mirrors the frontend's {@code entriesOverlap} check so a hand-crafted or
- * buggy {@code PUT /api/problem} can't slip overlapping entries past the UI:
+ * buggy write request can't slip overlapping entries past the UI:
  * within one employee no two availability blocks may overlap, and within one
  * position no two shift templates may overlap.
  *

@@ -34,21 +34,6 @@ public class ScheduleResource {
     }
 
     /**
-     * Live stream of the full state, pushed over Server-Sent Events. Emits the
-     * current snapshot immediately, then a fresh snapshot on every change (new
-     * best solution, problem edit, solver start/stop), plus a periodic heartbeat
-     * to keep the connection alive through proxies.
-     *
-     * <p>Snapshots are rebuilt off the solver thread (via {@code emitOn}) so the
-     * solver is never blocked by serialization or slow clients.
-     *
-     * <p>{@code @Blocking} so the request runs on a worker thread: the shared
-     * {@link dev.shiftsmith.auth.AuthFilter} performs a transactional DB lookup
-     * (the seeded-password check), which is illegal on the reactive IO thread a
-     * {@code Multi}-returning endpoint would otherwise use. The streaming itself
-     * stays off the worker thread — each snapshot is emitted via {@code emitOn}.
-     */
-    /**
      * Live stream of typed change events over Server-Sent Events (issue #47, Phase 5).
      * Emits a {@code connected} frame immediately, then a small {@link ChangeEvent} per
      * change (a problem edit, a pinned-assignment change, or solver progress), plus a
