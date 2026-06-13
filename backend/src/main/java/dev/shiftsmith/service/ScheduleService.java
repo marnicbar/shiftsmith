@@ -36,11 +36,13 @@ import java.util.Optional;
  * Holds the canonical problem (employees, positions, settings, manual overrides)
  * and runs Timefold continuously over the configured horizon.
  *
- * <p>The problem is persisted to the database as a JSONB document so it survives
- * restarts; on boot we rehydrate from it (starting from an empty problem on a
- * fresh database). Every change — a new best solution from the solver, a problem
- * edit, or a solver start/stop — pushes a tick to {@link ScheduleBroadcaster}, so
- * connected browsers get live updates over SSE instead of polling.
+ * <p>The problem is persisted to the database as normalized, time-indexed rows
+ * (issue #47) so it survives restarts; on boot {@link ProblemStore#load()}
+ * rehydrates it from the rows (starting from an empty problem on a fresh
+ * database). Every change — a new best solution from the solver, a granular
+ * problem edit, or a solver start/stop — emits a typed change event to
+ * {@link ScheduleBroadcaster}, so connected browsers get live updates over SSE
+ * instead of polling.
  *
  * <p>Continuous solving: {@code solveBuilder().run()} streams each new best
  * solution into {@link #bestSolution}. Termination is governed by
@@ -555,10 +557,10 @@ public class ScheduleService {
     public Schedule getBestSolution() { return bestSolution; }
 
     /**
-     * Build the full state payload the frontend consumes — over both
-     * {@code GET /api/schedule} and the SSE stream. Synchronized so the snapshot
-     * is internally consistent; copies the editable collections so they can be
-     * serialized off-thread without a concurrent edit triggering a CME.
+     * Build the full state payload the frontend consumes over {@code GET /api/schedule}
+     * (the SSE stream carries only typed deltas, never this snapshot). Synchronized so
+     * the snapshot is internally consistent; copies the editable collections so they can
+     * be serialized off-thread without a concurrent edit triggering a CME.
      */
     public synchronized ScheduleDTO snapshotDTO() {
         ScheduleDTO dto = new ScheduleDTO();

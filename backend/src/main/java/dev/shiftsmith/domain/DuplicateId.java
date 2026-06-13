@@ -6,7 +6,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Server-side guard against duplicate entity IDs in a {@code PUT /api/problem} payload.
+ * Server-side guard against duplicate entity IDs in a written resource.
  *
  * <p>The frontend mints every ID and the backend stores it verbatim — it never
  * assigns IDs itself ({@code setId} is only a Jackson setter). So a buggy or stale

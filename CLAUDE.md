@@ -104,8 +104,7 @@ Clients (`api.subscribeSchedule`, `lib/deltas.js`) refetch only the affected sli
 the granular `GET /api/{employees,positions}/{id}` / `/settings` for problem edits
 (skipping their own edits via the `rev` hint), and a debounced `GET /api/schedule`
 for `solver`/`assignment` events. `EventSource` auto-reconnects; a drop flips a
-visible "reconnecting" state and a reconnect refetches to catch up. The deprecated
-bulk `PUT /api/problem` emits a coarse `reload` event (full refetch).
+visible "reconnecting" state and a reconnect refetches to catch up.
 
 ### Domain model
 - **Employee** — `skills`, calendar `blocks`, and working-time `rules`
@@ -156,8 +155,9 @@ lead-in each boundary constraint needs (ISO-week/month bucket starts, `maxConsec
 `[lookbackStart, windowStart)` as fixed **history facts** (`ShiftAssignment.history`,
 pinned). History counts towards rest/consec/week/month at the boundary but is ignored
 by per-shift rules, coverage and preferences, and only charges a breach where a window
-slot shares it. Because `ProblemStore.save` upserts the FK targets (employee, position,
-shift_template) by id, this history survives document edits.
+slot shares it. Because the granular per-resource stores upsert the FK targets
+(employee, position, shift_template) by id, this history survives edits to those
+resources.
 
 ### Constraints (`ScheduleConstraintProvider`)
 Hard: required skills, vacation, availability (shift must fit an available window),

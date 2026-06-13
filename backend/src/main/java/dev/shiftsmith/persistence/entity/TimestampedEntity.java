@@ -10,17 +10,18 @@ import java.time.Instant;
 
 /**
  * Common bookkeeping columns shared by every normalized entity table (issue #47):
- * a {@code version} for optimistic concurrency (wired now, enforced in the
- * granular-write phase) and {@code created_at}/{@code updated_at} audit timestamps.
+ * a {@code version} for optimistic concurrency (enforced by the granular per-resource
+ * stores) and {@code created_at}/{@code updated_at} audit timestamps.
  */
 @MappedSuperclass
 public abstract class TimestampedEntity extends PanacheEntityBase {
 
     /**
-     * Optimistic-concurrency counter. Intentionally a plain column (not {@code @Version})
-     * in this phase: the persistence path still rewrites the whole document, so enabling
-     * Hibernate's optimistic locking now would add no value. The granular per-resource
-     * writes promote this to {@code @Version}.
+     * Optimistic-concurrency counter. A plain column rather than a Hibernate
+     * {@code @Version}: the granular per-resource stores enforce it themselves —
+     * comparing the caller's expected version and bumping on each successful write —
+     * so the conditional-request ({@code If-Match}/{@code ETag} → 409) logic lives in
+     * one place instead of relying on a Hibernate {@code OptimisticLockException}.
      */
     @Column(name = "version", nullable = false)
     public long version = 0;

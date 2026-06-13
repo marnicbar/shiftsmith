@@ -38,8 +38,7 @@ import java.util.Optional;
  *
  * <p>Authorization (issue #47, Phase 6): the catalogue writes (employees, positions,
  * settings, pins) require a manager/admin; an {@code employee} account may only edit
- * its own calendar via {@code PUT /api/employees/{id}/availability|rules}. The bulk
- * {@code PUT} remains as a (now deprecated) compatibility layer.
+ * its own calendar via {@code PUT /api/employees/{id}/availability|rules}.
  */
 @Path("/api")
 @Produces(MediaType.APPLICATION_JSON)
