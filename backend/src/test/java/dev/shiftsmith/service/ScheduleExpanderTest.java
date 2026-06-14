@@ -109,6 +109,39 @@ class ScheduleExpanderTest {
     }
 
     @Test
+    void pinToASinceDeletedEmployeeLeavesTheSlotFillable() {
+        // The occurrence is pinned to "ghost", who no longer exists in the roster.
+        ShiftTemplate t = template("t1", MON, 540, 1020, 1, "Reception");
+        Map<String, List<String>> overrides = Map.of("t1@" + MON, List.of("ghost"));
+
+        List<ShiftAssignment> slots = ScheduleExpander.expand(
+                List.of(positionWith(t)), List.of(), weekWindow, overrides, MON);
+
+        assertThat(slots).hasSize(1);
+        // Not a null-employee pin that blocks the slot forever — the solver can refill it.
+        assertThat(slots.get(0).isPinned()).isFalse();
+        assertThat(slots.get(0).getEmployee()).isNull();
+    }
+
+    @Test
+    void aDeletedPinDoesNotDisturbTheOtherPinnedSlots() {
+        // headcount 2, pinned to [mei, ghost]; mei stays, ghost was deleted.
+        ShiftTemplate t = template("t1", MON, 540, 1020, 2, "Reception");
+        Employee mei = employee("mei", "Reception");
+        Map<String, List<String>> overrides = Map.of("t1@" + MON, List.of("mei", "ghost"));
+
+        List<ShiftAssignment> slots = ScheduleExpander.expand(
+                List.of(positionWith(t)), List.of(mei), weekWindow, overrides, MON);
+
+        assertThat(slots).hasSize(2);
+        // slot 0 keeps its real pin; slot 1's deleted pin is dropped (not shifted onto mei).
+        assertThat(slots.get(0).getEmployee()).isEqualTo(mei);
+        assertThat(slots.get(0).isPinned()).isTrue();
+        assertThat(slots.get(1).getEmployee()).isNull();
+        assertThat(slots.get(1).isPinned()).isFalse();
+    }
+
+    @Test
     void headcountIsAtLeastOneEvenIfMisconfigured() {
         ShiftTemplate t = template("t1", MON, 540, 1020, 0, "Reception");
         List<ShiftAssignment> slots = ScheduleExpander.expand(
