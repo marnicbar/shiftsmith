@@ -62,8 +62,23 @@ public final class ScheduleExpander {
                         ShiftAssignment a = new ShiftAssignment(
                                 key + "#" + i, p, t, i, d, st, en);
                         if (pins != null) {
-                            a.setPinned(true);
-                            if (i < pins.size()) a.setEmployee(byId.get(pins.get(i)));
+                            // A present key marks the occurrence as manually controlled. Each
+                            // slot is either pinned to the listed person, intentionally
+                            // pinned-empty (the list is shorter than headcount, or the entry
+                            // is blank), or — when the listed person has since been deleted —
+                            // left unpinned so the solver can refill it instead of being a
+                            // null-employee pin that blocks the slot forever (#39).
+                            String pinnedId = i < pins.size() ? pins.get(i) : null;
+                            if (pinnedId == null || pinnedId.isBlank()) {
+                                a.setPinned(true); // intentional pinned-empty slot
+                            } else {
+                                Employee e = byId.get(pinnedId);
+                                if (e != null) {
+                                    a.setEmployee(e);
+                                    a.setPinned(true);
+                                }
+                                // else: pinned person was deleted — leave the slot fillable.
+                            }
                         }
                         out.add(a);
                     }
