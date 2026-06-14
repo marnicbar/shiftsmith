@@ -53,6 +53,30 @@ const uid = (p) => `${p}${randomUUID()}`;
 
 const shiftSkills = (s) => s.skills ? s.skills : (s.skill ? [s.skill] : []);
 
+// --- Recurrence / multi-day spans ------------------------------------------
+// Whether a recurring or multi-day calendar item (a shift template or an
+// availability/vacation Block) covers the given ISO date. This is the single
+// source of truth used by the timeline (matchesDay), the reusable Calendar, and
+// the dashboard. It MUST stay in lock-step with the backend's
+// dev.shiftsmith.domain.Block.occursOn / Recurrence (see CLAUDE.md) — note the
+// multi-day `endDate` span and the `null`/missing `repeat` coercion to 'none',
+// which several callers used to miss.
+const weekdayOf = (iso) => (parseISO(iso).getDay() + 6) % 7; // Mon=0 … Sun=6
+function occursOn(item, date) {
+  if (!item) return false;
+  if (item.except && item.except.includes(date)) return false;
+  // Multi-day span (e.g. a vacation range): start .. endDate, inclusive.
+  if (item.endDate && (!item.repeat || item.repeat === 'none')) return date >= item.date && date <= item.endDate;
+  if (item.until && date > item.until) return false;
+  if (!item.repeat || item.repeat === 'none') return date === item.date;
+  if (item.repeat === 'daily') return date >= item.date;
+  if (item.repeat === 'weekly') {
+    if (item.days && item.days.length) return date >= item.date && item.days.includes(weekdayOf(date));
+    return weekdayOf(date) === weekdayOf(item.date) && date >= item.date;
+  }
+  return false;
+}
+
 // --- Employee name helpers --------------------------------------------------
 // A person has a firstName + lastName. `order` ('first' | 'last') is a UI
 // preference deciding which one leads in lists/labels; 'last' renders "Last, First".
@@ -87,6 +111,6 @@ function reflowPositions(positions, order) {
 
 export const SS = {
   DAY, pad, isoOf, startOfWeek, addDays, parseISO, minLabel, min12, uid,
-  shiftSkills, reflowPositions, MAX_HORIZON_DAYS, horizonDays,
+  shiftSkills, reflowPositions, MAX_HORIZON_DAYS, horizonDays, occursOn,
   fullName, empInitials, nameSeed, compareNames,
 };

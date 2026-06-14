@@ -148,6 +148,56 @@ describe('SS.compareNames', () => {
   });
 });
 
+describe('SS.occursOn', () => {
+  const MON = '2026-06-01'; // Monday
+  const TUE = '2026-06-02';
+  const WED = '2026-06-03';
+  const THU = '2026-06-04';
+  const FRI = '2026-06-05';
+  const NEXT_WED = '2026-06-10';
+
+  it('single-day (none / null repeat) occurs only on its own date', () => {
+    expect(SS.occursOn({ repeat: 'none', date: MON }, MON)).toBe(true);
+    expect(SS.occursOn({ repeat: 'none', date: MON }, TUE)).toBe(false);
+    // A missing/null repeat is coerced to 'none', matching the backend.
+    expect(SS.occursOn({ date: MON }, MON)).toBe(true);
+    expect(SS.occursOn({ date: MON }, TUE)).toBe(false);
+  });
+
+  it('multi-day span covers the whole inclusive range (vacation)', () => {
+    const vac = { type: 'vac', date: MON, endDate: THU }; // Mon–Thu, no repeat
+    expect(SS.occursOn(vac, MON)).toBe(true);
+    expect(SS.occursOn(vac, WED)).toBe(true);
+    expect(SS.occursOn(vac, THU)).toBe(true);
+    expect(SS.occursOn(vac, FRI)).toBe(false);
+    expect(SS.occursOn(vac, '2026-05-31')).toBe(false);
+  });
+
+  it('multi-day span still honours except', () => {
+    const vac = { type: 'vac', date: MON, endDate: THU, except: [TUE] };
+    expect(SS.occursOn(vac, TUE)).toBe(false);
+    expect(SS.occursOn(vac, WED)).toBe(true);
+  });
+
+  it('daily occurs on and after the anchor', () => {
+    expect(SS.occursOn({ repeat: 'daily', date: TUE }, MON)).toBe(false);
+    expect(SS.occursOn({ repeat: 'daily', date: MON }, WED)).toBe(true);
+  });
+
+  it('weekly on selected days recurs on each chosen weekday (Mon=0 … Sun=6)', () => {
+    const b = { repeat: 'weekly', date: MON, days: [0, 2] }; // Mon, Wed
+    expect(SS.occursOn(b, MON)).toBe(true);
+    expect(SS.occursOn(b, TUE)).toBe(false);
+    expect(SS.occursOn(b, WED)).toBe(true);
+    expect(SS.occursOn(b, NEXT_WED)).toBe(true);
+  });
+
+  it('respects until (inclusive)', () => {
+    expect(SS.occursOn({ repeat: 'daily', date: MON, until: TUE }, WED)).toBe(false);
+    expect(SS.occursOn({ repeat: 'daily', date: MON, until: TUE }, TUE)).toBe(true);
+  });
+});
+
 describe('SS.horizonDays', () => {
   const TODAY = new Date(2026, 5, 3); // Wednesday 2026-06-03, matches the backend test anchor
 
