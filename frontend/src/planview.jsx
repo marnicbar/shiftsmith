@@ -17,6 +17,16 @@ import { getScheduleRange } from './lib/api.js';
 const NOOP = () => {};
 const NEW_ITEM = () => ({});
 
+// Prepend the day before the visible range. An overnight shift anchored on that
+// lead-in day spills its tail into the first visible day; building events over it
+// lets the read-only Calendar render that tail. The Calendar only draws its own
+// columns, so the lead-in day's head (and any non-overnight lead-in event) is
+// harmlessly dropped.
+function withLeadIn(dayList) {
+  if (!dayList.length) return dayList;
+  return [SS.isoOf(SS.addDays(SS.parseISO(dayList[0]), -1)), ...dayList];
+}
+
 // Turn the backend's range slots into the `shiftTemplateId@date → [employee]` map the
 // event builders consume (mirrors App's live assignMap, so the two are interchangeable).
 export function slotsToAssign(slots = [], empById = {}) {
@@ -130,16 +140,19 @@ function PersonSchedule({ employees = [], positions = [], assign, selId, setSelI
     .sort((a, b) => SS.compareNames(a, b, nameOrder));
 
   const dayList = useMemo(() => calendarDays(view, anchor), [view, anchor]);
+  const buildDays = useMemo(() => withLeadIn(dayList), [dayList]);
   const empById = useMemo(() => Object.fromEntries(employees.map((e) => [e.id, e])), [employees]);
-  // Fetch the visible range from the durable store (so past months show history),
-  // then overlay the live window assignments on top.
-  const rangeAssign = useRangeAssign(dayList, emp ? `person:${emp.id}` : null, empById);
+  // Fetch the visible range (plus the overnight lead-in day) from the durable store
+  // (so past months show history), then overlay the live window assignments on top.
+  const rangeAssign = useRangeAssign(buildDays, emp ? `person:${emp.id}` : null, empById);
   const effectiveAssign = useMemo(() => ({ ...rangeAssign, ...assign }), [rangeAssign, assign]);
   const events = useMemo(
-    () => (emp ? buildPersonEvents(emp, positions, dayList, effectiveAssign) : []),
-    [emp, positions, dayList, effectiveAssign],
+    () => (emp ? buildPersonEvents(emp, positions, buildDays, effectiveAssign) : []),
+    [emp, positions, buildDays, effectiveAssign],
   );
-  const totalHours = events.reduce((a, ev) => a + evHours(ev), 0);
+  // Stats reflect the visible range only — exclude the lead-in day's spill-over anchor.
+  const visibleEvents = useMemo(() => events.filter((ev) => ev.date >= dayList[0]), [events, dayList]);
+  const totalHours = visibleEvents.reduce((a, ev) => a + evHours(ev), 0);
 
   return (
     <div className="view">
@@ -183,7 +196,7 @@ function PersonSchedule({ employees = [], positions = [], assign, selId, setSelI
               <div className="divider"></div>
               <div className="section-title">{t('plan.inView')}</div>
               <div>
-                <div className="stat-line"><span className="k">{t('plan.assignedShifts')}</span><span className="v">{events.length}</span></div>
+                <div className="stat-line"><span className="k">{t('plan.assignedShifts')}</span><span className="v">{visibleEvents.length}</span></div>
                 <div className="stat-line"><span className="k">{t('plan.assignedHours')}</span><span className="v">{t('plan.hours', { hours: Math.round(totalHours * 10) / 10 })}</span></div>
               </div>
             </div>
@@ -207,16 +220,20 @@ function PositionSchedule({ positions = [], employees = [], assign, selId, setSe
   const list = positions.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()));
 
   const dayList = useMemo(() => calendarDays(view, anchor), [view, anchor]);
+  const buildDays = useMemo(() => withLeadIn(dayList), [dayList]);
   const empById = useMemo(() => Object.fromEntries(employees.map((e) => [e.id, e])), [employees]);
-  // History-aware range load for this position, with the live window overlaid on top.
-  const rangeAssign = useRangeAssign(dayList, pos ? `position:${pos.id}` : null, empById);
+  // History-aware range load for this position (plus the overnight lead-in day),
+  // with the live window overlaid on top.
+  const rangeAssign = useRangeAssign(buildDays, pos ? `position:${pos.id}` : null, empById);
   const effectiveAssign = useMemo(() => ({ ...rangeAssign, ...assign }), [rangeAssign, assign]);
   const events = useMemo(
-    () => (pos ? buildPositionEvents(pos, dayList, effectiveAssign, { nameOrder, t }) : []),
-    [pos, dayList, effectiveAssign, nameOrder, t],
+    () => (pos ? buildPositionEvents(pos, buildDays, effectiveAssign, { nameOrder, t }) : []),
+    [pos, buildDays, effectiveAssign, nameOrder, t],
   );
-  const filled = events.reduce((a, e) => a + (e.crew ? e.crew.length : 0), 0);
-  const open = events.reduce((a, e) => a + (e.open || 0), 0);
+  // Stats reflect the visible range only — exclude the lead-in day's spill-over anchor.
+  const visibleEvents = useMemo(() => events.filter((e) => e.date >= dayList[0]), [events, dayList]);
+  const filled = visibleEvents.reduce((a, e) => a + (e.crew ? e.crew.length : 0), 0);
+  const open = visibleEvents.reduce((a, e) => a + (e.open || 0), 0);
 
   return (
     <div className="view">

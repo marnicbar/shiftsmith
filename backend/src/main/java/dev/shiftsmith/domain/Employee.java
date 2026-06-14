@@ -56,13 +56,15 @@ public class Employee {
      * Soft preference, in minutes of the shift {@code [start,end)} on day {@code d}
      * that fall inside a preferred window (counts positive) or an undesired window
      * (counts negative). Availability itself is enforced separately as a hard rule.
+     * When {@code end} runs past midnight (an overnight shift) the next day's windows
+     * are included too, so the post-midnight portion is scored against that day.
      */
     public int preferredMinutes(LocalDate d, int start, int end) {
-        return overlapMinutes(mergedRanges(d, b -> "pref".equals(b.getType())), start, end);
+        return overlapMinutes(mergedRanges(d, end > 1440, b -> "pref".equals(b.getType())), start, end);
     }
 
     public int undesiredMinutes(LocalDate d, int start, int end) {
-        return overlapMinutes(mergedRanges(d, b -> "undes".equals(b.getType())), start, end);
+        return overlapMinutes(mergedRanges(d, end > 1440, b -> "undes".equals(b.getType())), start, end);
     }
 
     /**
@@ -70,9 +72,17 @@ public class Employee {
      * by their preferred and undesired blocks (an empty calendar means unavailable).
      * A shift may only be assigned if it fits entirely within one such window;
      * adjacent/overlapping blocks merge into a single window.
+     *
+     * <p>An overnight shift's {@code end} is expressed as minutes past this day's
+     * midnight (so it exceeds 1440); in that case the next day's windows are folded
+     * in at {@code +1440} before merging, so a window reaching midnight on {@code d}
+     * and one starting at midnight on {@code d+1} join into a single window that
+     * spans the seam. That makes two adjacent day blocks cover an overnight shift —
+     * the only way to express overnight availability, since a single block can't
+     * cross midnight.
      */
     public boolean isAvailableFor(LocalDate d, int start, int end) {
-        for (int[] w : availableWindows(d)) {
+        for (int[] w : availableWindows(d, end > 1440)) {
             if (w[0] <= start && end <= w[1]) return true;
         }
         return false;
@@ -80,21 +90,27 @@ public class Employee {
 
     /** Merged available windows (preferred ∪ undesired) on day {@code d}. */
     public List<int[]> availableWindows(LocalDate d) {
-        return mergedRanges(d, b -> "pref".equals(b.getType()) || "undes".equals(b.getType()));
+        return availableWindows(d, false);
     }
 
-    /** Minute ranges of matching blocks active on {@code d}, sorted and merged (adjacent ranges join). */
+    private List<int[]> availableWindows(LocalDate d, boolean spanMidnight) {
+        return mergedRanges(d, spanMidnight, b -> "pref".equals(b.getType()) || "undes".equals(b.getType()));
+    }
+
+    /** Single-day {@link #mergedRanges(LocalDate, boolean, Predicate)} (no midnight spill-over). */
     private List<int[]> mergedRanges(LocalDate d, Predicate<Block> match) {
+        return mergedRanges(d, false, match);
+    }
+
+    /**
+     * Minute ranges of matching blocks active on {@code d}, sorted and merged (adjacent
+     * ranges join). When {@code spanMidnight} is set, the next day's ranges are folded
+     * in shifted by {@code +1440} so they can merge with a window that reaches midnight.
+     */
+    private List<int[]> mergedRanges(LocalDate d, boolean spanMidnight, Predicate<Block> match) {
         List<int[]> raw = new ArrayList<>();
-        for (Block b : blocks) {
-            if (!match.test(b) || !b.occursOn(d)) continue;
-            if (b.isAllDay()) raw.add(new int[]{0, 1440});
-            else if (b.getStart() < b.getEnd()) raw.add(new int[]{b.getStart(), b.getEnd()});
-            // An overnight window (start > end) wraps past midnight into the next
-            // day, mirroring how an overnight shift's end minute is expressed
-            // (end + 1440), so such a window stays usable instead of being dropped.
-            else if (b.getStart() > b.getEnd()) raw.add(new int[]{b.getStart(), b.getEnd() + 1440});
-        }
+        collectRanges(raw, d, 0, match);
+        if (spanMidnight) collectRanges(raw, d.plusDays(1), 1440, match);
         raw.sort(Comparator.comparingInt(r -> r[0]));
         List<int[]> merged = new ArrayList<>();
         for (int[] r : raw) {
@@ -106,6 +122,19 @@ public class Employee {
             }
         }
         return merged;
+    }
+
+    /** Append the matching blocks' minute ranges on {@code d}, each shifted by {@code offset}. */
+    private void collectRanges(List<int[]> raw, LocalDate d, int offset, Predicate<Block> match) {
+        for (Block b : blocks) {
+            if (!match.test(b) || !b.occursOn(d)) continue;
+            if (b.isAllDay()) raw.add(new int[]{offset, offset + 1440});
+            else if (b.getStart() < b.getEnd()) raw.add(new int[]{offset + b.getStart(), offset + b.getEnd()});
+            // An overnight window (start > end) wraps past midnight into the next
+            // day, mirroring how an overnight shift's end minute is expressed
+            // (end + 1440), so such a window stays usable instead of being dropped.
+            else if (b.getStart() > b.getEnd()) raw.add(new int[]{offset + b.getStart(), offset + b.getEnd() + 1440});
+        }
     }
 
     private static int overlapMinutes(List<int[]> windows, int start, int end) {

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 
+import static dev.shiftsmith.support.Fixtures.availableAllDay;
 import static dev.shiftsmith.support.Fixtures.employee;
 import static dev.shiftsmith.support.Fixtures.rule;
 import static dev.shiftsmith.support.Fixtures.vacation;
@@ -64,6 +65,34 @@ class EmployeeAvailabilityTest {
         assertThat(e.isAvailableFor(D, 1320, 1560)).isTrue();  // 22:00–02:00 fits exactly
         assertThat(e.isAvailableFor(D, 1380, 1500)).isTrue();  // 23:00–01:00 fits inside
         assertThat(e.isAvailableFor(D, 1260, 1560)).isFalse(); // starts 21:00, before window
+    }
+
+    @Test
+    void twoAdjacentDayWindowsAcrossMidnightCoverAnOvernightShift() {
+        // Overnight availability can't be entered as one block, so it's expressed as
+        // two adjacent day windows: one reaching midnight, one starting at midnight.
+        Employee e = employee("e1");
+        e.getBlocks().add(window("pref", D, 1080, 1440));          // 18:00–24:00
+        e.getBlocks().add(window("pref", D.plusDays(1), 0, 360));  // next day 00:00–06:00
+        // 18:00–06:00 shift: end is 06:00 next day → 1800 in wrapped minutes.
+        assertThat(e.isAvailableFor(D, 1080, 1800)).isTrue();
+        assertThat(e.isAvailableFor(D, 1020, 1800)).isFalse(); // starts 17:00, before the window
+        assertThat(e.isAvailableFor(D, 1080, 1860)).isFalse(); // ends 07:00, past the next-day window
+    }
+
+    @Test
+    void availabilityOnlyOnTheStartDayDoesNotCoverThePostMidnightTail() {
+        Employee e = employee("e1");
+        e.getBlocks().add(window("pref", D, 1080, 1440)); // 18:00–24:00, nothing the next day
+        assertThat(e.isAvailableFor(D, 1080, 1560)).isFalse(); // 18:00–02:00 spills past midnight
+    }
+
+    @Test
+    void allDayOnBothSidesOfMidnightCoversAnOvernightShift() {
+        Employee e = employee("e1");
+        availableAllDay(e, D);
+        availableAllDay(e, D.plusDays(1));
+        assertThat(e.isAvailableFor(D, 1320, 1560)).isTrue(); // 22:00–02:00
     }
 
     @Test
