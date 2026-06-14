@@ -90,10 +90,22 @@ public class AuthService {
         return store.mustChangePassword(username);
     }
 
+    /**
+     * A throwaway hash verified against on the user-miss path so an unknown username
+     * still pays the PBKDF2 cost. Without it, an unknown user returns immediately while
+     * a known user with a wrong password pays ~PBKDF2 — a timing oracle for username
+     * enumeration (issue #36).
+     */
+    private static final String DUMMY_HASH = PasswordHasher.hash("timing-equalizer-not-a-real-password");
+
     /** Verify credentials and, on success, mint a signed token. */
     public Optional<String> login(String username, String password, boolean remember) {
         Optional<UserAccount> user = store.find(username);
-        if (user.isEmpty() || !PasswordHasher.verify(password, user.get().passwordHash)) {
+        if (user.isEmpty()) {
+            PasswordHasher.verify(password, DUMMY_HASH); // burn equivalent time, ignore result
+            return Optional.empty();
+        }
+        if (!PasswordHasher.verify(password, user.get().passwordHash)) {
             return Optional.empty();
         }
         return Optional.of(mintToken(username, user.get().passwordHash,

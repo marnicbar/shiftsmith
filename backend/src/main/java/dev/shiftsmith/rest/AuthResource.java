@@ -3,8 +3,11 @@ package dev.shiftsmith.rest;
 import dev.shiftsmith.auth.AuthFilter;
 import dev.shiftsmith.auth.AuthService;
 import dev.shiftsmith.auth.CurrentUser;
+import dev.shiftsmith.auth.LoginThrottle;
 import dev.shiftsmith.auth.UserAccount;
 import dev.shiftsmith.rest.dto.ApiError;
+import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.net.SocketAddress;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -12,6 +15,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.container.ContainerRequestContext;
@@ -33,6 +37,9 @@ public class AuthResource {
     @Inject
     CurrentUser currentUser;
 
+    @Inject
+    LoginThrottle throttle;
+
     public record LoginRequest(String username, String password, boolean remember) {}
     public record LoginResponse(String token, String username, boolean mustChangePassword,
                                 String role, String employeeId) {}
@@ -41,21 +48,40 @@ public class AuthResource {
 
     @POST
     @Path("/login")
-    public Response login(LoginRequest req) {
+    public Response login(LoginRequest req, @Context HttpServerRequest http) {
         if (req == null || req.username() == null || req.password() == null) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(new ApiError("Username and password are required")).build();
         }
+        String ip = clientIp(http);
+
+        // Brute-force brake: reject while the username or IP is in cooldown (issue #36).
+        long retryAfter = throttle.retryAfterSeconds(req.username(), ip);
+        if (retryAfter > 0) {
+            return Response.status(429)
+                    .header(HttpHeaders.RETRY_AFTER, retryAfter)
+                    .entity(new ApiError("Too many login attempts. Try again later.")).build();
+        }
+
         Optional<String> token = auth.login(req.username(), req.password(), req.remember());
         if (token.isEmpty()) {
+            throttle.recordFailure(req.username(), ip);
             return Response.status(Response.Status.UNAUTHORIZED)
                     .entity(new ApiError("Invalid username or password")).build();
         }
+        throttle.recordSuccess(req.username(), ip);
         UserAccount account = auth.account(req.username()).orElse(null);
         return Response.ok(new LoginResponse(token.get(), req.username(),
                 auth.mustChangePassword(req.username()),
                 account == null ? null : account.role,
                 account == null ? null : account.employeeId)).build();
+    }
+
+    /** Best-effort source address for throttling; the direct peer (not a spoofable header). */
+    private static String clientIp(HttpServerRequest http) {
+        if (http == null) return "unknown";
+        SocketAddress addr = http.remoteAddress();
+        return addr != null && addr.hostAddress() != null ? addr.hostAddress() : "unknown";
     }
 
     /** Confirms the caller's token is valid; used by the SPA on startup. */
