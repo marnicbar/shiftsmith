@@ -123,7 +123,11 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
                     Employee e = a.getEmployee();
                     if (e == null) return false;
                     if (a.isHistory() && b.isHistory()) return false;   // past-only pair: immutable
-                    Integer rest = e.minLimit("restHours", a.getDate());
+                    // The rest gap belongs to the earlier shift's day, so resolve the
+                    // (time-varying) restHours limit there — not at whichever shift
+                    // Timefold happened to order first (#37).
+                    ShiftAssignment earlier = a.getStart().isBefore(b.getStart()) ? a : b;
+                    Integer rest = e.minLimit("restHours", earlier.getDate());
                     if (rest == null) return false;
                     long gap1 = Duration.between(a.getEnd(), b.getStart()).toMinutes();
                     long gap2 = Duration.between(b.getEnd(), a.getStart()).toMinutes();
@@ -163,6 +167,13 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
      * period. History hours count towards the total (so a partial boundary week/month
      * is complete), but a period is only penalised when it contains a window slot —
      * the solver can't undo a purely historical overage.
+     *
+     * <p>The limit is resolved once per period, at the bucket's start date. This is
+     * exact, not a simplification: a scheduled rule {@code Change} for the daily metric
+     * lands on a specific day (so {@code dayHours} buckets by that day), and for the
+     * weekly/monthly metrics the UI constrains the change date to a period boundary
+     * (Monday / first-of-month), so a weekly/monthly limit can never change part-way
+     * through its own bucket (#37).
      */
     private Constraint overMax(ConstraintFactory f, String metric,
                                java.util.function.Function<ShiftAssignment, LocalDate> bucket, String name) {
@@ -209,25 +220,24 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
                         ConstraintCollectors.toSet(ShiftAssignment::getDate),
                         ConstraintCollectors.conditionally(a -> !a.isHistory(),
                                 ConstraintCollectors.toSet(ShiftAssignment::getDate)))
-                .filter((e, days, windowDays) -> {
-                    Integer max = e.maxLimit("consecDays", Collections.min(days));
-                    return max != null && longestRunWithWindow(days, windowDays) > max;
-                })
+                .filter((e, days, windowDays) -> consecutiveDaysOverage(e, days, windowDays) > 0)
                 .penalize(HardMediumSoftScore.ONE_HARD,
-                        (e, days, windowDays) -> longestRunWithWindow(days, windowDays)
-                                - e.maxLimit("consecDays", Collections.min(days)))
+                        (e, days, windowDays) -> consecutiveDaysOverage(e, days, windowDays))
                 .asConstraint("Too many consecutive days");
     }
 
     /**
-     * Longest run of consecutive days that includes at least one window day. A run made
-     * up entirely of history is immovable and so doesn't count — only runs the solver
-     * can actually shorten are penalised.
+     * Total consecutive-day overage across every run that includes at least one window
+     * day. A run made up entirely of history is immovable and so doesn't count — only
+     * runs the solver can actually shorten are penalised. Each run is judged against the
+     * consecDays limit in effect on its <em>own</em> start day (per-run, not once for the
+     * whole horizon), and each over-limit run contributes its overage, so two separate
+     * violations cost more than one (#37).
      */
-    private int longestRunWithWindow(Set<LocalDate> allDays, Set<LocalDate> windowDays) {
+    private int consecutiveDaysOverage(Employee e, Set<LocalDate> allDays, Set<LocalDate> windowDays) {
         List<LocalDate> days = new ArrayList<>(allDays);
         Collections.sort(days);
-        int best = 0;
+        int total = 0;
         int i = 0;
         while (i < days.size()) {
             int j = i;
@@ -236,10 +246,14 @@ public class ScheduleConstraintProvider implements ConstraintProvider {
                 j++;
                 if (windowDays.contains(days.get(j))) hasWindow = true;
             }
-            if (hasWindow) best = Math.max(best, j - i + 1);
+            if (hasWindow) {
+                Integer max = e.maxLimit("consecDays", days.get(i)); // limit at this run's start
+                int runLength = j - i + 1;
+                if (max != null && runLength > max) total += runLength - max;
+            }
             i = j + 1;
         }
-        return best;
+        return total;
     }
 
     // -------------------------------------------------------------- medium
