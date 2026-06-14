@@ -49,6 +49,11 @@ services:
       - QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://db:5432/${POSTGRES_DB:-shiftsmith}
       - POSTGRES_USER=${POSTGRES_USER:-shiftsmith}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-shiftsmith}
+      # The schedule model is zone-less: "today", the horizon roll-over and shift
+      # wall-clock times all use the app's default timezone. Pin it explicitly to
+      # your business timezone (e.g. Europe/Berlin) so the horizon rolls at local
+      # midnight; defaults to UTC rather than the host's zone (issue #40).
+      - TZ=${TZ:-UTC}
     depends_on:
       db:
         condition: service_healthy

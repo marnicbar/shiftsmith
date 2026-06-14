@@ -43,7 +43,10 @@
     "tightenedRules": "Persönliche Regeln für {{names}} verschärft, um die neuen Systemgrenzen einzuhalten.",
     "namesMore": "{{names}} +{{count}} weitere",
     "reloadedAfterConflict": "Jemand anderes hat dies geändert – der aktuelle Stand wurde neu geladen. Bitte wiederhole deine Änderung.",
-    "reconnecting": "Verbindung zu Live-Updates wird wiederhergestellt…"
+    "reconnecting": "Verbindung zu Live-Updates wird wiederhergestellt…",
+    "errorTitle": "Etwas ist schiefgelaufen",
+    "errorBody": "Die App hat einen unerwarteten Fehler festgestellt. Ein Neuladen behebt das meist.",
+    "errorReload": "Neu laden"
   },
   "auth": {
     "title": "Anmelden",

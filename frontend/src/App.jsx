@@ -238,8 +238,11 @@ export default function App() {
   }), [refetchEntity, refetchSettings, refetchSchedule, loadProblem, reportError]);
 
   // Live updates: subscribe to the backend's typed SSE change events once loaded. Each
-  // event refetches only the affected slice; a (re)connect catches up via the schedule,
-  // a drop flips the visible "reconnecting" state.
+  // event refetches only the affected slice; a drop flips the visible "reconnecting" state.
+  // onOpen refetches the schedule on every (re)connect — including the first — which also
+  // closes the window between the initial GET and the EventSource handshake: a solver
+  // improvement emitted in that gap (and otherwise lost, since the stream is delta-only)
+  // is caught by this catch-up rather than left stale until the next edit (#40).
   useEffect(() => {
     if (!loaded) return;
     return api.subscribeSchedule(

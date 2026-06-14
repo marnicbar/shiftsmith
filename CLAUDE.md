@@ -138,6 +138,12 @@ visible "reconnecting" state and a reconnect refetches to catch up.
 `Settings.horizonEnd` computes the window: start of today → start of the next full
 unit + `horizonCount` units. So `week × 1` covers "this week and the next".
 
+**Timezone.** The model is zone-less: `LocalDate.now()` ("today"), the horizon
+roll-over and shift wall-clock times all use the **app's default timezone**. Pin it
+explicitly via the `TZ` env (set on the `app`/`backend` services in the compose files,
+defaulting to UTC) to your business timezone so the horizon rolls at local midnight;
+don't rely on the host zone. Making the business TZ a per-tenant setting is future work.
+
 ### Continuous solving
 `solverManager.solveBuilder()...run()` streams best solutions via
 `withBestSolutionEventConsumer` (each also fires an SSE tick);

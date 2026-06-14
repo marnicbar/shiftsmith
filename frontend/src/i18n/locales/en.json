@@ -43,7 +43,10 @@
     "tightenedRules": "Tightened personal rules for {{names}} to satisfy the new system limits.",
     "namesMore": "{{names}} +{{count}} more",
     "reloadedAfterConflict": "Someone else changed this — reloaded the latest. Please redo your edit.",
-    "reconnecting": "Reconnecting to live updates…"
+    "reconnecting": "Reconnecting to live updates…",
+    "errorTitle": "Something went wrong",
+    "errorBody": "The app hit an unexpected error. Reloading usually fixes it.",
+    "errorReload": "Reload"
   },
   "auth": {
     "title": "Sign in",

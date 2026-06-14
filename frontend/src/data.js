@@ -53,6 +53,15 @@ const uid = (p) => `${p}${randomUUID()}`;
 
 const shiftSkills = (s) => s.skills ? s.skills : (s.skill ? [s.skill] : []);
 
+// Slots a shift contributes per week (display-only): headcount × occurrences/week.
+// A daily shift recurs 7×; a weekly one recurs once per *selected* weekday (so a
+// Mon/Wed/Fri shift is 3, not 1); anything else (a one-off) counts once. Used by the
+// positions rail/group meta/config badges — keep it in one place so they agree (#40).
+const weeklySlots = (s) => {
+  const occ = s.repeat === 'daily' ? 7 : s.repeat === 'weekly' ? (s.days?.length || 1) : 1;
+  return (s.headcount || 0) * occ;
+};
+
 // --- Recurrence / multi-day spans ------------------------------------------
 // Whether a recurring or multi-day calendar item (a shift template or an
 // availability/vacation Block) covers the given ISO date. This is the single
@@ -111,6 +120,6 @@ function reflowPositions(positions, order) {
 
 export const SS = {
   DAY, pad, isoOf, startOfWeek, addDays, parseISO, minLabel, min12, uid,
-  shiftSkills, reflowPositions, MAX_HORIZON_DAYS, horizonDays, occursOn,
+  shiftSkills, weeklySlots, reflowPositions, MAX_HORIZON_DAYS, horizonDays, occursOn,
   fullName, empInitials, nameSeed, compareNames,
 };

@@ -148,6 +148,22 @@ describe('SS.compareNames', () => {
   });
 });
 
+describe('SS.weeklySlots', () => {
+  it('counts a one-off shift once per headcount', () => {
+    expect(SS.weeklySlots({ repeat: 'none', headcount: 2 })).toBe(2);
+  });
+  it('counts a daily shift seven times per headcount', () => {
+    expect(SS.weeklySlots({ repeat: 'daily', headcount: 1 })).toBe(7);
+  });
+  it('counts a weekly shift once per selected weekday (#40)', () => {
+    expect(SS.weeklySlots({ repeat: 'weekly', headcount: 1, days: [0, 2, 4] })).toBe(3); // Mon/Wed/Fri
+    expect(SS.weeklySlots({ repeat: 'weekly', headcount: 2, days: [0, 2, 4] })).toBe(6);
+  });
+  it('falls back to one weekday when a weekly shift has no days array', () => {
+    expect(SS.weeklySlots({ repeat: 'weekly', headcount: 1 })).toBe(1);
+  });
+});
+
 describe('SS.occursOn', () => {
   const MON = '2026-06-01'; // Monday
   const TUE = '2026-06-02';
