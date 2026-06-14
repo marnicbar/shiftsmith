@@ -118,7 +118,7 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
             </div>
           </div>
 
-          <div className="row" style={{ gap: 10, alignItems: 'flex-end' }}>
+          <div className="row" style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
             <div className="field" style={{ flex: 1 }}>
               <label>{t('personnel.firstName')}</label>
               <input className="input" value={emp.firstName || ''} onChange={(e) => updateEmp({ firstName: e.target.value })}
