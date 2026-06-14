@@ -774,9 +774,16 @@ function labelOf(item, kind, t) {
 }
 
 function useClickAway(ref, onAway, active) {
+  // Keep the latest callback in a ref so the document listener (registered only
+  // when `active` flips) always calls the current closure. Otherwise it would
+  // capture the callback from open-time — e.g. TimeField's tryCommitText closing
+  // over the initial, pre-typing `text` — and a click-away would commit a stale
+  // value, silently discarding what the user typed (#34).
+  const onAwayRef = useRef(onAway);
+  onAwayRef.current = onAway;
   useEffect(() => {
     if (!active) return;
-    function h(e) { if (ref.current && !ref.current.contains(e.target)) onAway(); }
+    function h(e) { if (ref.current && !ref.current.contains(e.target)) onAwayRef.current(e); }
     document.addEventListener('mousedown', h, true);
     return () => document.removeEventListener('mousedown', h, true);
   }, [active]);
@@ -855,7 +862,7 @@ function parseTimeText(raw, isEnd) {
   return total;
 }
 
-function TimeField({ minutes, onChange, isEnd, align }) {
+export function TimeField({ minutes, onChange, isEnd, align }) {
   const { t } = useTranslation();
   const h24 = is24h();
   const [open, setOpen] = useState(false);
