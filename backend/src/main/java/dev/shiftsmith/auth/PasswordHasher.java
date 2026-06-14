@@ -13,7 +13,10 @@ import java.util.Base64;
 public final class PasswordHasher {
 
     private static final String ALGO = "PBKDF2WithHmacSHA256";
-    private static final int ITERATIONS = 210_000;
+    // OWASP guidance for PBKDF2-HMAC-SHA256 (issue #36). The self-describing hash format
+    // carries the iteration count, so {@link #verify} keeps validating older hashes while
+    // new/changed passwords are written at this cost.
+    private static final int ITERATIONS = 600_000;
     private static final int SALT_BYTES = 16;
     private static final int KEY_BITS = 256;
     private static final SecureRandom RANDOM = new SecureRandom();
