@@ -31,6 +31,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Holds the canonical problem (employees, positions, settings, manual overrides)
@@ -84,6 +85,14 @@ public class ScheduleService {
     private volatile Schedule bestSolution;
 
     /**
+     * Monotonic id of the current solver job. Each {@link #startSolving()} bumps it and
+     * captures the new value; the asynchronous best-solution consumers compare against it
+     * and ignore any event from a superseded job, so a late/queued event from an old solve
+     * (built on the previous problem) can never overwrite the current best (#38).
+     */
+    private final AtomicLong solverGeneration = new AtomicLong();
+
+    /**
      * The last solved roster, persisted as {@code assignment} rows and reloaded on
      * boot, keyed by slot id. Overlays a freshly expanded schedule so the previous
      * solution is shown immediately after a restart, before the solver re-runs.
@@ -96,7 +105,7 @@ public class ScheduleService {
     private long settingsVer;
 
     /** Rehydrate the persisted problem (empty on a fresh database) and start solving at boot. */
-    void onStart(@Observes StartupEvent ev) {
+    synchronized void onStart(@Observes StartupEvent ev) {
         Optional<LoadedProblem> saved = store.load();
         if (saved.isPresent()) {
             LoadedProblem d = saved.get();
@@ -191,6 +200,9 @@ public class ScheduleService {
     // --- solver lifecycle ------------------------------------------------
 
     public synchronized void startSolving() {
+        // Bump first, so any late event still draining from the job we're about to
+        // terminate is already considered stale by the consumers below.
+        long gen = nextSolverGeneration();
         try {
             solverManager.terminateEarly(JOB_ID);
         } catch (Exception ignored) {}
@@ -207,11 +219,14 @@ public class ScheduleService {
         solverManager.solveBuilder()
                 .withProblemId(JOB_ID)
                 .withProblem(problem)
-                .withBestSolutionEventConsumer(event -> { this.bestSolution = event.solution(); broadcaster.fire(); })
+                .withBestSolutionEventConsumer(event -> {
+                    if (applyIfCurrent(gen, event.solution())) broadcaster.fire();
+                })
                 .withFinalBestSolutionEventConsumer(event -> {
-                    this.bestSolution = event.solution();
-                    persistSolved(event.solution());
-                    broadcaster.fire();
+                    if (applyIfCurrent(gen, event.solution())) {
+                        persistSolved(event.solution());
+                        broadcaster.fire();
+                    }
                 })
                 .withExceptionHandler((id, ex) -> LOG.errorf(ex, "Solver job %s failed", id))
                 .run();
@@ -555,6 +570,24 @@ public class ScheduleService {
     }
 
     public Schedule getBestSolution() { return bestSolution; }
+
+    /**
+     * Accept a best-solution from solver job {@code gen} only while that job is still the
+     * current generation, publishing it as the new {@link #bestSolution}. An event from a
+     * superseded job (a different generation) is dropped, so a late/queued solution built
+     * on a previous problem can't overwrite the current best (#38). Package-private for the
+     * unit test; the broadcast/persist side effects stay with the caller.
+     */
+    boolean applyIfCurrent(long gen, Schedule solution) {
+        if (gen != solverGeneration.get()) return false;
+        this.bestSolution = solution;
+        return true;
+    }
+
+    /** Start a new solver generation, superseding any previous job. Package-private for the test. */
+    long nextSolverGeneration() {
+        return solverGeneration.incrementAndGet();
+    }
 
     /**
      * Build the full state payload the frontend consumes over {@code GET /api/schedule}
