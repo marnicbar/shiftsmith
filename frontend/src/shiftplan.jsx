@@ -377,33 +377,60 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   // content is chosen purely from that width (see `bar`).
   const BOX_H = 68, BOX_TOP = 7;
 
+  // Bar segments for one position row on day `d` (index `di`). A normal shift is a
+  // single full segment; an overnight shift is a head (its start day) plus a tail at
+  // the start of the next day. In the fit views (day/week) the head is clipped at
+  // midnight and the tail drawn separately, since a bar can't run off the right edge
+  // into an absent next-day column — mirroring how the calendars split overnight
+  // events. The continuous view keeps one bar that simply spans across the boundary.
+  function daySegments(p, d, di) {
+    const segs = [];
+    for (const sh of p.shifts) {
+      if (!matchesDay(sh, d)) continue;
+      const end = wrapEnd(sh.start, sh.end);
+      const overnight = end > 1440;
+      const headEnd = overnight && fitWidth ? 1440 : end; // clip overnight heads only in fit views
+      segs.push({ sh, date: d, di, s: sh.start, e: headEnd, seg: overnight ? 'head' : 'full' });
+    }
+    if (fitWidth) {
+      // Incoming tail: an overnight shift that started the previous day continues into
+      // the early hours of this one. Drawn at this day's 00:00.
+      const prev = SS.isoOf(SS.addDays(SS.parseISO(d), -1));
+      for (const sh of p.shifts) {
+        const end = wrapEnd(sh.start, sh.end);
+        if (end <= 1440 || !matchesDay(sh, prev)) continue;
+        segs.push({ sh, date: prev, di, s: 0, e: end - 1440, seg: 'tail' });
+      }
+    }
+    return segs;
+  }
+
   function bar(p, d, di) {
-    return p.shifts.filter((sh) => matchesDay(sh, d)).map((sh) => {
-      const key = `${sh.id}@${d}`;
+    return daySegments(p, d, di).map((sg) => {
+      const { sh, date, di: dayIdx, s, e, seg } = sg;
+      const key = `${sh.id}@${date}`;
       const crew = assign[key] || [];
       const edited = !!overrides[key];
-      const x = (di*24 + sh.start/60) * effPph;
-      // Overnight shifts (end at/before start) extend past midnight into the next
-      // day's column; wrap the end so the bar spans its real duration instead of
-      // collapsing to a sliver.
-      const w = Math.max(4, (wrapEnd(sh.start, sh.end) - sh.start)/60 * effPph);
+      const x = (dayIdx*24 + s/60) * effPph;
+      const w = Math.max(4, (e - s)/60 * effPph);
       const full = crew.length >= sh.headcount;
       const title = `${sh.name} · ${SS.minLabel(sh.start)}–${SS.minLabel(sh.end)} · ${SS.shiftSkills(sh).join(' · ') || '—'} · ${crew.length}/${sh.headcount}${edited ? ` · ${t('shiftplan.manuallySetLower')}` : ''}`;
-      const cls = `bar ${full?'full':'under'} ${edited?'edited':''}`;
+      const cls = `bar ${full?'full':'under'} ${edited?'edited':''} ${seg !== 'full' ? 'seg-'+seg : ''}`;
       const style = { left: x+1, width: Math.max(3, w-2), top: BOX_TOP, height: BOX_H };
+      const segKey = `${key}${seg === 'tail' ? '@t' : ''}`;
 
       // How many 18px circles (3px gap) fit across the box's inner width.
       const fit = Math.floor((w - 16 + 3) / 21);
       if (fit < 1) {
         // Too small for even one circle — just a plain coloured box.
-        return <div key={key} className={cls + ' tiny'} title={title} onClick={(e) => openEditor(e, sh, p, d, key)} style={style}></div>;
+        return <div key={segKey} className={cls + ' tiny'} title={title} onClick={(e) => openEditor(e, sh, p, date, key)} style={style}></div>;
       }
 
       // One circle per headcount slot: filled avatars first, then empty slots.
       const circles = Array.from({ length: sh.headcount }, (_, i) => {
-        const e = crew[i];
-        return e
-          ? <span key={i} className="av" style={{ background: Theme.avatarColor(SS.nameSeed(e)) }} title={SS.fullName(e, nameOrder)}>{SS.empInitials(e)}</span>
+        const em = crew[i];
+        return em
+          ? <span key={i} className="av" style={{ background: Theme.avatarColor(SS.nameSeed(em)) }} title={SS.fullName(em, nameOrder)}>{SS.empInitials(em)}</span>
           : <span key={i} className="slot-empty"></span>;
       });
       // Collapse whatever doesn't fit into a single "+N" circle.
@@ -414,9 +441,9 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
       }
 
       return (
-        <div key={key} className={cls} title={title} onClick={(e) => openEditor(e, sh, p, d, key)} style={style}>
+        <div key={segKey} className={cls} title={title} onClick={(e) => openEditor(e, sh, p, date, key)} style={style}>
           <div className="bhead">
-            <span className="bt">{sh.name}</span>
+            <span className="bt">{seg === 'tail' ? `↪ ${sh.name}` : sh.name}</span>
             {edited && <span className="bedit" title={t('shiftplan.manuallySet')}><Ic.user size={9}/></span>}
           </div>
           <span className="btime mono">{SS.minLabel(sh.start)}–{SS.minLabel(sh.end)}</span>
