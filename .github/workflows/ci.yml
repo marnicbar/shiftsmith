@@ -8,6 +8,10 @@ on:
     branches: [main]
   pull_request:
 
+# Least privilege: these jobs only read the checkout; nothing needs write scope.
+permissions:
+  contents: read
+
 # Cancel superseded runs for the same PR/branch to save CI minutes. Keyed on the
 # head branch (PR source) so re-pushes cancel the in-flight run.
 concurrency:
