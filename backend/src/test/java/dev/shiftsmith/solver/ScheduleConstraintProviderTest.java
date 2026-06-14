@@ -2,6 +2,7 @@ package dev.shiftsmith.solver;
 
 import ai.timefold.solver.core.api.score.stream.test.ConstraintVerifier;
 import dev.shiftsmith.domain.Employee;
+import dev.shiftsmith.domain.Rule;
 import dev.shiftsmith.domain.Schedule;
 import dev.shiftsmith.domain.ShiftAssignment;
 import dev.shiftsmith.support.SolverHarness;
@@ -11,6 +12,7 @@ import java.util.List;
 
 import static dev.shiftsmith.support.Fixtures.assignment;
 import static dev.shiftsmith.support.Fixtures.availableAllDay;
+import static dev.shiftsmith.support.Fixtures.change;
 import static dev.shiftsmith.support.Fixtures.day;
 import static dev.shiftsmith.support.Fixtures.employee;
 import static dev.shiftsmith.support.Fixtures.rule;
@@ -138,6 +140,20 @@ class ScheduleConstraintProviderTest {
         verifier.verifyThat(ScheduleConstraintProvider::minRestBetweenShifts).given(e, a, b).penalizesBy(0);
     }
 
+    @Test
+    void minRest_resolvesTheLimitAtTheEarlierShiftsDate() {
+        // restHours is 12 today, dropping to 6 from day(1). The rest gap starts on day(0),
+        // so the day(0) limit (12) must apply — not the looser day(1) limit (6).
+        Employee e = employee("e1", "Bar");
+        Rule rest = rule("restHours", "min", 12);
+        rest.getChanges().add(change(day(1), "set", "restHours", "min", 6));
+        e.getRules().add(rest);
+        ShiftAssignment a = assignment("a1", day(0), 600, 1320, e, "Bar"); // ends day(0) 22:00
+        ShiftAssignment b = assignment("a2", day(1), 360, 720, e, "Bar");  // day(1) 06:00 → 8h gap
+        // 8h < 12h (day(0) limit) → penalised; if it wrongly used day(1)'s 6h it would be silent.
+        verifier.verifyThat(ScheduleConstraintProvider::minRestBetweenShifts).given(e, a, b).penalizesBy(1);
+    }
+
     // ----------------------------------------------------------- hour caps
 
     @Test
@@ -180,6 +196,42 @@ class ScheduleConstraintProviderTest {
         ShiftAssignment c = assignment("a3", day(2), 540, 660, e, "Bar");
         ShiftAssignment d = assignment("a4", day(3), 540, 660, e, "Bar"); // 4-day run, cap 2 → 2 over
         verifier.verifyThat(ScheduleConstraintProvider::maxConsecutiveDays).given(e, a, b, c, d).penalizesBy(2);
+    }
+
+    @Test
+    void maxConsecutiveDays_penalizesEachOverLimitRunSeparately() {
+        // Two distinct 4-day runs, cap 2 → each is 2 over → 4 total (not just the longest).
+        Employee e = employee("e1", "Bar");
+        e.getRules().add(rule("consecDays", "max", 2));
+        ShiftAssignment[] runA = {
+                assignment("a0", day(0), 540, 660, e, "Bar"), assignment("a1", day(1), 540, 660, e, "Bar"),
+                assignment("a2", day(2), 540, 660, e, "Bar"), assignment("a3", day(3), 540, 660, e, "Bar") };
+        ShiftAssignment[] runB = {
+                assignment("b0", day(6), 540, 660, e, "Bar"), assignment("b1", day(7), 540, 660, e, "Bar"),
+                assignment("b2", day(8), 540, 660, e, "Bar"), assignment("b3", day(9), 540, 660, e, "Bar") };
+        verifier.verifyThat(ScheduleConstraintProvider::maxConsecutiveDays)
+                .given(e, runA[0], runA[1], runA[2], runA[3], runB[0], runB[1], runB[2], runB[3])
+                .penalizesBy(4);
+    }
+
+    @Test
+    void maxConsecutiveDays_resolvesTheLimitPerRunStart() {
+        // consecDays is 5 today, tightening to 2 from day(6). The early 2-day run is fine
+        // under either limit; the later 5-day run breaches the day(6) limit (5 > 2 → 3 over).
+        // The old code resolved the limit once at the earliest worked day (5), missing it.
+        Employee e = employee("e1", "Bar");
+        Rule consec = rule("consecDays", "max", 5);
+        consec.getChanges().add(change(day(6), "set", "consecDays", "max", 2));
+        e.getRules().add(consec);
+        ShiftAssignment[] early = {
+                assignment("e0", day(0), 540, 660, e, "Bar"), assignment("e1", day(1), 540, 660, e, "Bar") };
+        ShiftAssignment[] late = {
+                assignment("l0", day(6), 540, 660, e, "Bar"), assignment("l1", day(7), 540, 660, e, "Bar"),
+                assignment("l2", day(8), 540, 660, e, "Bar"), assignment("l3", day(9), 540, 660, e, "Bar"),
+                assignment("l4", day(10), 540, 660, e, "Bar") };
+        verifier.verifyThat(ScheduleConstraintProvider::maxConsecutiveDays)
+                .given(e, early[0], early[1], late[0], late[1], late[2], late[3], late[4])
+                .penalizesBy(3);
     }
 
     // -------------------------------------------------- overnight (end < start)
