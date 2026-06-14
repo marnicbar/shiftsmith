@@ -76,7 +76,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
   function splitShift(updated, added) { updatePos({ shifts: pos.shifts.map((x) => x.id === updated.id ? updated : x).concat(added) }); }
   const newItem = ({ date, start, end }) => ({ id: SS.uid('s'), name: t('positions.newShift'), date, start, end, skills: pos.skills.slice(), headcount: 1, repeat: 'none', preferred: [] });
 
-  const weeklySlots = pos ? pos.shifts.reduce((a, s) => a + s.headcount * (s.repeat === 'daily' ? 7 : 1), 0) : 0;
+  const weeklySlots = pos ? pos.shifts.reduce((a, s) => a + SS.weeklySlots(s), 0) : 0;
 
   const extraFields = (item, patch) => {
     const prefIds = item.preferred || [];
@@ -163,7 +163,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
             if (q && !items.length) return null;
             const isReal = g !== UNGROUPED;
             const isCollapsed = !q && collapsed[g];
-            const slotsWk = items.reduce((a, p) => a + p.shifts.reduce((b, s) => b + s.headcount * (s.repeat === 'daily' ? 7 : 1), 0), 0);
+            const slotsWk = items.reduce((a, p) => a + p.shifts.reduce((b, s) => b + SS.weeklySlots(s), 0), 0);
             const greorder = drag && drag.kind === 'group' && mark && mark.type === 'group' && mark.g === g ? mark.edge : null;
             const groupOver = (e) => {
               if (!drag) return; e.preventDefault();
@@ -190,7 +190,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
                   </div>
                 ) : (allGroups.length > 0 && <div className="rail-group-head plain"><span className="rgh-name">{t('positions.ungrouped')}</span></div>)}
                 {!isCollapsed && items.map((p) => {
-                  const slots = p.shifts.reduce((a, s) => a + s.headcount * (s.repeat === 'daily' ? 7 : 1), 0);
+                  const slots = p.shifts.reduce((a, s) => a + SS.weeklySlots(s), 0);
                   const m = drag && drag.kind === 'pos' && mark && mark.type === 'pos' && mark.id === p.id ? mark.edge : null;
                   return (
                     <div key={p.id} draggable={dnd}
