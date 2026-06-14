@@ -1,15 +1,72 @@
 name: Publish image
 
 # Build the all-in-one image and push it to the GitHub Container Registry on
-# version tags (e.g. `v1.2.3`). Also runnable on demand from the Actions tab.
+# version tags (e.g. `v1.2.3`). Also runnable on demand from the Actions tab —
+# but the publish step only runs for a `v*` tag, so a manual run from a feature
+# branch can't push an image or move `latest`.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
 
+# Least privilege by default; the publish job widens this to packages: write.
+permissions:
+  contents: read
+
 jobs:
+  # The image is only pushed if both suites pass for this exact commit (issue #35).
+  test-backend:
+    name: Test backend (Quarkus + Timefold)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # ubuntu-latest has a running Docker daemon, so `verify` also runs the
+      # @QuarkusTest *IT (REST + Dev Services PostgreSQL round-trip).
+      - name: Build and test
+        run: mvn -B --no-transfer-progress verify
+
+  test-frontend:
+    name: Test frontend (React + Vite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
   image:
     name: Build and push (GHCR)
+    needs: [test-backend, test-frontend]
+    # Publish only for a version tag, never a branch dispatch — so an image (and
+    # `latest`) can never be produced from an arbitrary, unreleased ref.
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -28,6 +85,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Derives image tags/labels: the full semver, major.minor, and `latest`.
+      # `latest` is gated on a version tag, so re-running from a branch never moves it.
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -36,7 +94,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
       - name: Build and push
         uses: docker/build-push-action@v6

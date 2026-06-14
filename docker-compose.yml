@@ -53,3 +53,9 @@ services:
       db:
         condition: service_healthy
     restart: unless-stopped
+    # The Timefold solver deliberately burns CPU between edits, so cap the app's
+    # resources to stop it starving PostgreSQL (or the host) on a shared box. The
+    # JVM is container-aware and sizes its heap from this limit (issue #35). Raise
+    # mem_limit for very large rosters.
+    mem_limit: 1g
+    cpus: 2.0
