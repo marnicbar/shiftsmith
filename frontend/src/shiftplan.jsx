@@ -7,18 +7,10 @@ import { dateLocale } from './i18n/index.js';
 import { Ic } from './icons.jsx';
 import { Theme } from './theme.js';
 
-export function matchesDay(item, date) {
-  if (item.until && date > item.until) return false;
-  if (item.except && item.except.includes(date)) return false;
-  if (item.repeat === 'none') return date === item.date;
-  if (item.repeat === 'daily') return date >= item.date;
-  if (item.repeat === 'weekly') {
-    if (date < item.date) return false;
-    if (item.days && item.days.length) return item.days.includes((SS.parseISO(date).getDay()+6)%7);
-    return ((SS.parseISO(date).getDay()+6)%7) === ((SS.parseISO(item.date).getDay()+6)%7);
-  }
-  return false;
-}
+// Recurrence/multi-day matcher shared with the Calendar and dashboard, and kept in
+// lock-step with the backend (see SS.occursOn in data.js). Re-exported under the
+// timeline's historical name so its many callers (and tests) stay unchanged.
+export const matchesDay = (item, date) => SS.occursOn(item, date);
 function onVacation(emp, date) {
   return emp.blocks.some((b) => b.type === 'vac' && matchesDay(b, date));
 }

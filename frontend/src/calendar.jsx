@@ -16,19 +16,8 @@ const ZOOM_MAX = 160;
 const ZOOM_FLOOR = 18;
 
 function weekdayOf(iso) { return (SS.parseISO(iso).getDay() + 6) % 7; }
-function occursOn(it, d) {
-  if (it.except && it.except.includes(d)) return false;
-  // Multi-day span (e.g. a vacation range): start .. endDate, inclusive.
-  if (it.endDate && (!it.repeat || it.repeat === 'none')) return d >= it.date && d <= it.endDate;
-  if (it.until && d > it.until) return false;
-  if (!it.repeat || it.repeat === 'none') return d === it.date;
-  if (it.repeat === 'daily') return d >= it.date;
-  if (it.repeat === 'weekly') {
-    if (it.days && it.days.length) return d >= it.date && it.days.includes(weekdayOf(d));
-    return weekdayOf(d) === weekdayOf(it.date) && d >= it.date;
-  }
-  return false;
-}
+// Shared recurrence/multi-day matcher (data.js), kept in lock-step with the backend.
+const occursOn = (it, d) => SS.occursOn(it, d);
 function isOvernight(it) { return !it.allDay && it.end < it.start; }
 
 // --- overlap detection -----------------------------------------------------

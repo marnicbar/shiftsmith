@@ -41,6 +41,21 @@ describe('matchesDay', () => {
     expect(matchesDay({ repeat: 'daily', date: MON, until: TUE }, '2026-06-03')).toBe(false);
     expect(matchesDay({ repeat: 'daily', date: MON, except: [TUE] }, TUE)).toBe(false);
   });
+
+  it('covers a multi-day vacation on every day in its range (#33)', () => {
+    const WED = '2026-06-03';
+    const THU = '2026-06-04';
+    const vac = { type: 'vac', date: MON, endDate: '2026-06-04' }; // Mon–Thu, no repeat field
+    expect(matchesDay(vac, MON)).toBe(true);
+    expect(matchesDay(vac, WED)).toBe(true);  // mid-range — used to be missed
+    expect(matchesDay(vac, THU)).toBe(true);  // last day
+    expect(matchesDay(vac, '2026-06-05')).toBe(false);
+  });
+
+  it('treats a missing/null repeat as a single day (matches the backend)', () => {
+    expect(matchesDay({ date: MON }, MON)).toBe(true);
+    expect(matchesDay({ date: MON }, TUE)).toBe(false);
+  });
 });
 
 // --- buildPlan -------------------------------------------------------------
