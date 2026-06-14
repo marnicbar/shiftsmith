@@ -3,7 +3,6 @@
 //   SettingsView (gear → System settings): skills, working-time rules, solver.
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Theme } from './theme.js';
 import { SS } from './data.js';
 import { dateLocale, LANGUAGES } from './i18n/index.js';
 import { Ic } from './icons.jsx';
@@ -135,34 +134,16 @@ function SigninSection({ username }) {
   );
 }
 
-function AppearanceCard({ prefs, setPref, fonts }) {
+function AppearanceCard({ prefs, setPref }) {
   const { t } = useTranslation();
-  const accents = Object.entries(Theme.ACCENTS);
   return (
     <div className="card set-card">
       <h3>{t('settings.appearance')}</h3>
       <Row label={t('settings.darkMode')} hint={t('settings.darkModeHint')}>
         <Toggle value={prefs.dark} onChange={(v) => setPref('dark', v)} />
       </Row>
-      <Row label={t('settings.palette')} hint={t('settings.paletteHint')}>
-        <Seg value={prefs.palette} options={['slate', 'stone', 'mono']} onChange={(v) => setPref('palette', v)} />
-      </Row>
-      <Row label={t('settings.accent')} hint={t('settings.accentHint')}>
-        <div className="accent-row">
-          {accents.map(([key, a]) => (
-            <button key={key} title={a.label} onClick={() => setPref('accent', key)}
-              className={`accent-swatch ${prefs.accent === key ? 'on' : ''}`}
-              style={{ background: `oklch(0.6 ${a.c} ${a.hue})` }} />
-          ))}
-        </div>
-      </Row>
       <Row label={t('settings.nameOrder')} hint={t('settings.nameOrderHint')}>
         <Seg value={prefs.nameOrder} options={[{ value: 'first', label: t('settings.order.first') }, { value: 'last', label: t('settings.order.last') }]} onChange={(v) => setPref('nameOrder', v)} />
-      </Row>
-      <Row label={t('settings.uiFont')}>
-        <select className="input set-select" value={prefs.font} onChange={(e) => setPref('font', e.target.value)}>
-          {Object.keys(fonts).map((f) => <option key={f} value={f}>{f}</option>)}
-        </select>
       </Row>
       <Row label={t('settings.language')} hint={t('settings.languageHint')}>
         <select className="input set-select" value={prefs.lang} onChange={(e) => setPref('lang', e.target.value)}>
@@ -180,9 +161,6 @@ function CalendarCard({ prefs, setPref }) {
       <h3>{t('settings.calendar')}</h3>
       <Row label={t('settings.timeSnap')} hint={t('settings.timeSnapHint')}>
         <Seg value={prefs.snapLabel} options={[{ value: '15 min', label: t('settings.snap.15') }, { value: '30 min', label: t('settings.snap.30') }, { value: '60 min', label: t('settings.snap.60') }]} onChange={(v) => setPref('snapLabel', v)} />
-      </Row>
-      <Row label={t('settings.newBlock')} hint={t('settings.newBlockHint')}>
-        <Seg value={prefs.newFlowLabel} options={[{ value: 'Paint, then tweak', label: t('settings.flow.paint') }, { value: 'Open a form', label: t('settings.flow.form') }]} onChange={(v) => setPref('newFlowLabel', v)} />
       </Row>
       <Row label={t('settings.defaultView')}>
         <Seg value={prefs.tlDefaultLabel} options={[{ value: 'Day', label: t('settings.view.day') }, { value: 'Week', label: t('settings.view.week') }, { value: 'Continuous', label: t('settings.view.continuous') }]} onChange={(v) => setPref('tlDefaultLabel', v)} />
@@ -207,14 +185,14 @@ function horizonSummary(t, sched, settings) {
 }
 
 /** Account settings: sign-in, appearance and calendar — personal to the user. */
-export function AccountView({ prefs, setPref, fonts, authUser }) {
+export function AccountView({ prefs, setPref, authUser }) {
   const { t } = useTranslation();
   return (
     <div className="settings">
       <div className="settings-inner">
         <div className="dash-head"><div><h1>{t('account.title')}</h1><p>{t('account.subtitle')}</p></div></div>
         <SigninSection username={authUser} />
-        <AppearanceCard prefs={prefs} setPref={setPref} fonts={fonts} />
+        <AppearanceCard prefs={prefs} setPref={setPref} />
         <CalendarCard prefs={prefs} setPref={setPref} />
       </div>
     </div>
