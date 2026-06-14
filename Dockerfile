@@ -7,7 +7,7 @@
 #   docker build -t shiftsmith .
 
 # ---- Stage 1: build the React frontend into static assets -------------------
-FROM node:26-alpine AS frontend
+FROM node:24-alpine AS frontend
 WORKDIR /frontend
 # Install dependencies first so the layer is cached unless the lockfile changes.
 COPY frontend/package.json frontend/package-lock.json ./
