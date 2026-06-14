@@ -29,7 +29,7 @@ COPY --from=frontend /frontend/dist/ ./src/main/resources/META-INF/resources/
 RUN mvn -B --no-transfer-progress package -DskipTests
 
 # ---- Stage 3: slim runtime --------------------------------------------------
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 # curl backs the container HEALTHCHECK; run as an unprivileged user.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
