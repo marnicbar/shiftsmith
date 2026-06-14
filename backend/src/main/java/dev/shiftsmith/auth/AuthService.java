@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Optional;
 
@@ -21,10 +22,12 @@ import java.util.Optional;
  * credentials, and issues / verifies stateless session tokens.
  *
  * <p>Tokens are HMAC-signed (no server-side session table): a token carries the
- * username and an expiry, signed with a persisted secret, so it survives
- * restarts and lets the SSE stream authenticate via a query parameter. There is
- * no revocation list — changing a password does not invalidate tokens already
- * issued; they simply expire.
+ * username, a fingerprint of the account's password hash, and an expiry, signed
+ * with a persisted secret, so it survives restarts and lets the SSE stream
+ * authenticate via a query parameter. The fingerprint gives stateless
+ * revocation: {@link #verify} re-checks it against the account's current password
+ * hash, so changing a password invalidates every token minted before the change
+ * (older tokens otherwise simply expire).
  */
 @ApplicationScoped
 public class AuthService {
@@ -93,7 +96,8 @@ public class AuthService {
         if (user.isEmpty() || !PasswordHasher.verify(password, user.get().passwordHash)) {
             return Optional.empty();
         }
-        return Optional.of(mintToken(username, remember ? TTL_REMEMBER : TTL_DEFAULT));
+        return Optional.of(mintToken(username, user.get().passwordHash,
+                remember ? TTL_REMEMBER : TTL_DEFAULT));
     }
 
     /**
@@ -123,7 +127,12 @@ public class AuthService {
         return store.createUser(username, PasswordHasher.hash(password), role, employeeId);
     }
 
-    /** Validate a token's signature and expiry, returning the username it carries. */
+    /**
+     * Validate a token's signature, password-hash fingerprint and expiry, returning
+     * the username it carries. The fingerprint check means a token is only honored
+     * while it still matches the account's current password hash, so a password
+     * change (or a vanished account) invalidates it.
+     */
     public Optional<String> verify(String token) {
         if (token == null || token.isBlank()) return Optional.empty();
         int dot = token.indexOf('.');
@@ -134,23 +143,48 @@ public class AuthService {
             byte[] expectedSig = hmac(payloadB64.getBytes(StandardCharsets.US_ASCII));
             if (!MessageDigest.isEqual(sig, expectedSig)) return Optional.empty();
 
+            // Payload is "username\nfingerprint\nexpiry"; parse from the end so a
+            // username containing a newline can't shift the fixed trailing fields.
             String payload = new String(B64D.decode(payloadB64), StandardCharsets.UTF_8);
-            int sep = payload.lastIndexOf('\n');
-            if (sep < 0) return Optional.empty();
-            long expiry = Long.parseLong(payload.substring(sep + 1));
+            int lastNl = payload.lastIndexOf('\n');
+            if (lastNl < 0) return Optional.empty();
+            int prevNl = payload.lastIndexOf('\n', lastNl - 1);
+            if (prevNl < 0) return Optional.empty();
+            String username = payload.substring(0, prevNl);
+            String fingerprint = payload.substring(prevNl + 1, lastNl);
+            long expiry = Long.parseLong(payload.substring(lastNl + 1));
             if (System.currentTimeMillis() > expiry) return Optional.empty();
-            return Optional.of(payload.substring(0, sep));
+
+            // Revocation: the token must still match the account's current password
+            // hash. Compared in constant time, like the signature above.
+            Optional<UserAccount> user = store.find(username);
+            if (user.isEmpty()) return Optional.empty();
+            byte[] presented = fingerprint.getBytes(StandardCharsets.US_ASCII);
+            byte[] expected = fingerprint(user.get().passwordHash).getBytes(StandardCharsets.US_ASCII);
+            if (!MessageDigest.isEqual(presented, expected)) return Optional.empty();
+            return Optional.of(username);
         } catch (RuntimeException e) {
             return Optional.empty();
         }
     }
 
-    private String mintToken(String username, Duration ttl) {
+    private String mintToken(String username, String passwordHash, Duration ttl) {
         long expiry = System.currentTimeMillis() + ttl.toMillis();
-        String payload = username + "\n" + expiry;
+        String payload = username + "\n" + fingerprint(passwordHash) + "\n" + expiry;
         String payloadB64 = B64.encodeToString(payload.getBytes(StandardCharsets.UTF_8));
         String sig = B64.encodeToString(hmac(payloadB64.getBytes(StandardCharsets.US_ASCII)));
         return payloadB64 + "." + sig;
+    }
+
+    /**
+     * A short, deterministic tag derived from the account's current password hash.
+     * Embedded in the token and re-checked on {@link #verify}: because the hash
+     * changes whenever the password does, this invalidates every token minted
+     * before the change — stateless revocation without a session table.
+     */
+    private String fingerprint(String passwordHash) {
+        byte[] tag = hmac(("pw:" + passwordHash).getBytes(StandardCharsets.UTF_8));
+        return B64.encodeToString(Arrays.copyOf(tag, 12));
     }
 
     private byte[] hmac(byte[] data) {
