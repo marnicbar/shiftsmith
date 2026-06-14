@@ -377,80 +377,79 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   // content is chosen purely from that width (see `bar`).
   const BOX_H = 68, BOX_TOP = 7;
 
-  // Bar segments for one position row on day `d` (index `di`). A normal shift is a
-  // single full segment; an overnight shift is a head (its start day) plus a tail at
-  // the start of the next day. In the fit views (day/week) the head is clipped at
-  // midnight and the tail drawn separately, since a bar can't run off the right edge
-  // into an absent next-day column — mirroring how the calendars split overnight
-  // events. The continuous view keeps one bar that simply spans across the boundary.
-  function daySegments(p, d, di) {
-    const segs = [];
-    for (const sh of p.shifts) {
-      if (!matchesDay(sh, d)) continue;
-      const end = wrapEnd(sh.start, sh.end);
-      const overnight = end > 1440;
-      const headEnd = overnight && fitWidth ? 1440 : end; // clip overnight heads only in fit views
-      segs.push({ sh, date: d, di, s: sh.start, e: headEnd, seg: overnight ? 'head' : 'full' });
-    }
-    if (fitWidth) {
-      // Incoming tail: an overnight shift that started the previous day continues into
-      // the early hours of this one. Drawn at this day's 00:00.
-      const prev = SS.isoOf(SS.addDays(SS.parseISO(d), -1));
+  // All bar segments for one position row across the visible range. A shift renders as
+  // one continuous bar from its start to its (possibly past-midnight) end, spanning
+  // freely across interior day borders. Only the fit views (day/week) clip a bar at the
+  // range edge: the right edge, where it would run off-screen, and the left edge, where
+  // a shift that began just before the range carries its tail in. The continuous view
+  // scrolls, so it never clips — a bar just spans the whole way.
+  function rowBars(p) {
+    const rangeEnd = dayList.length * 1440; // minutes across the whole visible track
+    const out = [];
+    // Include a lead-in day (di = -1) in the fit views so an overnight shift that began
+    // just before the range still shows its morning tail at the left edge.
+    const first = fitWidth ? -1 : 0;
+    for (let di = first; di < dayList.length; di++) {
+      const d = di < 0 ? SS.isoOf(SS.addDays(SS.parseISO(dayList[0]), di)) : dayList[di];
       for (const sh of p.shifts) {
-        const end = wrapEnd(sh.start, sh.end);
-        if (end <= 1440 || !matchesDay(sh, prev)) continue;
-        segs.push({ sh, date: prev, di, s: 0, e: end - 1440, seg: 'tail' });
+        if (!matchesDay(sh, d)) continue;
+        const startAbs = di * 1440 + sh.start;
+        const endAbs = di * 1440 + wrapEnd(sh.start, sh.end);
+        const lo = fitWidth ? Math.max(0, startAbs) : startAbs;
+        const hi = fitWidth ? Math.min(rangeEnd, endAbs) : endAbs;
+        if (hi <= lo) continue; // entirely outside the range (e.g. a non-overnight lead-in shift)
+        out.push(renderBar(p, sh, d, lo, hi, startAbs < lo, endAbs > hi));
       }
     }
-    return segs;
+    return out;
   }
 
-  function bar(p, d, di) {
-    return daySegments(p, d, di).map((sg) => {
-      const { sh, date, di: dayIdx, s, e, seg } = sg;
-      const key = `${sh.id}@${date}`;
-      const crew = assign[key] || [];
-      const edited = !!overrides[key];
-      const x = (dayIdx*24 + s/60) * effPph;
-      const w = Math.max(4, (e - s)/60 * effPph);
-      const full = crew.length >= sh.headcount;
-      const title = `${sh.name} · ${SS.minLabel(sh.start)}–${SS.minLabel(sh.end)} · ${SS.shiftSkills(sh).join(' · ') || '—'} · ${crew.length}/${sh.headcount}${edited ? ` · ${t('shiftplan.manuallySetLower')}` : ''}`;
-      const cls = `bar ${full?'full':'under'} ${edited?'edited':''} ${seg !== 'full' ? 'seg-'+seg : ''}`;
-      const style = { left: x+1, width: Math.max(3, w-2), top: BOX_TOP, height: BOX_H };
-      const segKey = `${key}${seg === 'tail' ? '@t' : ''}`;
+  // Render one bar segment spanning [lo, hi) absolute minutes from the track's left edge.
+  // `clipL`/`clipR` mark a segment cut by the range's left/right edge (an overnight
+  // carry-in or run-off), which flattens the cut side so it reads as continuing off-screen.
+  function renderBar(p, sh, date, lo, hi, clipL, clipR) {
+    const key = `${sh.id}@${date}`;
+    const crew = assign[key] || [];
+    const edited = !!overrides[key];
+    const x = lo / 60 * effPph;
+    const w = Math.max(4, (hi - lo) / 60 * effPph);
+    const full = crew.length >= sh.headcount;
+    const title = `${sh.name} · ${SS.minLabel(sh.start)}–${SS.minLabel(sh.end)} · ${SS.shiftSkills(sh).join(' · ') || '—'} · ${crew.length}/${sh.headcount}${edited ? ` · ${t('shiftplan.manuallySetLower')}` : ''}`;
+    const cls = `bar ${full?'full':'under'} ${edited?'edited':''} ${clipL ? 'seg-tail' : ''} ${clipR ? 'seg-head' : ''}`;
+    const style = { left: x+1, width: Math.max(3, w-2), top: BOX_TOP, height: BOX_H };
+    const segKey = `${key}${clipL ? '@t' : ''}`;
 
-      // How many 18px circles (3px gap) fit across the box's inner width.
-      const fit = Math.floor((w - 16 + 3) / 21);
-      if (fit < 1) {
-        // Too small for even one circle — just a plain coloured box.
-        return <div key={segKey} className={cls + ' tiny'} title={title} onClick={(e) => openEditor(e, sh, p, date, key)} style={style}></div>;
-      }
+    // How many 18px circles (3px gap) fit across the box's inner width.
+    const fit = Math.floor((w - 16 + 3) / 21);
+    if (fit < 1) {
+      // Too small for even one circle — just a plain coloured box.
+      return <div key={segKey} className={cls + ' tiny'} title={title} onClick={(e) => openEditor(e, sh, p, date, key)} style={style}></div>;
+    }
 
-      // One circle per headcount slot: filled avatars first, then empty slots.
-      const circles = Array.from({ length: sh.headcount }, (_, i) => {
-        const em = crew[i];
-        return em
-          ? <span key={i} className="av" style={{ background: Theme.avatarColor(SS.nameSeed(em)) }} title={SS.fullName(em, nameOrder)}>{SS.empInitials(em)}</span>
-          : <span key={i} className="slot-empty"></span>;
-      });
-      // Collapse whatever doesn't fit into a single "+N" circle.
-      let shown = circles;
-      if (circles.length > fit) {
-        shown = circles.slice(0, fit - 1);
-        shown.push(<span key="more" className="av more" title={t('shiftplan.staffedCount', { filled: crew.length, total: sh.headcount })}>+{circles.length - (fit - 1)}</span>);
-      }
-
-      return (
-        <div key={segKey} className={cls} title={title} onClick={(e) => openEditor(e, sh, p, date, key)} style={style}>
-          <div className="bhead">
-            <span className="bt">{seg === 'tail' ? `↪ ${sh.name}` : sh.name}</span>
-            {edited && <span className="bedit" title={t('shiftplan.manuallySet')}><Ic.user size={9}/></span>}
-          </div>
-          <span className="btime mono">{SS.minLabel(sh.start)}–{SS.minLabel(sh.end)}</span>
-          <div className="crew">{shown}</div>
-        </div>
-      );
+    // One circle per headcount slot: filled avatars first, then empty slots.
+    const circles = Array.from({ length: sh.headcount }, (_, i) => {
+      const em = crew[i];
+      return em
+        ? <span key={i} className="av" style={{ background: Theme.avatarColor(SS.nameSeed(em)) }} title={SS.fullName(em, nameOrder)}>{SS.empInitials(em)}</span>
+        : <span key={i} className="slot-empty"></span>;
     });
+    // Collapse whatever doesn't fit into a single "+N" circle.
+    let shown = circles;
+    if (circles.length > fit) {
+      shown = circles.slice(0, fit - 1);
+      shown.push(<span key="more" className="av more" title={t('shiftplan.staffedCount', { filled: crew.length, total: sh.headcount })}>+{circles.length - (fit - 1)}</span>);
+    }
+
+    return (
+      <div key={segKey} className={cls} title={title} onClick={(e) => openEditor(e, sh, p, date, key)} style={style}>
+        <div className="bhead">
+          <span className="bt">{clipL ? `↪ ${sh.name}` : sh.name}</span>
+          {edited && <span className="bedit" title={t('shiftplan.manuallySet')}><Ic.user size={9}/></span>}
+        </div>
+        <span className="btime mono">{SS.minLabel(sh.start)}–{SS.minLabel(sh.end)}</span>
+        <div className="crew">{shown}</div>
+      </div>
+    );
   }
 
   const rowH = BOX_H + 2 * BOX_TOP;
@@ -546,7 +545,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
                     </React.Fragment>;
                   })}
                   {nowX >= 0 && <div className="tl-now" style={{ left: nowX }}></div>}
-                  {dayList.map((d, di) => bar(p, d, di))}
+                  {rowBars(p)}
                 </div>
               </div>
             );

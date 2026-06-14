@@ -1,6 +1,7 @@
-// Regression: the Shift Plan overview timeline must split overnight shifts in the
-// fit (day/week) views — a head on the start day (clipped at midnight) plus a tail
-// at the start of the next day — while the continuous view keeps one spanning bar.
+// Regression: the Shift Plan overview timeline only splits an overnight shift at the
+// edge of the visible range — the right edge where it runs off-screen, and the left
+// edge where a shift carries in from before the range. Interior day borders are spanned
+// by one continuous bar, and the continuous view never splits (nor flattens) at all.
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import { ShiftPlan } from './shiftplan.jsx';
@@ -18,29 +19,33 @@ const renderTL = (mode) => render(
     setOverrides={() => {}} initialMode={mode} sched={{}} />,
 );
 const c = (container) => ({
-  head: container.querySelectorAll('.bar.seg-head').length,
-  tail: container.querySelectorAll('.bar.seg-tail').length,
+  head: container.querySelectorAll('.bar.seg-head').length, // clipped at the right edge
+  tail: container.querySelectorAll('.bar.seg-tail').length, // carried in at the left edge
   full: container.querySelectorAll('.bar:not(.seg-head):not(.seg-tail)').length,
 });
 
 describe('Shift Plan timeline overnight', () => {
-  it('day view splits the overnight shift into a head and an incoming tail', () => {
+  it('day view splits the overnight shift at the single day edge (run-off + carry-in)', () => {
     const { container } = renderTL('day');
     const { head, tail, full } = c(container);
-    expect(head).toBe(1);  // Night, 22:00→24:00 clipped at the day edge
-    expect(tail).toBe(1);  // Night, 00:00→02:00 carried over from the previous day
+    expect(head).toBe(1);  // Night, 22:00→24:00 running off the right edge
+    expect(tail).toBe(1);  // Night, 00:00→02:00 carried in from the previous day
     expect(full).toBe(1);  // the daytime control shift, unsplit
   });
 
-  it('week view draws an incoming tail on every day for a daily overnight shift', () => {
+  it('week view splits the daily overnight shift only at the two week edges', () => {
     const { container } = renderTL('week');
     const { head, tail } = c(container);
-    expect(head).toBe(7); // one head per day
-    expect(tail).toBe(7); // each day also shows the prior day's overnight tail
+    expect(head).toBe(1); // only the last day runs off the right edge
+    expect(tail).toBe(1); // only the first day carries in from the prior day
+    // The interior nights span their day border as one continuous (unsplit) bar:
+    // 6 spanning Night bars (Mon–Sat) + 7 daytime bars = 13 unsplit.
+    expect(container.querySelectorAll('.bar:not(.seg-head):not(.seg-tail)').length).toBe(13);
   });
 
-  it('continuous view keeps a single spanning bar (no tail segments)', () => {
+  it('continuous view never splits or flattens an overnight bar', () => {
     const { container } = renderTL('free');
     expect(container.querySelectorAll('.bar.seg-tail').length).toBe(0);
+    expect(container.querySelectorAll('.bar.seg-head').length).toBe(0);
   });
 });
