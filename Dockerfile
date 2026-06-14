@@ -7,7 +7,7 @@
 #   docker build -t shiftsmith .
 
 # ---- Stage 1: build the React frontend into static assets -------------------
-FROM node:20-alpine AS frontend
+FROM node:24-alpine AS frontend
 WORKDIR /frontend
 # Install dependencies first so the layer is cached unless the lockfile changes.
 COPY frontend/package.json frontend/package-lock.json ./
@@ -16,7 +16,7 @@ COPY frontend/ ./
 RUN npm run build          # → /frontend/dist (index.html + /assets/*)
 
 # ---- Stage 2: build the Quarkus backend, bundling the SPA -------------------
-FROM maven:3.9-eclipse-temurin-21 AS backend
+FROM maven:3-eclipse-temurin-26 AS backend
 WORKDIR /build
 # Resolve dependencies first so they are cached unless the POM changes.
 COPY backend/pom.xml ./
@@ -29,7 +29,7 @@ COPY --from=frontend /frontend/dist/ ./src/main/resources/META-INF/resources/
 RUN mvn -B --no-transfer-progress package -DskipTests
 
 # ---- Stage 3: slim runtime --------------------------------------------------
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:26-jre
 # curl backs the container HEALTHCHECK; run as an unprivileged user.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \

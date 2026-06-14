@@ -83,7 +83,7 @@ docker compose -f docker-compose.dev.yml up --build
 Open **http://localhost:5173**; the Vite dev server proxies `/api/*` to the
 backend on :8080.
 
-Or run the toolchains directly (requires Java 21 + Maven and Node 20+):
+Or run the toolchains directly (requires Java 21 + Maven and Node 20.19+):
 ```bash
 cd backend && mvn quarkus:dev      # :8080
 cd frontend && npm install && npm run dev   # :5173 (proxies /api → :8080)
@@ -94,7 +94,7 @@ cd frontend && npm install && npm run dev   # :5173 (proxies /api → :8080)
 | Layer | Technology |
 |-------|-----------|
 | Frontend | React + Vite |
-| Backend | Quarkus 3.35 (Java 21) |
+| Backend | Quarkus 3.36 (Java 21) |
 | Solver | Timefold Solver 2.1 |
 
 ## License
