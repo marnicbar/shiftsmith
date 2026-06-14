@@ -1,19 +1,9 @@
 // theme.js — injects design tokens as CSS variables on <html>.
-// Palettes vary the neutral hue/chroma; accent + status are computed for light & dark.
+// The neutral palette (slate) and accent (blue) are fixed; status colors are
+// computed for light & dark.
 
-const PALETTES = {
-  slate: { label: 'Slate', hue: 256, chroma: 0.012 },
-  stone: { label: 'Stone', hue: 70,  chroma: 0.010 },
-  mono:  { label: 'Mono',  hue: 0,   chroma: 0.000 },
-};
-
-const ACCENTS = {
-  indigo: { label: 'Indigo', hue: 274, c: 0.17 },
-  blue:   { label: 'Blue',   hue: 248, c: 0.16 },
-  teal:   { label: 'Teal',   hue: 192, c: 0.12 },
-  violet: { label: 'Violet', hue: 305, c: 0.19 },
-  amberA: { label: 'Amber',  hue: 64,  c: 0.14 },
-};
+const PALETTE = { hue: 256, chroma: 0.012 }; // slate
+const ACCENT  = { hue: 248, c: 0.16 };       // blue
 
 function neutralVars(hue, chroma, dark) {
   const H = hue, C = chroma;
@@ -52,9 +42,9 @@ function toneVars(name, hue, c, dark) {
   };
 }
 
-function applyTheme({ palette = 'slate', accent = 'indigo', dark = false }) {
-  const p = PALETTES[palette] || PALETTES.slate;
-  const a = ACCENTS[accent] || ACCENTS.indigo;
+function applyTheme({ dark = false } = {}) {
+  const p = PALETTE;
+  const a = ACCENT;
   const root = document.documentElement;
   const vars = {
     ...neutralVars(p.hue, p.chroma, dark),
@@ -77,4 +67,4 @@ function avatarColor(seed) {
   return `oklch(0.62 0.13 ${h})`;
 }
 
-export const Theme = { PALETTES, ACCENTS, applyTheme, avatarColor };
+export const Theme = { applyTheme, avatarColor };

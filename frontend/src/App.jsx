@@ -27,20 +27,15 @@ const TABS = [
 // Scopes the Shift Plan tab morphs into while active (see the nav below).
 const PLAN_SCOPES = ['overview', 'personnel', 'positions'];
 
-export const FONTS = {
-  'Geist':          "'Geist', system-ui, sans-serif",
-  'Helvetica Neue': "'Helvetica Neue', Helvetica, Arial, sans-serif",
-  'Figtree':        "'Figtree', system-ui, sans-serif",
-};
+const UI_FONT = "'Geist', system-ui, sans-serif";
 
 const PREF_DEFAULTS = {
-  dark: false, palette: 'slate', accent: 'indigo', font: 'Geist', lang: 'en',
-  snapLabel: '15 min', newFlowLabel: 'Paint, then tweak', tlDefaultLabel: 'Week',
+  dark: false, lang: 'en',
+  snapLabel: '15 min', tlDefaultLabel: 'Week',
   nameOrder: 'first',
 };
 
 const SNAP_MAP = { '15 min': 15, '30 min': 30, '60 min': 60 };
-const FLOW_MAP = { 'Paint, then tweak': 'quick', 'Open a form': 'menu' };
 const TL_MAP = { 'Day': 'day', 'Week': 'week', 'Continuous': 'free' };
 const PREF_KEY = 'shiftsmith.prefs';
 
@@ -50,8 +45,8 @@ const initialPrefs = (() => {
 })();
 
 // Apply theme immediately on module load to avoid a flash of unstyled content.
-Theme.applyTheme({ palette: initialPrefs.palette, accent: initialPrefs.accent, dark: initialPrefs.dark });
-document.documentElement.style.setProperty('--ui-font', FONTS[initialPrefs.font] || FONTS.Geist);
+Theme.applyTheme({ dark: initialPrefs.dark });
+document.documentElement.style.setProperty('--ui-font', UI_FONT);
 
 function usePrefs() {
   const [prefs, setPrefs] = useState(initialPrefs);
@@ -140,8 +135,7 @@ export default function App() {
     lastSyncRef.current = null;
   }, []);
 
-  useEffect(() => { Theme.applyTheme({ palette: prefs.palette, accent: prefs.accent, dark: prefs.dark }); }, [prefs.palette, prefs.accent, prefs.dark]);
-  useEffect(() => { document.documentElement.style.setProperty('--ui-font', FONTS[prefs.font] || FONTS.Geist); }, [prefs.font]);
+  useEffect(() => { Theme.applyTheme({ dark: prefs.dark }); }, [prefs.dark]);
   useEffect(() => { if (prefs.lang && i18n.language !== prefs.lang) i18n.changeLanguage(prefs.lang); }, [prefs.lang]);
 
   const setMeta = useCallback((d) => {
@@ -305,7 +299,7 @@ export default function App() {
   }, [loaded, employees, positions, settings, overrides, reportError, t, loadProblem]);
 
   const snap = SNAP_MAP[prefs.snapLabel] ?? 15;
-  const newFlow = FLOW_MAP[prefs.newFlowLabel] ?? 'quick';
+  const newFlow = 'quick';
   const tlDefault = TL_MAP[prefs.tlDefaultLabel] ?? 'week';
 
   // Skill catalogue lives in settings (managed on the Settings page). Renames and
@@ -462,7 +456,7 @@ export default function App() {
       {tab === 'positions' && <Positions employees={employees} positions={positions} setPositions={setPositions} groupOrder={groupOrder} setGroupOrder={setGroupOrder} skills={skills} selId={selPos} setSelId={setSelPos} snap={snap} newFlow={newFlow} nameOrder={prefs.nameOrder} />}
       {tab === 'shiftplan' && <PlanView key={tlDefault} scope={planScope} employees={employees} positions={positions} groupOrder={groupOrder} initialMode={tlDefault} assign={assignMap} overrides={overrides} setOverrides={setOverrides} sched={sched} onSolve={solveNow} onPause={pauseSolver} focus={focusShift} onFocusConsumed={() => setFocusShift(null)} nameOrder={prefs.nameOrder} selEmp={selEmp} setSelEmp={setSelEmp} selPos={selPos} setSelPos={setSelPos} />}
       {tab === 'settings' && <SettingsView settings={settings} setSettings={setSettings} sched={sched} skills={skills} onAddSkill={addSkill} onRenameSkill={renameSkill} onRemoveSkill={removeSkill} globalRules={settings.globalRules || []} setGlobalRules={setGlobalRules} />}
-      {tab === 'account' && <AccountView prefs={prefs} setPref={setPref} fonts={FONTS} authUser={authUser} />}
+      {tab === 'account' && <AccountView prefs={prefs} setPref={setPref} authUser={authUser} />}
     </div>
   );
 }
