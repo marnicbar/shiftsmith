@@ -78,7 +78,7 @@ public final class ProblemValidation {
     }
 
     private static Optional<String> checkShift(Position p, ShiftTemplate t) {
-        String where = "Shift '" + label(t.getName(), t.getId()) + "' in position '"
+        String where = "Shift '" + label(null, t.getId()) + "' in position '"
                 + label(p.getName(), p.getId()) + "'";
         if (isBlank(t.getId())) {
             return Optional.of("A shift in position '" + label(p.getName(), p.getId()) + "' is missing an id.");

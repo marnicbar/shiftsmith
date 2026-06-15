@@ -10,7 +10,7 @@ import { SS } from './data.js';
 const today = SS.isoOf(new Date());
 const positions = [
   { id: 'p1', name: 'Bar', color: '20', shifts: [
-    { id: 's1', name: 'Evening', start: 1020, end: 1320, headcount: 2, skills: [], repeat: 'none', date: today },
+    { id: 's1', start: 1020, end: 1320, headcount: 2, skills: [], repeat: 'none', date: today },
   ] },
 ];
 const employees = [
@@ -38,7 +38,7 @@ describe('Dashboard', () => {
     const onOpenShift = vi.fn();
     render(<Dashboard employees={employees} positions={positions} assign={assign} onOpenShift={onOpenShift} />);
 
-    const row = await screen.findByRole('button', { name: /Evening/ });
+    const row = await screen.findByRole('button', { name: /Bar/ });
     await userEvent.click(row);
     expect(onOpenShift).toHaveBeenCalledWith('s1', today);
   });

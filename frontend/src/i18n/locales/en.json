@@ -16,7 +16,6 @@
     "skills": "Skills",
     "decrease": "Decrease",
     "increase": "Increase",
-    "shift": "Shift",
     "perWeek": "/wk",
     "weekdays3": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     "weekdays2": ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
@@ -129,7 +128,6 @@
     "addPosition": "Add position",
     "searchPlaceholder": "Search positions",
     "newPosition": "New Position",
-    "newShift": "New Shift",
     "ungrouped": "Ungrouped",
     "noGroup": "No group",
     "newGroupOption": "+ New group…",
@@ -138,7 +136,6 @@
     "dragHere": "Drag positions here",
     "emptyTitle": "No positions yet",
     "emptyBody": "Add your first position to start defining shifts.",
-    "shiftName": "Shift name",
     "requiredSkills": "Required skills",
     "requiredSkillsHint": "Only people with every selected skill can fill this shift.",
     "staff": "Staff",

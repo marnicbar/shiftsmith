@@ -16,7 +16,6 @@
     "skills": "Fähigkeiten",
     "decrease": "Verringern",
     "increase": "Erhöhen",
-    "shift": "Schicht",
     "perWeek": "/Wo",
     "weekdays3": ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
     "weekdays2": ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
@@ -129,7 +128,6 @@
     "addPosition": "Position hinzufügen",
     "searchPlaceholder": "Positionen suchen",
     "newPosition": "Neue Position",
-    "newShift": "Neue Schicht",
     "ungrouped": "Ohne Gruppe",
     "noGroup": "Keine Gruppe",
     "newGroupOption": "+ Neue Gruppe…",
@@ -138,7 +136,6 @@
     "dragHere": "Positionen hierher ziehen",
     "emptyTitle": "Noch keine Positionen",
     "emptyBody": "Füge die erste Position hinzu, um Schichten zu definieren.",
-    "shiftName": "Schichtname",
     "requiredSkills": "Erforderliche Fähigkeiten",
     "requiredSkillsHint": "Nur Personen mit allen ausgewählten Fähigkeiten können diese Schicht übernehmen.",
     "staff": "Personalbedarf",

@@ -17,7 +17,6 @@ import java.util.Set;
 public class ShiftTemplate {
 
     private String id;
-    private String name;
     private LocalDate date;
     private int start;
     private int end;
@@ -37,9 +36,6 @@ public class ShiftTemplate {
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
-
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
 
     public LocalDate getDate() { return date; }
     public void setDate(LocalDate date) { this.date = date; }

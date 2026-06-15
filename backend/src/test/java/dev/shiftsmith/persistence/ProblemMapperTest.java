@@ -67,7 +67,7 @@ class ProblemMapperTest {
         p.id = "p1"; p.name = "Bar"; p.color = 3; p.group = "front"; p.skills = new HashSet<>(Set.of("Bar"));
         t.positions.add(p);
         ShiftTemplate t1 = new ShiftTemplate();
-        t1.setId("t1"); t1.setName("Evening"); t1.setDate(MON); t1.setStart(1020); t1.setEnd(1440);
+        t1.setId("t1"); t1.setDate(MON); t1.setStart(1020); t1.setEnd(1440);
         t1.setHeadcount(2); t1.setRepeat("weekly"); t1.setDays(Set.of(0)); t1.setSkills(new HashSet<>(Set.of("Bar")));
         t.templates.add(ProblemMapper.templateToEntity(t1, "p1"));
 

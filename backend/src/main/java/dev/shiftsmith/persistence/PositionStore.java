@@ -93,7 +93,6 @@ public class PositionStore {
             ShiftTemplateEntity m = ShiftTemplateEntity.findById(t.getId());
             if (m == null) { src.persist(); continue; }
             m.positionId = src.positionId;
-            m.name = src.name;
             m.anchorDate = src.anchorDate;
             m.startMin = src.startMin;
             m.endMin = src.endMin;

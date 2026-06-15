@@ -143,7 +143,7 @@ export function Dashboard({ employees, positions, assign = {}, onOpenShift }) {
                     style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 10, background: 'var(--tone-soft)', border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%' }}>
                     <span style={{ width: 8, height: 8, borderRadius: 99, background: 'var(--tone)', flex: '0 0 8px' }}></span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tone-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.pos.name} · {r.sh.name}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--tone-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.pos.name}</div>
                       <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{dlabel} · {SS.minLabel(r.sh.start)}–{SS.minLabel(r.sh.end)} · {t('dashboard.kpi.slotsOpen', { count: r.open })}</div>
                     </div>
                     <Ic.chevR size={15} style={{ color: 'var(--text-3)', flex: '0 0 auto' }}/>
