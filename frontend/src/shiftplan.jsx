@@ -143,15 +143,28 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   // the current focus; we clear it afterwards so a later manual visit stays put.
   useEffectSP(() => {
     if (!focus) return;
+    let raf = 0;
     for (const p of positions) {
       const sh = p.shifts.find((s) => s.id === focus.shiftId);
       if (sh) {
-        setEditing({ key: `${sh.id}@${focus.date}`, sh, pos: p, date: focus.date,
-          x: Math.max(12, window.innerWidth / 2 - 170), y: 96 });
+        const key = `${sh.id}@${focus.date}`;
+        // Anchor the editor to the shift's bar, just like a direct click — but the
+        // bar's final geometry only settles after the container width and scroll
+        // layout effects run, so position on the next frame. If the bar can't be
+        // found (e.g. scrolled out of view), fall back to a centred popover.
+        const place = () => {
+          const el = scrollRef.current?.querySelector(`[data-shift-key="${key}"]`);
+          const at = el
+            ? (() => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.bottom + 6 }; })()
+            : { x: Math.max(12, window.innerWidth / 2 - 170), y: 96 };
+          setEditing({ key, sh, pos: p, date: focus.date, ...at });
+        };
+        raf = requestAnimationFrame(place);
         break;
       }
     }
     onFocusConsumed?.();
+    return () => { if (raf) cancelAnimationFrame(raf); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -424,7 +437,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     const fit = Math.floor((w - 16 + 3) / 21);
     if (fit < 1) {
       // Too small for even one circle — just a plain coloured box.
-      return <div key={segKey} className={cls + ' tiny'} title={title} onClick={(e) => openEditor(e, sh, p, date, key)} style={style}></div>;
+      return <div key={segKey} data-shift-key={key} className={cls + ' tiny'} title={title} onClick={(e) => openEditor(e, sh, p, date, key)} style={style}></div>;
     }
 
     // One circle per headcount slot: filled avatars first, then empty slots.
@@ -442,7 +455,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     }
 
     return (
-      <div key={segKey} className={cls} title={title} onClick={(e) => openEditor(e, sh, p, date, key)} style={style}>
+      <div key={segKey} data-shift-key={key} className={cls} title={title} onClick={(e) => openEditor(e, sh, p, date, key)} style={style}>
         <div className="bhead">
           <span className="btime mono">{clipL ? '↪ ' : ''}{SS.minLabel(sh.start)}–{SS.minLabel(sh.end)}</span>
           {edited && <span className="bedit" title={t('shiftplan.manuallySet')}><Ic.user size={9}/></span>}
