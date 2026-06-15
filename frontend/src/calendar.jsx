@@ -786,7 +786,10 @@ function DateField({ value, onChange }) {
   useClickAway(wrap, () => setOpen(false), open);
   const base = value ? SS.parseISO(value) : new Date();
   const [vm, setVm] = useState(() => new Date(base.getFullYear(), base.getMonth(), 1));
-  useEffect(() => { if (open && value) { const d = SS.parseISO(value); setVm(new Date(d.getFullYear(), d.getMonth(), 1)); } }, [open]);
+  // Re-anchor the visible month to `value` when the popover opens, and also follow an
+  // external `value` change while it's open (a parent re-patching the date). Month
+  // navigation only moves `vm`, not `value`, so it isn't clobbered by this.
+  useEffect(() => { if (open && value) { const d = SS.parseISO(value); setVm(new Date(d.getFullYear(), d.getMonth(), 1)); } }, [open, value]);
   const todayISO = SS.isoOf(new Date());
   const gridStart = SS.startOfWeek(new Date(vm.getFullYear(), vm.getMonth(), 1));
   const weeks = Array.from({ length: 6 }, (_, w) => Array.from({ length: 7 }, (_, i) => SS.addDays(gridStart, w * 7 + i)));

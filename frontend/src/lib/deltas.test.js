@@ -3,7 +3,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { dispatchChange, etagNum, upsertById, removeById } from './deltas.js';
 
 const handlers = () => ({
-  employee: vi.fn(), position: vi.fn(), settings: vi.fn(), schedule: vi.fn(), reload: vi.fn(),
+  employee: vi.fn(), position: vi.fn(), settings: vi.fn(), schedule: vi.fn(),
+  assignment: vi.fn(), reload: vi.fn(),
 });
 
 describe('dispatchChange', () => {
@@ -17,11 +18,25 @@ describe('dispatchChange', () => {
     expect(h.settings).toHaveBeenCalledWith(5);
   });
 
-  it('routes solver and assignment events to the schedule handler', () => {
+  it('routes a solver tick to the schedule handler', () => {
     const h = handlers();
     dispatchChange({ type: 'solver' }, h);
+    expect(h.schedule).toHaveBeenCalledTimes(1);
+    expect(h.assignment).not.toHaveBeenCalled();
+  });
+
+  it('routes a pin change to the dedicated assignment handler', () => {
+    const h = handlers();
     dispatchChange({ type: 'assignment', from: '2026-06-01', to: '2026-06-01' }, h);
-    expect(h.schedule).toHaveBeenCalledTimes(2);
+    expect(h.assignment).toHaveBeenCalledTimes(1);
+    expect(h.schedule).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the schedule handler for assignment when none is dedicated', () => {
+    const h = handlers();
+    delete h.assignment;
+    dispatchChange({ type: 'assignment' }, h);
+    expect(h.schedule).toHaveBeenCalledTimes(1);
   });
 
   it('routes reload events and ignores liveness frames', () => {

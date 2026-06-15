@@ -2,14 +2,20 @@
 // refetch handler, and small list helpers for applying a remote change. Pure, so the
 // routing is unit-testable; the handlers themselves live in the component (stateful).
 
-/** Dispatch one change event to `handlers` { employee, position, settings, schedule, reload }. */
+/**
+ * Dispatch one change event to `handlers`
+ * { employee, position, settings, schedule, assignment, reload }.
+ * A pin/unpin (`assignment`) is routed separately from a solver tick (`solver`) so the
+ * client can also reconcile the overrides map for a pin, while keeping solver ticks cheap.
+ * `assignment` falls back to `schedule` when no dedicated handler is supplied.
+ */
 export function dispatchChange(ev, handlers) {
   if (!ev || !ev.type) return;
   switch (ev.type) {
     case 'employee': handlers.employee(ev.id, ev.rev); break;
     case 'position': handlers.position(ev.id, ev.rev); break;
     case 'settings': handlers.settings(ev.rev); break;
-    case 'assignment':
+    case 'assignment': (handlers.assignment || handlers.schedule)(); break;
     case 'solver': handlers.schedule(); break;
     case 'reload': handlers.reload(); break;
     default: break; // connected / heartbeat — liveness only
