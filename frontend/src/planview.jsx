@@ -84,7 +84,7 @@ export function buildPositionEvents(position, dayList, assign = {}, { nameOrder 
       const crew = assigned.map((e) => ({
         name: SS.fullName(e, nameOrder), initials: SS.empInitials(e), color: Theme.avatarColor(SS.nameSeed(e)),
       }));
-      const title = [sh.name, time, crew.map((c) => c.name).join(', '), open ? openLabel(open) : '']
+      const title = [position.name, time, crew.map((c) => c.name).join(', '), open ? openLabel(open) : '']
         .filter(Boolean).join(' · ');
       out.push({
         id: `${sh.id}@${d}`, date: d, start: sh.start, end: sh.end, repeat: 'none', allDay: false,
@@ -115,7 +115,7 @@ export function buildPersonEvents(employee, positions = [], dayList, assign = {}
         out.push({
           id: `${sh.id}@${d}#${p.id}`, date: d, start: sh.start, end: sh.end, repeat: 'none', allDay: false,
           _tone: 'assign', _color: `oklch(0.62 0.13 ${p.color})`,
-          _label: p.name, _title: `${p.name} · ${sh.name} · ${time}`,
+          _label: p.name, _title: `${p.name} · ${time}`,
           positionId: p.id, shiftId: sh.id,
         });
       }

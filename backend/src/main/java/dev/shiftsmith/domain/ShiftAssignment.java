@@ -31,7 +31,6 @@ public class ShiftAssignment {
     private String positionId;
     private String positionName;
     private String shiftTemplateId;
-    private String shiftName;
     private int slotIndex;
 
     private LocalDate date;
@@ -63,7 +62,6 @@ public class ShiftAssignment {
         this.positionId = position.getId();
         this.positionName = position.getName();
         this.shiftTemplateId = template.getId();
-        this.shiftName = template.getName();
         this.slotIndex = slotIndex;
         this.date = date;
         this.start = start;
@@ -118,9 +116,6 @@ public class ShiftAssignment {
 
     public String getShiftTemplateId() { return shiftTemplateId; }
     public void setShiftTemplateId(String shiftTemplateId) { this.shiftTemplateId = shiftTemplateId; }
-
-    public String getShiftName() { return shiftName; }
-    public void setShiftName(String shiftName) { this.shiftName = shiftName; }
 
     public int getSlotIndex() { return slotIndex; }
     public void setSlotIndex(int slotIndex) { this.slotIndex = slotIndex; }

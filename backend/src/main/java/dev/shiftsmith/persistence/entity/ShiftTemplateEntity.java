@@ -32,9 +32,6 @@ public class ShiftTemplateEntity extends TimestampedEntity {
     @Column(name = "position_id", nullable = false, length = 255)
     public String positionId;
 
-    @Column(name = "name")
-    public String name;
-
     @Column(name = "anchor_date")
     public LocalDate anchorDate;
 

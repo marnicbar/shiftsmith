@@ -74,7 +74,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
   }
   function deleteShift(id) { updatePos({ shifts: pos.shifts.filter((x) => x.id !== id) }); }
   function splitShift(updated, added) { updatePos({ shifts: pos.shifts.map((x) => x.id === updated.id ? updated : x).concat(added) }); }
-  const newItem = ({ date, start, end }) => ({ id: SS.uid('s'), name: t('positions.newShift'), date, start, end, skills: pos.skills.slice(), headcount: 1, repeat: 'none', preferred: [] });
+  const newItem = ({ date, start, end }) => ({ id: SS.uid('s'), date, start, end, skills: pos.skills.slice(), headcount: 1, repeat: 'none', preferred: [] });
 
   const weeklySlots = pos ? pos.shifts.reduce((a, s) => a + SS.weeklySlots(s), 0) : 0;
 
@@ -87,10 +87,6 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
     const atMax = prefIds.length >= item.headcount;
     return (
     <>
-      <div className="field">
-        <label>{t('positions.shiftName')}</label>
-        <input className="input" value={item.name} onChange={(e) => patch({ name: e.target.value })} autoFocus={item.name === t('positions.newShift')}/>
-      </div>
       <div className="field">
         <label title={t('positions.requiredSkillsHint')}>{t('positions.requiredSkills')}</label>
         <UI.SkillEditor value={reqSkills} all={skills}

@@ -35,7 +35,6 @@ class WeeklyRecurringSolveTest {
         // Position: weekly Mon–Fri, 08:00–12:00
         ShiftTemplate t = new ShiftTemplate();
         t.setId("morning");
-        t.setName("morning");
         t.setDate(MON);
         t.setStart(480);   // 08:00
         t.setEnd(720);     // 12:00

@@ -102,7 +102,6 @@ public final class ProblemMapper {
         ShiftTemplateEntity te = new ShiftTemplateEntity();
         te.id = st.getId();
         te.positionId = positionId;
-        te.name = st.getName();
         te.anchorDate = st.getDate();
         te.startMin = st.getStart();
         te.endMin = st.getEnd();
@@ -235,7 +234,6 @@ public final class ProblemMapper {
     private static ShiftTemplate templateToDomain(ShiftTemplateEntity te) {
         ShiftTemplate st = new ShiftTemplate();
         st.setId(te.id);
-        st.setName(te.name);
         st.setDate(te.anchorDate);
         st.setStart(te.startMin);
         st.setEnd(te.endMin);

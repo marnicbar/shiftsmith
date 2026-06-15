@@ -376,7 +376,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
 
   // Boxes have a fixed height in every view; only their width varies, and the
   // content is chosen purely from that width (see `bar`).
-  const BOX_H = 68, BOX_TOP = 7;
+  const BOX_H = 44, BOX_TOP = 6;
 
   // All bar segments for one position row across the visible range. A shift renders as
   // one continuous bar from its start to its (possibly past-midnight) end, spanning
@@ -415,7 +415,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     const x = lo / 60 * effPph;
     const w = Math.max(4, (hi - lo) / 60 * effPph);
     const full = crew.length >= sh.headcount;
-    const title = `${sh.name} · ${SS.minLabel(sh.start)}–${SS.minLabel(sh.end)} · ${SS.shiftSkills(sh).join(' · ') || '—'} · ${crew.length}/${sh.headcount}${edited ? ` · ${t('shiftplan.manuallySetLower')}` : ''}`;
+    const title = `${p.name} · ${SS.minLabel(sh.start)}–${SS.minLabel(sh.end)} · ${SS.shiftSkills(sh).join(' · ') || '—'} · ${crew.length}/${sh.headcount}${edited ? ` · ${t('shiftplan.manuallySetLower')}` : ''}`;
     const cls = `bar ${full?'full':'under'} ${edited?'edited':''} ${clipL ? 'seg-tail' : ''} ${clipR ? 'seg-head' : ''}`;
     const style = { left: x+1, width: Math.max(3, w-2), top: BOX_TOP, height: BOX_H };
     const segKey = `${key}${clipL ? '@t' : ''}`;
@@ -444,10 +444,9 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     return (
       <div key={segKey} className={cls} title={title} onClick={(e) => openEditor(e, sh, p, date, key)} style={style}>
         <div className="bhead">
-          <span className="bt">{clipL ? `↪ ${sh.name}` : sh.name}</span>
+          <span className="btime mono">{clipL ? '↪ ' : ''}{SS.minLabel(sh.start)}–{SS.minLabel(sh.end)}</span>
           {edited && <span className="bedit" title={t('shiftplan.manuallySet')}><Ic.user size={9}/></span>}
         </div>
-        <span className="btime mono">{SS.minLabel(sh.start)}–{SS.minLabel(sh.end)}</span>
         <div className="crew">{shown}</div>
       </div>
     );
@@ -643,8 +642,8 @@ function AssignEditor({ ctx, employees, assign, overrides, setOverrides, onClose
       <div className="pop assign-pop" ref={popRef} style={{ left: place.left, top: place.top, visibility: place.ready ? 'visible' : 'hidden' }}>
         <div className="ae-head">
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div className="ae-title">{sh.name}</div>
-            <div className="ae-sub">{pos.name} · {SS.minLabel(sh.start)}–{SS.minLabel(sh.end)} · {dateLabel}</div>
+            <div className="ae-title">{pos.name}</div>
+            <div className="ae-sub">{SS.minLabel(sh.start)}–{SS.minLabel(sh.end)} · {dateLabel}</div>
           </div>
           <button className="iconbtn" onClick={onClose} style={{ width: 26, height: 26, flex: '0 0 26px' }}><Ic.x size={15}/></button>
         </div>

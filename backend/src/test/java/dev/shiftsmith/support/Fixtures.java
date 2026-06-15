@@ -100,7 +100,6 @@ public final class Fixtures {
                                          int headcount, String... skills) {
         ShiftTemplate t = new ShiftTemplate();
         t.setId(id);
-        t.setName(id);
         t.setDate(date);
         t.setStart(startMin);
         t.setEnd(endMin);
