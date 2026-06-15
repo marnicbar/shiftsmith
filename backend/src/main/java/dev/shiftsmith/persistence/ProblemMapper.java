@@ -158,6 +158,7 @@ public final class ProblemMapper {
             e.setLastName(ee.lastName);
             e.setRole(ee.role);
             e.setContract(ee.contract);
+            e.setColor(ee.color);
             e.setSkills(new HashSet<>(ee.skills));
             List<Block> blocks = new ArrayList<>();
             for (AvailabilityBlockEntity be : blocksByEmployee.getOrDefault(ee.id, List.of())) {

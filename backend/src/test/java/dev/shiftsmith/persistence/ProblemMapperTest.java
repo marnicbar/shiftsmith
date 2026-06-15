@@ -95,6 +95,7 @@ class ProblemMapperTest {
         Employee alice = p.employees().stream().filter(e -> e.getId().equals("alice")).findFirst().orElseThrow();
         assertThat(alice.getFirstName()).isEqualTo("Alice");
         assertThat(alice.getContract()).isEqualTo(80);
+        assertThat(alice.getColor()).isEqualTo(7);
         assertThat(alice.getSkills()).containsExactly("Bar");
 
         assertThat(alice.isAvailableFor(MON, 480, 1200)).isTrue();
@@ -120,6 +121,7 @@ class ProblemMapperTest {
     private static EmployeeEntity employee(String id, String fn, String ln, String role, int contract, Set<String> skills) {
         EmployeeEntity e = new EmployeeEntity();
         e.id = id; e.firstName = fn; e.lastName = ln; e.role = role; e.contract = contract;
+        e.color = 7;
         e.skills = new HashSet<>(skills);
         return e;
     }

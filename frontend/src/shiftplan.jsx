@@ -431,7 +431,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
     const circles = Array.from({ length: sh.headcount }, (_, i) => {
       const em = crew[i];
       return em
-        ? <span key={i} className="av" style={{ background: Theme.avatarColor(SS.nameSeed(em)) }} title={SS.fullName(em, nameOrder)}>{SS.empInitials(em)}</span>
+        ? <span key={i} className="av" style={{ background: Theme.colorAt(em.color) }} title={SS.fullName(em, nameOrder)}>{SS.empInitials(em)}</span>
         : <span key={i} className="slot-empty"></span>;
     });
     // Collapse whatever doesn't fit into a single "+N" circle.
@@ -531,7 +531,7 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
             return (
               <div key={p.id} className="tl-row" style={{ height: rowH }}>
                 <div className="tl-label">
-                  <div className="avatar sq" style={{ background: `oklch(0.62 0.13 ${p.color})`, width: 30, height: 30, flexBasis: 30 }}><Ic.briefcase size={15}/></div>
+                  <div className="avatar sq" style={{ background: Theme.colorAt(p.color), width: 30, height: 30, flexBasis: 30 }}><Ic.briefcase size={15}/></div>
                   <div style={{ minWidth: 0 }}>
                     <div className="nm">{p.name}</div>
                   </div>
@@ -660,7 +660,7 @@ function AssignEditor({ ctx, employees, assign, overrides, setOverrides, onClose
               <button key={e.id} type="button" className={`ae-row ${on ? 'on' : ''} ${blocked ? 'blocked' : ''}`}
                 disabled={blocked} onClick={() => toggle(e.id)}>
                 <span className="ae-check">{on && <Ic.check size={13}/>}</span>
-                <span className="avatar sq" style={{ width: 26, height: 26, flexBasis: 26, fontSize: 10, background: Theme.avatarColor(SS.nameSeed(e)) }}>{SS.empInitials(e)}</span>
+                <span className="avatar sq" style={{ width: 26, height: 26, flexBasis: 26, fontSize: 10, background: Theme.colorAt(e.color) }}>{SS.empInitials(e)}</span>
                 <span className="ae-who">
                   <span className="ae-name">{SS.fullName(e, nameOrder)}{pref && <Ic.star size={11} className="ae-star"/>}</span>
                   <span className="ae-tags">

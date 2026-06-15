@@ -6,6 +6,7 @@ import { Ic } from './icons.jsx';
 import { UI } from './ui.jsx';
 import { Calendar } from './calendar.jsx';
 import { WorkingTimeRules } from './rules.jsx';
+import { Theme } from './theme.js';
 
 const AVAIL_PALETTE = [
   { type: 'pref',  cls: 'pref',  labelKey: 'avail.pref' },
@@ -40,7 +41,7 @@ export function Personnel({ employees, setEmployees, skills, settings, selId, se
   const newItem = ({ date, start, end }) => ({ id: SS.uid('b'), type: paint, date, start, end, allDay: paint === 'vac', repeat: 'none' });
 
   const addEmployee = () => {
-    const e = { id: SS.uid('e'), firstName: t('personnel.newPerson'), lastName: '', skills: [], blocks: [], rules: [] };
+    const e = { id: SS.uid('e'), firstName: t('personnel.newPerson'), lastName: '', color: Theme.nextColor(employees.map((x) => x.color)), skills: [], blocks: [], rules: [] };
     setEmployees([...employees, e]); setSelId(e.id);
   };
 

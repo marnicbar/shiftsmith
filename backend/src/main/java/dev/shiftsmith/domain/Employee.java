@@ -27,6 +27,8 @@ public class Employee {
     private String lastName;
     private String role;
     private int contract;
+    /** Stable colour index assigned at creation; maps to a distinct avatar swatch (see theme.colorAt). */
+    private int color;
     private Set<String> skills = new HashSet<>();
     private List<Block> blocks = new ArrayList<>();
     private List<Rule> rules = new ArrayList<>();
@@ -229,6 +231,9 @@ public class Employee {
 
     public int getContract() { return contract; }
     public void setContract(int contract) { this.contract = contract; }
+
+    public int getColor() { return color; }
+    public void setColor(int color) { this.color = color; }
 
     public Set<String> getSkills() { return skills; }
     // Normalize an explicit JSON null to an empty set: the solver thread reads

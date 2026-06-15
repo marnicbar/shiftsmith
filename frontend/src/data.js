@@ -104,8 +104,6 @@ function empInitials(e) {
   const l = (e && e.lastName || '').trim();
   return ((f[0] || '') + (l[0] || '')).toUpperCase() || '?';
 }
-// Stable seed for the avatar colour — must not change when the display order flips.
-function nameSeed(e) { return `${(e && e.firstName) || ''} ${(e && e.lastName) || ''}`.trim(); }
 // Compare two people by the chosen sort key, with the other name as a tiebreaker.
 function compareNames(a, b, key = 'first') {
   const first = (a.firstName || '').localeCompare(b.firstName || '');
@@ -121,5 +119,5 @@ function reflowPositions(positions, order) {
 export const SS = {
   DAY, pad, isoOf, startOfWeek, addDays, parseISO, minLabel, min12, uid,
   shiftSkills, weeklySlots, reflowPositions, MAX_HORIZON_DAYS, horizonDays, occursOn,
-  fullName, empInitials, nameSeed, compareNames,
+  fullName, empInitials, compareNames,
 };

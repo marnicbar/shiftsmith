@@ -82,7 +82,7 @@ export function buildPositionEvents(position, dayList, assign = {}, { nameOrder 
       const open = Math.max(0, headcount - assigned.length);
       const time = `${SS.minLabel(sh.start)}–${SS.minLabel(sh.end)}`;
       const crew = assigned.map((e) => ({
-        name: SS.fullName(e, nameOrder), initials: SS.empInitials(e), color: Theme.avatarColor(SS.nameSeed(e)),
+        name: SS.fullName(e, nameOrder), initials: SS.empInitials(e), color: Theme.colorAt(e.color),
       }));
       const title = [position.name, time, crew.map((c) => c.name).join(', '), open ? openLabel(open) : '']
         .filter(Boolean).join(' · ');
@@ -114,7 +114,7 @@ export function buildPersonEvents(employee, positions = [], dayList, assign = {}
         const time = `${SS.minLabel(sh.start)}–${SS.minLabel(sh.end)}`;
         out.push({
           id: `${sh.id}@${d}#${p.id}`, date: d, start: sh.start, end: sh.end, repeat: 'none', allDay: false,
-          _tone: 'assign', _color: `oklch(0.62 0.13 ${p.color})`,
+          _tone: 'assign', _color: Theme.colorAt(p.color),
           _label: p.name, _title: `${p.name} · ${time}`,
           positionId: p.id, shiftId: sh.id,
         });
@@ -247,7 +247,7 @@ function PositionSchedule({ positions = [], employees = [], assign, selId, setSe
         <div className="rail-list">
           {list.map((p) => (
             <div key={p.id} className={`rail-item ${pos && p.id === pos.id ? 'sel' : ''}`} onClick={() => setSelId(p.id)}>
-              <div className="avatar sq" style={{ background: `oklch(0.62 0.13 ${p.color})` }}><Ic.briefcase size={16}/></div>
+              <div className="avatar sq" style={{ background: Theme.colorAt(p.color) }}><Ic.briefcase size={16}/></div>
               <div className="ri-meta">
                 <div className="ri-name">{p.name}</div>
                 <div className="ri-sub">{t('positions.shiftCount', { count: p.shifts.length })}</div>
@@ -268,7 +268,7 @@ function PositionSchedule({ positions = [], employees = [], assign, selId, setSe
           <div className="config">
             <div className="pad">
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div className="avatar lg sq" style={{ background: `oklch(0.62 0.13 ${pos.color})` }}><Ic.briefcase size={20}/></div>
+                <div className="avatar lg sq" style={{ background: Theme.colorAt(pos.color) }}><Ic.briefcase size={20}/></div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.02em' }}>{pos.name}</div>
                   <div className="muted" style={{ fontSize: 12.5 }}>{t('positions.shiftTypeCount', { count: pos.shifts.length })}</div>

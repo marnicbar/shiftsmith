@@ -62,9 +62,31 @@ function applyTheme({ dark = false } = {}) {
   root.setAttribute('data-mode', dark ? 'dark' : 'light');
 }
 
-function avatarColor(seed) {
-  let h = 0; for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) % 360;
-  return `oklch(0.62 0.13 ${h})`;
+// A large, collision-free categorical palette shared by employees and positions.
+// `color` is a small integer assigned once at creation; `colorAt` maps it to a
+// distinct OKLCH swatch. Hues step by the golden angle (~137.5°) so successive
+// indices land as far apart as possible on the wheel; after each full turn the
+// lightness/chroma move to a new band, so the palette keeps yielding fresh,
+// distinguishable colours well past the 360 hues of a single revolution.
+const GOLDEN_ANGLE = 137.508;
+function colorAt(index) {
+  const i = Math.max(0, Math.floor(Number(index) || 0));
+  const turn = i * GOLDEN_ANGLE;
+  const hue = turn % 360;
+  const lap = Math.floor(turn / 360);
+  const L = (0.62 + ((lap % 3) - 1) * 0.06).toFixed(3); // 0.56 / 0.62 / 0.68 bands
+  const C = (0.13 + (lap % 2) * 0.025).toFixed(3);       // alternating chroma per lap
+  return `oklch(${L} ${C} ${hue.toFixed(1)})`;
 }
 
-export const Theme = { applyTheme, avatarColor };
+// The smallest non-negative index not already taken, so a new person/position
+// gets a colour distinct from its peers (and indices freed by a deletion are
+// reused). Pass the colours already in use among the same kind of resource.
+function nextColor(used = []) {
+  const taken = new Set(used.map((c) => Math.max(0, Math.floor(Number(c) || 0))));
+  let i = 0;
+  while (taken.has(i)) i++;
+  return i;
+}
+
+export const Theme = { applyTheme, colorAt, nextColor };
