@@ -134,39 +134,39 @@ export function ShiftPlan({ employees, positions, groupOrder = [], initialMode =
   const zoomScrollRef = useRefSP(null);
   const alignRef = useRefSP(startMode === 'free' ? 'left' : null);
   const rafRef = useRefSP(0);
+  const pendingFocusRef = useRefSP(null);
   // Mirror of `pph` that's always current synchronously, so a zoom triggered from
   // the (mode-scoped) wheel listener never reads a stale closed-over pph.
   const pphRef = useRefSP(startMode === 'free' ? FREE_BASE : 58);
 
-  // Open the assignment editor for a dashboard-requested shift on mount. The
+  // Resolve a dashboard-requested shift on mount and stash it for placement. The
   // component remounts each time the plan tab is entered, so this runs once with
   // the current focus; we clear it afterwards so a later manual visit stays put.
   useEffectSP(() => {
     if (!focus) return;
-    let raf = 0;
     for (const p of positions) {
       const sh = p.shifts.find((s) => s.id === focus.shiftId);
-      if (sh) {
-        const key = `${sh.id}@${focus.date}`;
-        // Anchor the editor to the shift's bar, just like a direct click — but the
-        // bar's final geometry only settles after the container width and scroll
-        // layout effects run, so position on the next frame. If the bar can't be
-        // found (e.g. scrolled out of view), fall back to a centred popover.
-        const place = () => {
-          const el = scrollRef.current?.querySelector(`[data-shift-key="${key}"]`);
-          const at = el
-            ? (() => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.bottom + 6 }; })()
-            : { x: Math.max(12, window.innerWidth / 2 - 170), y: 96 };
-          setEditing({ key, sh, pos: p, date: focus.date, ...at });
-        };
-        raf = requestAnimationFrame(place);
-        break;
-      }
+      if (sh) { pendingFocusRef.current = { sh, pos: p, date: focus.date, key: `${sh.id}@${focus.date}` }; break; }
     }
     onFocusConsumed?.();
-    return () => { if (raf) cancelAnimationFrame(raf); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Anchor the focused editor to its bar, mirroring a direct click
+  // (x: rect.left, y: rect.bottom + 6). The bar's real geometry only exists once
+  // the timeline knows its width — `containerW` is seeded by a ResizeObserver whose
+  // callback lands after mount, so we wait for that here rather than reading a
+  // not-yet-laid-out rect. Centred fallback only if the bar can't be found.
+  useLayoutEffectSP(() => {
+    const pf = pendingFocusRef.current;
+    if (!pf || !containerW) return;
+    pendingFocusRef.current = null;
+    const el = scrollRef.current?.querySelector(`[data-shift-key="${pf.key}"]`);
+    const at = el
+      ? (() => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.bottom + 6 }; })()
+      : { x: Math.max(12, window.innerWidth / 2 - 170), y: 96 };
+    setEditing({ key: pf.key, sh: pf.sh, pos: pf.pos, date: pf.date, ...at });
+  }, [containerW]);
 
   useEffectSP(() => {
     const el = scrollRef.current; if (!el || !window.ResizeObserver) return;
