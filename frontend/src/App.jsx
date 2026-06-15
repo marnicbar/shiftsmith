@@ -105,6 +105,9 @@ export default function App() {
   // Sticky flag: a pending schedule refetch should also reconcile the overrides map
   // (set by a remote pin/unpin event or a reconnect catch-up, not by plain solver ticks).
   const wantOverridesRef = useRef(false);
+  // Mirrors whether we currently believe the solver is running, read from the SSE handler
+  // (a ref, so a status change doesn't re-create the handler and resubscribe the stream).
+  const solvingRef = useRef(false);
 
   // Auth gate: 'checking' until we know, then 'in' (show the app) or 'out' (show login).
   const [authState, setAuthState] = useState('checking');
@@ -137,6 +140,10 @@ export default function App() {
     setEmployees([]); setPositions([]); setOverrides({}); setSelEmp(null); setSelPos(null);
     lastSyncRef.current = null;
   }, []);
+
+  useEffect(() => {
+    solvingRef.current = sched.solverStatus === 'SOLVING_ACTIVE' || sched.solverStatus === 'SOLVING_SCHEDULED';
+  }, [sched.solverStatus]);
 
   useEffect(() => { Theme.applyTheme({ dark: prefs.dark }); }, [prefs.dark]);
   useEffect(() => { if (prefs.lang && i18n.language !== prefs.lang) i18n.changeLanguage(prefs.lang); }, [prefs.lang]);
@@ -284,6 +291,11 @@ export default function App() {
     schedule: refetchSchedule,
     // A pin/unpin from another client: refresh the roster *and* the overrides map.
     assignment: () => refetchSchedule(true),
+    // While we believe the solver is running, reconcile on each heartbeat: the
+    // solver-went-idle event is one-shot and never re-asserted, so a client that
+    // missed it (a drop during the reconnect gap) would otherwise show "solving"
+    // forever. Cheap — only fires every 25s, and only while we think we're solving.
+    heartbeat: () => { if (solvingRef.current) refetchSchedule(); },
     reload: () => loadProblem().catch(reportError),
   }), [refetchEntity, refetchSettings, refetchSchedule, loadProblem, reportError]);
 

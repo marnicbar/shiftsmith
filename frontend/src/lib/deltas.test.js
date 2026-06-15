@@ -4,7 +4,7 @@ import { dispatchChange, etagNum, upsertById, removeById, isStaleEcho, mergeVers
 
 const handlers = () => ({
   employee: vi.fn(), position: vi.fn(), settings: vi.fn(), schedule: vi.fn(),
-  assignment: vi.fn(), reload: vi.fn(),
+  assignment: vi.fn(), heartbeat: vi.fn(), reload: vi.fn(),
 });
 
 describe('dispatchChange', () => {
@@ -39,11 +39,23 @@ describe('dispatchChange', () => {
     expect(h.schedule).toHaveBeenCalledTimes(1);
   });
 
-  it('routes reload events and ignores liveness frames', () => {
+  it('routes a heartbeat to its handler so a missed solver-idle edge can self-heal', () => {
+    const h = handlers();
+    dispatchChange({ type: 'heartbeat' }, h);
+    expect(h.heartbeat).toHaveBeenCalledTimes(1);
+    expect(h.schedule).not.toHaveBeenCalled();
+  });
+
+  it('tolerates a heartbeat when no handler is supplied (liveness only)', () => {
+    const h = handlers();
+    delete h.heartbeat;
+    expect(() => dispatchChange({ type: 'heartbeat' }, h)).not.toThrow();
+  });
+
+  it('routes reload events and ignores connected frames', () => {
     const h = handlers();
     dispatchChange({ type: 'reload' }, h);
     dispatchChange({ type: 'connected' }, h);
-    dispatchChange({ type: 'heartbeat' }, h);
     dispatchChange(null, h);
     expect(h.reload).toHaveBeenCalledTimes(1);
     expect(h.schedule).not.toHaveBeenCalled();

@@ -4,10 +4,13 @@
 
 /**
  * Dispatch one change event to `handlers`
- * { employee, position, settings, schedule, assignment, reload }.
+ * { employee, position, settings, schedule, assignment, heartbeat, reload }.
  * A pin/unpin (`assignment`) is routed separately from a solver tick (`solver`) so the
  * client can also reconcile the overrides map for a pin, while keeping solver ticks cheap.
- * `assignment` falls back to `schedule` when no dedicated handler is supplied.
+ * `assignment` falls back to `schedule` when no dedicated handler is supplied. A
+ * `heartbeat` is routed too (when a handler is supplied) so the client can reconcile a
+ * missed edge event — notably the one-shot solver-went-idle signal, which is never
+ * re-asserted and so would otherwise leave a client that missed it stuck on "solving".
  */
 export function dispatchChange(ev, handlers) {
   if (!ev || !ev.type) return;
@@ -18,7 +21,8 @@ export function dispatchChange(ev, handlers) {
     case 'assignment': (handlers.assignment || handlers.schedule)(); break;
     case 'solver': handlers.schedule(); break;
     case 'reload': handlers.reload(); break;
-    default: break; // connected / heartbeat — liveness only
+    case 'heartbeat': handlers.heartbeat?.(); break;
+    default: break; // connected — liveness only (reconnect catch-up runs onOpen)
   }
 }
 
