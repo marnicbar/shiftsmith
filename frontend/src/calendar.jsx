@@ -684,7 +684,7 @@ function TimeGrid({ scrollRef, dayList, view, zoom, items, kind, todayISO, onCol
                           ))}
                           {o.item._openLabel && <span className="asg-open">{o.item._openLabel}</span>}
                         </span>
-                      : <span className="el">{labelOf(o.item, kind, t)}</span>}
+                      : (labelOf(o.item, kind, t) && <span className="el">{labelOf(o.item, kind, t)}</span>)}
                     {resizable && <div className="evt-handle s" onMouseDown={(e) => onEvtDown(e, o, 's')}></div>}
                   </div>
                 );
@@ -759,7 +759,7 @@ function toneCls(item, kind) {
 function labelOf(item, kind, t) {
   if (item._label != null) return item._label; // read-only events carry their own label
   if (kind === 'availability') return item.type === 'pref' ? t('avail.pref') : item.type === 'undes' ? t('avail.undes') : t('avail.vac');
-  return item.name || t('common.shift');
+  return item.name || ''; // shifts are identified by their position + time, not a name
 }
 
 function useClickAway(ref, onAway, active) {

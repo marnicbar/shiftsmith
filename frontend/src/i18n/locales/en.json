@@ -16,7 +16,6 @@
     "skills": "Skills",
     "decrease": "Decrease",
     "increase": "Increase",
-    "shift": "Shift",
     "perWeek": "/wk",
     "weekdays3": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     "weekdays2": ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
