@@ -102,6 +102,9 @@ export default function App() {
   // SSE liveness: false while the stream is dropped/reconnecting (shown to the user).
   const [streamLive, setStreamLive] = useState(true);
   const schedTimerRef = useRef(null);
+  // Sticky flag: a pending schedule refetch should also reconcile the overrides map
+  // (set by a remote pin/unpin event or a reconnect catch-up, not by plain solver ticks).
+  const wantOverridesRef = useRef(false);
 
   // Auth gate: 'checking' until we know, then 'in' (show the app) or 'out' (show login).
   const [authState, setAuthState] = useState('checking');
@@ -187,6 +190,40 @@ export default function App() {
     lastSyncRef.current = JSON.stringify(prev);
   }, []);
 
+  // Adopt the backend's overrides (manual pins) from a fresh snapshot, keeping any
+  // edit we haven't synced yet. Pins have no per-row ETag, so we can't skip our own
+  // change by version (like refetchEntity does); instead we diff against the sync
+  // baseline and preserve only the keys we've changed locally but not yet pushed.
+  // Without this, a remote pin/unpin updates the rendered roster but leaves this
+  // client's `overrides` (the "manually set" badge / AssignEditor state) stale.
+  const reconcileOverrides = useCallback((remote) => {
+    const base = JSON.parse(lastSyncRef.current || '{"employees":[],"positions":[],"settings":{},"overrides":{}}');
+    const baseOv = base.overrides || {};
+    setOverrides((local) => {
+      const merged = { ...remote };
+      let changed = Object.keys(merged).length !== Object.keys(local).length;
+      const keys = new Set([...Object.keys(local), ...Object.keys(baseOv)]);
+      for (const k of keys) {
+        // A key whose local value diverges from the last-synced baseline is an unsynced
+        // local edit — keep it (a local deletion means drop the key the server still has).
+        if (JSON.stringify(local[k]) !== JSON.stringify(baseOv[k])) {
+          if (k in local) merged[k] = local[k];
+          else delete merged[k];
+        }
+      }
+      if (!changed) {
+        for (const k of new Set([...Object.keys(merged), ...Object.keys(local)])) {
+          if (JSON.stringify(merged[k]) !== JSON.stringify(local[k])) { changed = true; break; }
+        }
+      }
+      return changed ? merged : local; // keep the same ref when nothing moved (no needless re-render)
+    });
+    // The baseline now reflects what the server holds, so the next debounced diff only
+    // carries the still-unsynced local pin edits we preserved above.
+    base.overrides = remote;
+    lastSyncRef.current = JSON.stringify(base);
+  }, []);
+
   // Refetch one resource on its change event — unless the event's version matches what
   // we already hold (it was our own edit). A 404 means it was deleted.
   const refetchEntity = useCallback(async (kind, setList, id, rev) => {
@@ -215,19 +252,30 @@ export default function App() {
   }, [reportError]);
 
   // The solver advanced or pins changed: refetch the live schedule (assignments + score
-  // + versions), debounced so the solver's rapid ticks coalesce into one fetch.
-  const refetchSchedule = useCallback(() => {
+  // + versions), debounced so the solver's rapid ticks coalesce into one fetch. When the
+  // refetch was prompted by a pin change (or a reconnect catch-up) it also reconciles the
+  // overrides map from the same snapshot, so plain solver ticks stay cheap.
+  const refetchSchedule = useCallback((withOverrides = false) => {
+    if (withOverrides) wantOverridesRef.current = true;
     clearTimeout(schedTimerRef.current);
     schedTimerRef.current = setTimeout(async () => {
-      try { setMeta(await api.getSchedule()); } catch { /* transient — the next event retries */ }
+      const wantOv = wantOverridesRef.current;
+      wantOverridesRef.current = false;
+      try {
+        const d = await api.getSchedule();
+        setMeta(d);
+        if (wantOv) reconcileOverrides(d.overrides || {});
+      } catch { /* transient — the next event retries */ }
     }, 400);
-  }, [setMeta]);
+  }, [setMeta, reconcileOverrides]);
 
   const handleEvent = useCallback((ev) => dispatchChange(ev, {
     employee: (id, rev) => refetchEntity('employees', setEmployees, id, rev),
     position: (id, rev) => refetchEntity('positions', setPositions, id, rev),
     settings: refetchSettings,
     schedule: refetchSchedule,
+    // A pin/unpin from another client: refresh the roster *and* the overrides map.
+    assignment: () => refetchSchedule(true),
     reload: () => loadProblem().catch(reportError),
   }), [refetchEntity, refetchSettings, refetchSchedule, loadProblem, reportError]);
 
@@ -242,7 +290,7 @@ export default function App() {
     return api.subscribeSchedule(
       handleEvent,
       () => setStreamLive(false),
-      () => { setStreamLive(true); refetchSchedule(); },
+      () => { setStreamLive(true); refetchSchedule(true); },
     );
   }, [loaded, handleEvent, refetchSchedule]);
 

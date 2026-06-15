@@ -170,6 +170,20 @@ describe('buildPlan', () => {
     expect(e1Slots).toHaveLength(1);
   });
 
+  it('does not double-book across an overnight shift into the next morning', () => {
+    // an overnight MON shift (22:00→02:00) runs into TUE, so the lone candidate must
+    // not also fill an early-TUE shift — the two would physically overlap.
+    const shifts = [
+      shift('s1', { start: 1320, end: 120 }),            // MON 22:00 → TUE 02:00 (overnight)
+      shift('s2', { date: TUE, start: 60, end: 300 }),   // TUE 01:00 → 05:00
+    ];
+    const assign = buildPlan([emp('e1', ['Bar'])], [position(shifts)], [MON, TUE]);
+    const e1Slots = Object.values(assign).filter((crew) => crew.some((e) => e.id === 'e1'));
+    expect(e1Slots).toHaveLength(1);
+    expect(assign['s1@' + MON].map((e) => e.id)).toEqual(['e1']); // got the overnight one
+    expect(assign['s2@' + TUE]).toEqual([]);                       // left empty
+  });
+
   it('honours manual overrides verbatim, ignoring skills and preferences', () => {
     const overrides = { ['s1@' + MON]: ['e1'] };
     const assign = buildPlan(

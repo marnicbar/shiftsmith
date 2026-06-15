@@ -80,12 +80,21 @@ export function buildPlan(employees, positions, dayList, overrides = {}) {
   })));
   slots.sort((a, b) => a.date.localeCompare(b.date) || a.shift.start - b.shift.start);
   const used = {}; const assign = {};
+  // Greedy heuristic: one shift per person per day. An overnight shift runs into the
+  // next calendar day, so it consumes that day too — otherwise the preview can show the
+  // same person on an overnight shift and an early-morning shift the next day at once.
+  const markUsed = (eid, s) => {
+    used[`${eid}:${s.date}`] = true;
+    if (wrapEnd(s.shift.start, s.shift.end) > 1440) {
+      used[`${eid}:${SS.isoOf(SS.addDays(SS.parseISO(s.date), 1))}`] = true;
+    }
+  };
   for (const s of slots) {
     const ov = overrides[s.key];
     if (!ov) continue;
     const crew = ov.map((id) => empById[id]).filter(Boolean).slice(0, s.shift.headcount);
     assign[s.key] = crew;
-    crew.forEach((e) => { used[`${e.id}:${s.date}`] = true; });
+    crew.forEach((e) => markUsed(e.id, s));
   }
   for (const s of slots) {
     if (overrides[s.key]) continue;
@@ -95,7 +104,7 @@ export function buildPlan(employees, positions, dayList, overrides = {}) {
       .map((e) => ({ e, sc: prefScore(e, s.shift, s.date), pin: pref.includes(e.id) ? 1 : 0 }))
       .sort((a, b) => b.pin - a.pin || b.sc - a.sc);
     const got = [];
-    for (const c of cands) { if (got.length >= s.shift.headcount) break; got.push(c.e); used[`${c.e.id}:${s.date}`] = true; }
+    for (const c of cands) { if (got.length >= s.shift.headcount) break; got.push(c.e); markUsed(c.e.id, s); }
     assign[s.key] = got;
   }
   return assign;
