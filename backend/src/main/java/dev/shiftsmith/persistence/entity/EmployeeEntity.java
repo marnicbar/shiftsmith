@@ -38,6 +38,9 @@ public class EmployeeEntity extends TimestampedEntity {
     @Column(name = "contract", nullable = false)
     public int contract;
 
+    @Column(name = "color", nullable = false)
+    public int color;
+
     @ElementCollection
     @CollectionTable(name = "employee_skill", joinColumns = @JoinColumn(name = "employee_id"))
     @Column(name = "skill")

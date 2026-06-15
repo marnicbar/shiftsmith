@@ -130,13 +130,6 @@ describe('SS.empInitials', () => {
   });
 });
 
-describe('SS.nameSeed', () => {
-  it('is stable regardless of display order', () => {
-    const e = { firstName: 'Ada', lastName: 'Lovelace' };
-    expect(SS.nameSeed(e)).toBe('Ada Lovelace');
-  });
-});
-
 describe('SS.compareNames', () => {
   const a = { firstName: 'Ada', lastName: 'Zane' };
   const b = { firstName: 'Bo', lastName: 'Apex' };

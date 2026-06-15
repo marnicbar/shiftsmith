@@ -3,6 +3,7 @@
 // (shiftId@date → [employee]) into concrete, read-only calendar events.
 import { describe, it, expect } from 'vitest';
 import { buildPositionEvents, buildPersonEvents, slotsToAssign } from './planview.jsx';
+import { Theme } from './theme.js';
 
 const MON = '2026-06-01'; // Monday
 const TUE = '2026-06-02';
@@ -102,7 +103,7 @@ describe('buildPersonEvents', () => {
     const evs = buildPersonEvents(emp('me'), positions, [MON], assign);
     expect(evs).toHaveLength(1);
     expect(evs[0]).toMatchObject({ _label: 'Bar', positionId: 'p1', date: MON, _tone: 'assign' });
-    expect(evs[0]._color).toContain('200'); // owning position's hue
+    expect(evs[0]._color).toBe(Theme.colorAt(200)); // owning position's colour
   });
 
   it('includes every position the person works that day', () => {

@@ -102,7 +102,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
           <div className="pref-list">
             {chosen.map((e) => (
               <div key={e.id} className="pref-emp">
-                <span className="avatar sq" style={{ width: 22, height: 22, flexBasis: 22, fontSize: 9.5, background: Theme.avatarColor(SS.nameSeed(e)) }}>{SS.empInitials(e)}</span>
+                <span className="avatar sq" style={{ width: 22, height: 22, flexBasis: 22, fontSize: 9.5, background: Theme.colorAt(e.color) }}>{SS.empInitials(e)}</span>
                 <span className="pe-name">{SS.fullName(e, nameOrder)}</span>
                 <button className="pe-x" title={t('common.remove')} onClick={() => patch({ preferred: prefIds.filter((x) => x !== e.id) })}><Ic.x/></button>
               </div>
@@ -126,7 +126,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
   };
 
   const addPosition = () => {
-    const p = { id: SS.uid('p'), name: t('positions.newPosition'), color: Math.floor(Math.random()*360), skills: [], shifts: [] };
+    const p = { id: SS.uid('p'), name: t('positions.newPosition'), color: Theme.nextColor(positions.map((x) => x.color)), skills: [], shifts: [] };
     setPositions([...positions, p]); setSelId(p.id);
   };
 
@@ -201,7 +201,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
                       }}
                       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); applyDrop(); }}>
                       {dnd && <div className="ri-grip" title={t('positions.dragReorder')}><Ic.move size={13}/></div>}
-                      <div className="avatar sq" style={{ background: `oklch(0.62 0.13 ${p.color})` }}><Ic.briefcase size={16}/></div>
+                      <div className="avatar sq" style={{ background: Theme.colorAt(p.color) }}><Ic.briefcase size={16}/></div>
                       <div className="ri-meta">
                         <div className="ri-name">{p.name}</div>
                         <div className="ri-sub">{t('positions.shiftCount', { count: p.shifts.length })} · {t('positions.slotsPerWeek', { count: slots })}</div>
@@ -236,7 +236,7 @@ export function Positions({ employees = [], positions, setPositions, groupOrder,
       <div className="config">
         <div className="pad">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div className="avatar lg sq" style={{ background: `oklch(0.62 0.13 ${pos.color})` }}><Ic.briefcase size={20}/></div>
+            <div className="avatar lg sq" style={{ background: Theme.colorAt(pos.color) }}><Ic.briefcase size={20}/></div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.02em' }}>{pos.name}</div>
               <div className="muted" style={{ fontSize: 12.5 }}>{t('positions.shiftTypeCount', { count: pos.shifts.length })} · {t('positions.slotsPerWeek', { count: weeklySlots })}</div>

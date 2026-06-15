@@ -5,6 +5,7 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SS } from './data.js';
+import { Theme } from './theme.js';
 import { matchesDay } from './shiftplan.jsx';
 import { dateLocale } from './i18n/index.js';
 import { Ic } from './icons.jsx';
@@ -121,7 +122,7 @@ export function Dashboard({ employees, positions, assign = {}, onOpenShift }) {
                     <span className="mono" style={{ color: 'var(--text-3)', flex: '0 0 auto', marginLeft: 8 }}>{filled}/{total} · {pct}%</span>
                   </div>
                   <div style={{ height: 8, borderRadius: 99, background: 'var(--surface-2)', overflow: 'hidden' }}>
-                    <div style={{ width: pct + '%', height: '100%', borderRadius: 99, background: `oklch(0.62 0.13 ${p.color})` }}></div>
+                    <div style={{ width: pct + '%', height: '100%', borderRadius: 99, background: Theme.colorAt(p.color) }}></div>
                   </div>
                 </div>
               ))}

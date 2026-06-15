@@ -7,7 +7,7 @@ import { Ic } from './icons.jsx';
 
 function Avatar({ emp, size, square }) {
   return <div className={`avatar ${size === 'lg' ? 'lg' : ''} ${square ? 'sq' : ''}`}
-    style={{ background: Theme.avatarColor(SS.nameSeed(emp)) }}>{SS.empInitials(emp)}</div>;
+    style={{ background: Theme.colorAt(emp && emp.color) }}>{SS.empInitials(emp)}</div>;
 }
 
 function SkillEditor({ value, all, onChange, accent }) {

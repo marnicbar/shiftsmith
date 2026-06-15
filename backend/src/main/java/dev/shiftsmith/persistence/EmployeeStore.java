@@ -119,6 +119,7 @@ public class EmployeeStore {
         e.lastName = emp.getLastName();
         e.role = emp.getRole();
         e.contract = emp.getContract();
+        e.color = emp.getColor();
         e.skills = emp.getSkills() == null ? new HashSet<>() : new HashSet<>(emp.getSkills());
     }
 
