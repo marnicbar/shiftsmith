@@ -185,19 +185,35 @@ class ScheduleResourceIT {
         org.assertj.core.api.Assertions.assertThat(res.statusCode()).isEqualTo(200);
 
         java.util.List<String> frames = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
-        Thread reader = new Thread(() -> res.body().forEach(frames::add));
+        // The SSE stream is endless; the reader pumps frames until we close the body
+        // below. Closing it (or app shutdown) makes the lazy line reader throw, which is
+        // the expected end-of-test signal — swallow it so it doesn't surface as an
+        // uncaught-exception stack trace on this daemon thread (GitHub annotates such
+        // stderr as ##[error] even though the build passes).
+        java.util.stream.Stream<String> body = res.body();
+        Thread reader = new Thread(() -> {
+            try {
+                body.forEach(frames::add);
+            } catch (RuntimeException expectedOnClose) {
+                // stream closed at end of test
+            }
+        });
         reader.setDaemon(true);
         reader.start();
         Thread.sleep(400); // let the subscription attach
 
-        Employee e = availableAllDay(employee("sse-emp", "Bar"), today);
-        e.getBlocks().get(0).setId("blk-sse-emp");
-        authed().contentType(ContentType.JSON).body(MAPPER.writeValueAsString(e))
-                .when().post("/api/employees").then().statusCode(201);
+        try {
+            Employee e = availableAllDay(employee("sse-emp", "Bar"), today);
+            e.getBlocks().get(0).setId("blk-sse-emp");
+            authed().contentType(ContentType.JSON).body(MAPPER.writeValueAsString(e))
+                    .when().post("/api/employees").then().statusCode(201);
 
-        await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(200)).untilAsserted(() ->
-                org.assertj.core.api.Assertions.assertThat(frames.stream()
-                        .anyMatch(l -> l.contains("\"type\":\"employee\"") && l.contains("sse-emp"))).isTrue());
+            await().atMost(Duration.ofSeconds(15)).pollInterval(Duration.ofMillis(200)).untilAsserted(() ->
+                    org.assertj.core.api.Assertions.assertThat(frames.stream()
+                            .anyMatch(l -> l.contains("\"type\":\"employee\"") && l.contains("sse-emp"))).isTrue());
+        } finally {
+            body.close(); // stop the reader before the test (and the connection) goes away
+        }
     }
 
     @Test
