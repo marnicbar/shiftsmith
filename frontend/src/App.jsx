@@ -15,7 +15,7 @@ import { Login, ForcePasswordChange } from './login.jsx';
 import { tooLooseAgainst } from './rules.jsx';
 import * as api from './lib/api.js';
 import { applyProblemChanges } from './lib/sync.js';
-import { dispatchChange, etagNum, upsertById, removeById } from './lib/deltas.js';
+import { dispatchChange, etagNum, upsertById, removeById, isStaleEcho, mergeVersionsMax, foldRemoteEntity } from './lib/deltas.js';
 
 const TABS = [
   { id: 'dashboard', labelKey: 'nav.dashboard', icon: 'grid' },
@@ -105,6 +105,9 @@ export default function App() {
   // Sticky flag: a pending schedule refetch should also reconcile the overrides map
   // (set by a remote pin/unpin event or a reconnect catch-up, not by plain solver ticks).
   const wantOverridesRef = useRef(false);
+  // Mirrors whether we currently believe the solver is running, read from the SSE handler
+  // (a ref, so a status change doesn't re-create the handler and resubscribe the stream).
+  const solvingRef = useRef(false);
 
   // Auth gate: 'checking' until we know, then 'in' (show the app) or 'out' (show login).
   const [authState, setAuthState] = useState('checking');
@@ -138,12 +141,19 @@ export default function App() {
     lastSyncRef.current = null;
   }, []);
 
+  useEffect(() => {
+    solvingRef.current = sched.solverStatus === 'SOLVING_ACTIVE' || sched.solverStatus === 'SOLVING_SCHEDULED';
+  }, [sched.solverStatus]);
+
   useEffect(() => { Theme.applyTheme({ dark: prefs.dark }); }, [prefs.dark]);
   useEffect(() => { if (prefs.lang && i18n.language !== prefs.lang) i18n.changeLanguage(prefs.lang); }, [prefs.lang]);
 
   const setMeta = useCallback((d) => {
-    // Keep the version map fresh from every snapshot (incl. other clients' edits over SSE).
-    if (d.versions) versionsRef.current = d.versions;
+    // Fold the snapshot's versions into ours by per-row max (incl. other clients' edits
+    // over SSE), never regressing a row below a version we've already written — a
+    // wholesale replace from a snapshot read just before our latest write committed
+    // would roll it back and make our own next echo look like a remote change (#47).
+    if (d.versions) versionsRef.current = mergeVersionsMax(versionsRef.current, d.versions);
     setSched({
       assignments: d.assignments || [], solverStatus: d.solverStatus, score: d.score,
       total: d.total, staffed: d.staffed, unassigned: d.unassigned,
@@ -184,8 +194,11 @@ export default function App() {
   // sync baseline in step (so our own debounced sync doesn't echo it back). Only the
   // affected entity is touched, preserving any unsynced local edits to others.
   const applyRemoteList = useCallback((setList, kind, id, data) => {
-    setList((list) => (data ? upsertById(list, data) : removeById(list, id)));
     const prev = JSON.parse(lastSyncRef.current || '{"employees":[],"positions":[],"settings":{},"overrides":{}}');
+    // Fold against the last-synced baseline so a stale echo of our own write can't revert
+    // an unsynced local edit (e.g. characters typed since the last sync); the pending
+    // debounced sync then pushes that local edit on top of what the server now holds.
+    setList((list) => foldRemoteEntity(list, prev[kind] || [], id, data));
     prev[kind] = data ? upsertById(prev[kind] || [], data) : removeById(prev[kind] || [], id);
     lastSyncRef.current = JSON.stringify(prev);
   }, []);
@@ -224,12 +237,14 @@ export default function App() {
     lastSyncRef.current = JSON.stringify(base);
   }, []);
 
-  // Refetch one resource on its change event — unless the event's version matches what
-  // we already hold (it was our own edit). A 404 means it was deleted.
+  // Refetch one resource on its change event — unless the event is an echo of a change we
+  // already hold (our own edit, or a now-superseded one): versions are monotonic, so any
+  // rev at or below ours is stale and refetching it would risk reverting an unsynced local
+  // edit. Only a strictly newer rev is a genuine remote change. A 404 means it was deleted.
   const refetchEntity = useCallback(async (kind, setList, id, rev) => {
     const get = kind === 'employees' ? api.getEmployee : api.getPosition;
     const bag = versionsRef.current[kind] || (versionsRef.current[kind] = {});
-    if (rev != null && bag[id] === rev) return;
+    if (isStaleEcho(rev, bag[id])) return;
     try {
       const { data, etag } = await get(id);
       bag[id] = etagNum(etag);
@@ -241,7 +256,7 @@ export default function App() {
   }, [applyRemoteList, reportError]);
 
   const refetchSettings = useCallback(async (rev) => {
-    if (rev != null && versionsRef.current.settings === rev) return;
+    if (isStaleEcho(rev, versionsRef.current.settings)) return;
     try {
       const { data, etag } = await api.getSettings();
       versionsRef.current.settings = etagNum(etag);
@@ -276,6 +291,11 @@ export default function App() {
     schedule: refetchSchedule,
     // A pin/unpin from another client: refresh the roster *and* the overrides map.
     assignment: () => refetchSchedule(true),
+    // While we believe the solver is running, reconcile on each heartbeat: the
+    // solver-went-idle event is one-shot and never re-asserted, so a client that
+    // missed it (a drop during the reconnect gap) would otherwise show "solving"
+    // forever. Cheap — only fires every 25s, and only while we think we're solving.
+    heartbeat: () => { if (solvingRef.current) refetchSchedule(); },
     reload: () => loadProblem().catch(reportError),
   }), [refetchEntity, refetchSettings, refetchSchedule, loadProblem, reportError]);
 
