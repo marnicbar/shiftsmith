@@ -412,8 +412,8 @@ body.cal-moving, body.cal-resizing { user-select: none; }
   background: repeating-linear-gradient(135deg, transparent 0 9px, color-mix(in oklab, var(--text) 3%, transparent) 9px 10px);
   display: grid; place-items: center; color: var(--text-3); font-family: 'Geist Mono', monospace; font-size: 12px;
 }
-.attn-row { transition: filter .12s, box-shadow .12s; }
-.attn-row:hover { filter: brightness(1.04); box-shadow: 0 0 0 1px var(--tone); }
+.attn-row { transition: background .12s, box-shadow .12s; }
+.attn-row:hover { background: color-mix(in oklab, var(--tone) 16%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tone) 45%, transparent); }
 
 /* ---------- Shift plan timeline ---------- */
 .tl { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
