@@ -97,6 +97,60 @@ export const getScheduleRange = (from, to, scope) => {
   return request(`${BASE}/schedule/range?${params.toString()}`);
 };
 
+// --- PDF export -------------------------------------------------------------
+// The backend builds the export document from the canonical problem and renders it
+// with Typst; the client only says *what* to export. `scope` repeats — one per page
+// of the PDF — so the same call serves a single calendar and a batch.
+//
+//   { scopes: ['person:e1'], view: 'week', anchor: '2026-07-27',
+//     from: 360, to: 1320, paper: 'a4', orientation: 'landscape' }
+
+function exportQuery({ scopes = [], view, anchor, from, to, paper, orientation, lang, nameOrder }) {
+  const p = new URLSearchParams();
+  for (const s of scopes) p.append('scope', s);
+  if (view) p.set('view', view);
+  if (anchor) p.set('anchor', anchor);
+  if (from != null) p.set('from', String(from));
+  if (to != null) p.set('to', String(to));
+  if (paper) p.set('paper', paper);
+  if (orientation) p.set('orientation', orientation);
+  if (lang) p.set('lang', lang);
+  if (nameOrder) p.set('nameOrder', nameOrder);
+  return p.toString();
+}
+
+// What the export *would* contain — above all the shifts the chosen printed hours
+// would leave off the page — so the dialog can warn before anything is downloaded.
+export const getExportPlan = (params) =>
+  request(`${BASE}/export/calendar/plan?${exportQuery(params)}`);
+
+// Render the PDF. Returns `{ blob, filename }`: the server names the file (it knows
+// whether this is one calendar or a batch), and we honour that in the download.
+export async function exportCalendarPdf(params) {
+  const headers = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const url = `${BASE}/export/calendar.pdf?${exportQuery(params)}`;
+  const res = await fetch(url, { headers });
+  if (res.status === 401) {
+    clearToken();
+    if (onUnauthorized) onUnauthorized();
+    const e = new Error(`GET ${url} failed: 401`); e.status = 401; throw e;
+  }
+  if (!res.ok) {
+    let serverMessage = null;
+    try { const b = await res.json(); if (b && typeof b.error === 'string') serverMessage = b.error; } catch { /* no body */ }
+    const e = new Error(serverMessage || `PDF export failed: ${res.status}`);
+    e.status = res.status; e.serverMessage = serverMessage; throw e;
+  }
+  return { blob: await res.blob(), filename: filenameFrom(res.headers.get('Content-Disposition')) };
+}
+
+function filenameFrom(disposition) {
+  const m = /filename="([^"]+)"/.exec(disposition || '');
+  return m ? m[1] : 'schedule.pdf';
+}
+
 // --- Granular, concurrency-safe writes (issue #47, Phase 4) -----------------
 // Each returns { data, etag }; mutations carry the resource's expected version as an
 // If-Match header so a stale write is rejected (409) instead of silently overwriting.

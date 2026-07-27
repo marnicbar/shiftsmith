@@ -30,10 +30,26 @@ RUN mvn -B --no-transfer-progress package -DskipTests
 
 # ---- Stage 3: slim runtime --------------------------------------------------
 FROM eclipse-temurin:26-jre
-# curl backs the container HEALTHCHECK; run as an unprivileged user.
+# Typst renders the calendar PDF exports (see PdfExportService). Pinned, and taken
+# from the upstream release tarball — there is no Debian package.
+ARG TYPST_VERSION=0.14.2
+# curl backs the container HEALTHCHECK (and fetches Typst); fonts-dejavu-core is the
+# sans-serif the PDF template asks for — Typst only embeds serif/mono faces.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl ca-certificates xz-utils fonts-dejavu-core \
+    && arch="$(dpkg --print-architecture)" \
+    && case "$arch" in \
+         amd64) typst_arch=x86_64-unknown-linux-musl ;; \
+         arm64) typst_arch=aarch64-unknown-linux-musl ;; \
+         *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-${typst_arch}.tar.xz" \
+       | tar -xJ -C /tmp \
+    && install -m 0755 "/tmp/typst-${typst_arch}/typst" /usr/local/bin/typst \
+    && rm -rf "/tmp/typst-${typst_arch}" \
+    && apt-get purge -y --auto-remove xz-utils \
     && rm -rf /var/lib/apt/lists/* \
+    && typst --version \
     && groupadd -r app && useradd -r -g app -d /app -s /usr/sbin/nologin app
 WORKDIR /app
 COPY --from=backend --chown=app:app /build/target/quarkus-app/ ./

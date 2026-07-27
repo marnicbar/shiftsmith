@@ -186,6 +186,36 @@ preferred weekly hours, workload balance. Constraint names must be alphanumeric 
   `calendar.jsx` exports `calendarDays(view, anchor)` so the builders expand exactly the
   visible range.
 
+### PDF export (`export` package + `typst/calendar.typ`)
+The read-only Plan calendars can be printed to PDF for the day/week/month in view.
+**Everything is server-side** — the client only says *what* to export, so a future
+scheduled/emailed export uses the same path:
+
+- `ExportRequest` — validated query params. `scope` **repeats**, one per page
+  (`person:<id>` / `position:<id>`), so a single export and a batch ("everyone, a page
+  each") are the same code path; `MAX_SCOPES` bounds it.
+- `CalendarDocumentBuilder` — pure, no CDI/DB. The server-side counterpart of
+  `planview.jsx`'s `buildPersonEvents`/`buildPositionEvents` and `calendar.jsx`'s
+  `calendarDays`/`packLanes`: **keep those in lock-step**. Splits overnight shifts at
+  midnight, clips to the printed band, packs overlaps into lanes, and builds month chips.
+- `ExportLabels` / `Palette` — every string, date format and colour the page needs.
+  `Palette` mirrors `theme.js` `colorAt` (OKLCH components, not a CSS string).
+- `PdfExportService` — drops the document's JSON beside `typst/calendar.typ` in a scratch
+  directory and shells out to `typst compile --root <dir>` (sandboxed, timed out, cleaned
+  up). The template composes **no text of its own**; a section is a page.
+- `ScheduleService.assignMap(from, to)` — durable rows overlaid with the live in-memory
+  solution, exactly as the UI overlays them.
+
+Endpoints (both build the same document, so they cannot disagree):
+`GET /api/export/calendar.pdf` renders it; `GET /api/export/calendar/plan` returns just
+the preflight — above all **which shifts the printed hours would leave off the page**,
+which the dialog warns about and the PDF lists in a footnote. Nothing is dropped silently.
+
+The `typst` binary is installed in both Dockerfiles (pinned `TYPST_VERSION`, plus
+`fonts-dejavu-core` — Typst embeds no sans-serif face). Without it the app runs normally
+and only the export endpoint answers 503 with a clear message
+(`shiftsmith.typst.bin` / `shiftsmith.typst.timeout-seconds`).
+
 ### Internationalization (`i18n/`)
 - UI strings live in `i18n/locales/{en,de}.json` (one `translation` namespace, nested by
   feature); English is the fallback. Components read them via `useTranslation()`'s `t()`.

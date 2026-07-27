@@ -13,6 +13,7 @@ import { Theme } from './theme.js';
 import { Calendar, calendarDays } from './calendar.jsx';
 import { ShiftPlan, matchesDay } from './shiftplan.jsx';
 import { getScheduleRange } from './lib/api.js';
+import { ExportButton } from './export.jsx';
 
 const NOOP = () => {};
 const NEW_ITEM = () => ({});
@@ -183,6 +184,7 @@ function PersonSchedule({ employees = [], positions = [], assign, selId, setSelI
         <>
           <Calendar kind="assign-person" readOnly view={view} onView={setView} anchor={anchor} onAnchor={setAnchor}
             zoom={zoom} onZoom={setZoom} palette={[]} items={events}
+            toolbarExtra={<ExportButton scopes={[`person:${emp.id}`]} view={view} anchor={anchor} nameOrder={nameOrder} />}
             newItem={NEW_ITEM} onCommit={NOOP} onDelete={NOOP} onSplit={NOOP} />
           <div className="config">
             <div className="pad">
@@ -264,6 +266,7 @@ function PositionSchedule({ positions = [], employees = [], assign, selId, setSe
         <>
           <Calendar kind="assign-position" readOnly view={view} onView={setView} anchor={anchor} onAnchor={setAnchor}
             zoom={zoom} onZoom={setZoom} palette={[]} items={events}
+            toolbarExtra={<ExportButton scopes={[`position:${pos.id}`]} view={view} anchor={anchor} nameOrder={nameOrder} />}
             newItem={NEW_ITEM} onCommit={NOOP} onDelete={NOOP} onSplit={NOOP} />
           <div className="config">
             <div className="pad">

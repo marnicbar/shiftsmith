@@ -13,6 +13,8 @@ test layer cheap enough to run on every change.
 | Constraint unit tests | `backend/src/test/.../solver/ScheduleConstraintProviderTest` | Timefold `ConstraintVerifier` | no | Each scoring rule **in isolation** (penalty / reward / no-impact) |
 | Solver scenario tests | `backend/src/test/.../solver/ScheduleSolverTest` | Real solver, tiny problems | no | End-to-end: known input → expected assignment; impossible inputs → unfilled |
 | REST/persistence IT | `backend/src/test/.../rest/ScheduleResourceIT` | `@QuarkusTest` + RestAssured + Dev Services PostgreSQL | **yes** | The HTTP contract and the persist → solve → read-back round-trip |
+| Export document tests | `backend/src/test/.../export/CalendarDocumentBuilderTest` | JUnit 5 + AssertJ | no | What lands on the page: day lists, overnight splitting, band clipping, lane packing, month chips, localisation |
+| PDF render tests | `backend/src/test/.../service/PdfExportServiceTest` | JUnit 5 + the real `typst` binary | no (needs `typst` on PATH, else skipped) | The template compiles each view — and a batch — to a PDF; a missing binary degrades cleanly |
 | Frontend logic tests | `frontend/src/**/*.test.js(x)` | Vitest | no | Date/time helpers, recurrence parity, local assignment preview, the `api.js` client |
 | Frontend component tests | `frontend/src/*.test.jsx` | Vitest + React Testing Library + jsdom | no | Components render the right thing and react to interaction |
 
@@ -104,6 +106,9 @@ npm run test:coverage   # coverage report (v8)
 - `lib/api.test.js` — the API client, with `fetch` and `EventSource` stubbed.
 - `dashboard.test.jsx` — a worked RTL example (render with props, assert visible KPIs,
   click a button and assert the callback). Use it as the template for new component tests.
+- `export.test.jsx` — the PDF export control: the parameters it sends, the drop-out
+  warning it shows, the download it triggers. What the PDF *contains* is asserted
+  backend-side (`CalendarDocumentBuilderTest`), since that is where it is built.
 
 When adding tests, prefer pulling pure logic out of components (as `matchesDay`/`buildPlan`
 already are) and unit-testing it directly; reach for RTL for genuinely UI-level behaviour.

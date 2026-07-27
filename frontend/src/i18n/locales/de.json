@@ -277,6 +277,23 @@
     "assignedShifts": "Zugewiesene Schichten",
     "assignedHours": "Zugewiesene Stunden",
     "hours": "{{hours}} h",
+    "export": {
+      "button": "PDF",
+      "title": "Als PDF exportieren",
+      "timeRange": "Gedruckte Zeiten",
+      "timeRangeHint": "Nur dieser Teil des Tages wird gedruckt.",
+      "droppedWarning_one": "1 Schicht liegt ausserhalb dieser Zeiten. Sie wird am Seitenende aufgeführt.",
+      "droppedWarning_other": "{{count}} Schichten liegen ausserhalb dieser Zeiten. Sie werden am Seitenende aufgeführt.",
+      "paper": "Papier",
+      "paperName": { "a4": "A4", "a3": "A3", "us-letter": "Letter" },
+      "orientation": "Ausrichtung",
+      "orientationName": { "landscape": "Querformat", "portrait": "Hochformat" },
+      "pages_one": "1 Seite",
+      "pages_other": "{{count}} Seiten",
+      "download": "Herunterladen",
+      "rendering": "Wird erstellt…",
+      "failed": "Das PDF konnte nicht erstellt werden."
+    },
     "filledSlots": "Besetzte Plätze",
     "openSlotsLabel": "Offene Plätze"
   },

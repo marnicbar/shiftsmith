@@ -124,7 +124,10 @@ function expand(items, dayList) {
   return out;
 }
 
-function packLanes(evs) {
+// Greedy side-by-side packing for entries that share a day: `_lane` is the column
+// index, `_lanes` how many columns that entry's overlap cluster needs. Exported so
+// the PDF export lays overlapping shifts out exactly like the on-screen grid.
+export function packLanes(evs) {
   const sorted = [...evs].sort((a, b) => a.s - b.s || b.e - a.e);
   const lanes = [];
   for (const e of sorted) {
@@ -546,7 +549,7 @@ function monthDays(anchor) {
 
 function Toolbar(props) {
   const { t } = useTranslation();
-  const { view, onView, anchor, onAnchor, kind, paint, onPaint, onAdd, zoomControls, readOnly } = props;
+  const { view, onView, anchor, onAnchor, kind, paint, onPaint, onAdd, zoomControls, readOnly, toolbarExtra } = props;
   const monthLabel = anchor.toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' });
   let title = monthLabel, sub = '';
   if (view === 'week') {
@@ -580,6 +583,8 @@ function Toolbar(props) {
           <button key={v} className={view === v ? 'on' : ''} onClick={() => onView(v)}>{t(`calendar.view.${v}`)}</button>
         ))}
       </div>
+      {/* Owner-supplied trailing controls (the Plan views hang their PDF export here). */}
+      {toolbarExtra}
       {!readOnly && (
         <button className="btn primary sm" style={{ flexShrink: 0 }} onClick={onAdd} title={kind === 'availability' ? t('calendar.addAvailability') : t('calendar.addShift')}>
           <Ic.plus size={14}/> {t('common.add')}
