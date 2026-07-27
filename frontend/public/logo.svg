@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="shiftsmith-logo-title">
+  <title id="shiftsmith-logo-title">ShiftSmith</title>
+  <defs>
+    <linearGradient id="shiftsmith-ring" x1="0.04" y1="0.22" x2="0.96" y2="0.78">
+      <stop offset="0" stop-color="#4179b4"/>
+      <stop offset="1" stop-color="#46b184"/>
+    </linearGradient>
+  </defs>
+
+  <circle cx="256" cy="256" r="219" fill="none" stroke="url(#shiftsmith-ring)" stroke-width="37"/>
+
+  <g stroke="#1e4079" stroke-linecap="round" fill="none">
+    <g stroke-width="22">
+      <path d="M256 84L256 118"/>
+      <path d="M428 256L394 256"/>
+      <path d="M84 256L118 256"/>
+    </g>
+    <g stroke-width="14">
+      <path d="M342 107L325 136.5"/>
+      <path d="M405 170L375.5 187"/>
+      <path d="M405 342L375.5 325"/>
+      <path d="M342 405L325 375.5"/>
+      <path d="M170 405L187 375.5"/>
+      <path d="M107 342L136.5 325"/>
+      <path d="M107 170L136.5 187"/>
+      <path d="M170 107L187 136.5"/>
+    </g>
+  </g>
+
+  <path fill="#1e4079" d="M146 232
+           a14 14 0 0 1 14-14
+           h10 a10 10 0 0 0 20 0
+           h6  a10 10 0 0 0 20 0
+           h33
+           C292 213 334 222 353 249
+           C365 268 372 288 373 297
+           a10 10 0 0 1-19 5
+           C346 285 330 269 310 261
+           C291 254 273 262 266 279
+           C263 288 262 300 262 312
+           L265 464 a6 6 0 0 1-6 6
+           H223 a6 6 0 0 1-6-6
+           L220 312
+           C220 302 216 296 199 294
+           H146Z"/>
+</svg>
