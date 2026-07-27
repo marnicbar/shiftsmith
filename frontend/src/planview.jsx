@@ -274,7 +274,6 @@ function PositionSchedule({ positions = [], employees = [], assign, selId, setSe
                 <div className="avatar lg sq" style={{ background: Theme.colorAt(pos.color) }}><Ic.briefcase size={20}/></div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.02em' }}>{pos.name}</div>
-                  <div className="muted" style={{ fontSize: 12.5 }}>{t('positions.shiftTypeCount', { count: pos.shifts.length })}</div>
                 </div>
               </div>
               <div className="divider"></div>
