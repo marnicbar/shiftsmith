@@ -176,13 +176,17 @@
         let x = gutter + seg.day * col-w + seg.lane * lane-w
         let y = y-of(seg.start)
         let hh = calc.max(y-of(seg.end) - y, 9pt)
+        // White body, colour only in the accent bar down the left edge: the page
+        // stays legible in bulk (and photocopies) while the bar still carries the
+        // position. The remaining edges are a neutral hairline, just enough to read
+        // the chip as a card.
         place(dx: x + 0.7pt, dy: y + 0.5pt, block(
           width: lane-w - 1.4pt,
           height: hh - 1pt,
           clip: true,
           radius: 1.6pt,
-          fill: if seg.open { col.lighten(90%) } else { col.lighten(80%) },
-          stroke: (left: 1.6pt + col, rest: 0.4pt + col.darken(5%)),
+          fill: white,
+          stroke: (left: 1.6pt + col, rest: 0.4pt + hairline),
           chip-body(seg, compact: lane-w < 34mm),
         ))
       }
@@ -220,7 +224,7 @@
           let col = swatch(chip.color)
           block(
             width: 100%, inset: (x: 2.5pt, y: 1.2pt), radius: 1.4pt, below: 1.6pt,
-            fill: col.lighten(82%),
+            fill: white,
             stroke: (left: 1.4pt + col),
             // One line, clipped: a long crew list is cut off rather than wrapping, so
             // the cell always fits the chip budget the caller sized it for. The inner
