@@ -7,6 +7,11 @@
 // what the user sees on screen. (Your editor will flag `data.json` as missing: it
 // only exists in that scratch directory at render time.)
 //
+// `logo.svg` — the ShiftSmith mark printed beside the brand name in the page
+// footer — is copied into the same scratch directory by PdfExportService, from
+// `typst/logo.svg` on the classpath. It is the same drawing the web app uses
+// (`frontend/public/logo.svg`); keep the two copies in lock-step.
+//
 // Deliberately self-contained: no `@preview` packages, because the production
 // container has no network access at render time.
 //
@@ -48,7 +53,9 @@
       align: (left, center, right),
       meta.generated,
       [#counter(page).display("1") / #counter(page).final().first()],
-      meta.brand,
+      // The mark rides on the text baseline so it sits with the brand name rather
+      // than pushing the footer line taller.
+      [#box(baseline: 2.2pt, image("logo.svg", height: 8.5pt))#h(3.5pt)#meta.brand],
     )
   ],
 )

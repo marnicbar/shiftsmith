@@ -113,6 +113,28 @@ class PdfExportServiceTest {
         }
     }
 
+    /**
+     * The footer's brand mark is the same drawing the web app shows in its topbar and
+     * uses as its favicon. The two build contexts are separate (the backend image never
+     * sees {@code frontend/}), so the file is copied rather than shared — this pins the
+     * copies together so the PDF and the UI can't end up on different logos.
+     */
+    @Test
+    void logoShipsWithTheAppAndMatchesTheFrontendCopy() throws IOException {
+        byte[] shipped;
+        try (InputStream in = Thread.currentThread().getContextClassLoader()
+                .getResourceAsStream("typst/logo.svg")) {
+            assertThat(in).as("typst/logo.svg must ship with the app").isNotNull();
+            shipped = in.readAllBytes();
+        }
+        // Surefire runs from backend/; in a backend-only checkout there is nothing to compare to.
+        Path frontend = Path.of("..", "frontend", "public", "logo.svg");
+        assumeTrue(Files.exists(frontend), "frontend/public/logo.svg not in this checkout");
+        assertThat(shipped)
+                .as("typst/logo.svg must stay byte-identical to frontend/public/logo.svg")
+                .isEqualTo(Files.readAllBytes(frontend));
+    }
+
     @Test
     void rendersEveryViewToAPdf() {
         assumeTrue(typstAvailable(), "typst binary not on PATH");

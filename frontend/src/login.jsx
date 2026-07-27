@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as api from './lib/api.js';
+import { Brand } from './brand.jsx';
 
 export function Login({ onSuccess }) {
   const { t } = useTranslation();
@@ -30,7 +31,7 @@ export function Login({ onSuccess }) {
   return (
     <div className="login-screen">
       <form className="card login-card" onSubmit={submit}>
-        <div className="login-brand"><span className="logo">S</span><span className="brand-name"><b>Shift</b>Smith</span></div>
+        <Brand className="login-brand" />
         <h1 className="login-title">{t('auth.title')}</h1>
         <p className="login-sub">{t('auth.subtitle')}</p>
 
@@ -92,7 +93,7 @@ export function ForcePasswordChange({ username, onDone }) {
   return (
     <div className="login-screen">
       <form className="card login-card" onSubmit={submit}>
-        <div className="login-brand"><span className="logo">S</span><span className="brand-name"><b>Shift</b>Smith</span></div>
+        <Brand className="login-brand" />
         <h1 className="login-title">{t('auth.forceTitle')}</h1>
         <p className="login-sub">{t('auth.forceSubtitle')}</p>
 

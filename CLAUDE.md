@@ -173,6 +173,12 @@ preferred weekly hours, workload balance. Constraint names must be alphanumeric 
 
 ### Frontend notes
 - `lib/api.js` is the only integration point.
+- **Brand mark.** `frontend/public/logo.svg` is the single drawing of the ShiftSmith
+  logo: `brand.jsx` renders it (topbar + login screen), `index.html` points the
+  favicon at it, and the PDF export prints it in the page footer. The export runs in
+  a separate build context that never sees `frontend/`, so the backend ships a copy at
+  `backend/src/main/resources/typst/logo.svg` — `PdfExportServiceTest` fails if the two
+  drift apart, so **edit the logo in both places**.
 - Appearance/interaction prefs persist in `localStorage`; solver settings live in the backend.
 - `ShiftPlan` renders the solver's assignment map; the `AssignEditor` writes manual
   overrides which sync back as pins.
@@ -200,9 +206,11 @@ scheduled/emailed export uses the same path:
   midnight, clips to the printed band, packs overlaps into lanes, and builds month chips.
 - `ExportLabels` / `Palette` — every string, date format and colour the page needs.
   `Palette` mirrors `theme.js` `colorAt` (OKLCH components, not a CSS string).
-- `PdfExportService` — drops the document's JSON beside `typst/calendar.typ` in a scratch
-  directory and shells out to `typst compile --root <dir>` (sandboxed, timed out, cleaned
-  up). The template composes **no text of its own**; a section is a page.
+- `PdfExportService` — drops the document's JSON, plus `typst/logo.svg` (the brand mark
+  the footer prints — Typst may only read inside the sandbox root), beside
+  `typst/calendar.typ` in a scratch directory and shells out to
+  `typst compile --root <dir>` (sandboxed, timed out, cleaned up). The template composes
+  **no text of its own**; a section is a page.
 - `ScheduleService.assignMap(from, to)` — durable rows overlaid with the live in-memory
   solution, exactly as the UI overlays them.
 
