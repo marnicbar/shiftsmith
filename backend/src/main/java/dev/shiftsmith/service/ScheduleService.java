@@ -28,9 +28,12 @@ import org.jboss.logging.Logger;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -299,6 +302,40 @@ public class ScheduleService {
             if (b.occursOn(d)) return true;
         }
         return false;
+    }
+
+    /**
+     * Who is working each shift occurrence in {@code [from, to)}, as
+     * {@code templateId + "@" + date → ordered employee ids}.
+     *
+     * <p>Built the way the read-only Plan calendars build theirs: the durable
+     * {@code assignment} rows give the whole range (including history and any persisted
+     * future), and the live in-memory solution is overlaid on top for the occurrences it
+     * covers, so an export taken mid-solve shows what the screen shows. Used by the PDF
+     * export (see {@code dev.shiftsmith.export.CalendarDocumentBuilder}).
+     */
+    public synchronized Map<String, List<String>> assignMap(LocalDate from, LocalDate to) {
+        // Durable rows first: one entry per occurrence, slots in index order.
+        Map<String, SortedMap<Integer, String>> durable = new LinkedHashMap<>();
+        for (var a : assignmentStore.loadRange(from, to)) {
+            if (a.employeeId == null) continue;
+            durable.computeIfAbsent(a.templateId + "@" + a.occurrenceDate, k -> new TreeMap<>())
+                    .put(a.slotIndex, a.employeeId);
+        }
+        Map<String, List<String>> out = new LinkedHashMap<>();
+        for (var e : durable.entrySet()) out.put(e.getKey(), List.copyOf(e.getValue().values()));
+
+        // The live solution replaces a whole occurrence where it has one, so an
+        // unassigned slot in the current solve isn't papered over by a stale row.
+        Map<String, SortedMap<Integer, String>> live = new LinkedHashMap<>();
+        for (ShiftAssignment a : currentAssignments()) {
+            if (a.getDate().isBefore(from) || !a.getDate().isBefore(to)) continue;
+            SortedMap<Integer, String> slots =
+                    live.computeIfAbsent(a.getShiftTemplateId() + "@" + a.getDate(), k -> new TreeMap<>());
+            if (a.getEmployee() != null) slots.put(a.getSlotIndex(), a.getEmployee().getId());
+        }
+        for (var e : live.entrySet()) out.put(e.getKey(), List.copyOf(e.getValue().values()));
+        return out;
     }
 
     /**

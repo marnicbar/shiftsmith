@@ -278,7 +278,24 @@
     "assignedHours": "Assigned hours",
     "hours": "{{hours}} h",
     "filledSlots": "Filled slots",
-    "openSlotsLabel": "Open slots"
+    "openSlotsLabel": "Open slots",
+    "export": {
+      "button": "PDF",
+      "title": "Export as PDF",
+      "timeRange": "Printed hours",
+      "timeRangeHint": "Only this part of the day is printed.",
+      "droppedWarning_one": "1 shift falls outside these hours. It is listed at the foot of the page.",
+      "droppedWarning_other": "{{count}} shifts fall outside these hours. They are listed at the foot of the page.",
+      "paper": "Paper",
+      "paperName": { "a4": "A4", "a3": "A3", "us-letter": "Letter" },
+      "orientation": "Orientation",
+      "orientationName": { "landscape": "Landscape", "portrait": "Portrait" },
+      "pages_one": "1 page",
+      "pages_other": "{{count}} pages",
+      "download": "Download",
+      "rendering": "Rendering…",
+      "failed": "Could not create the PDF."
+    }
   },
   "calendar": {
     "overlapAvail": "This overlaps another availability entry. Entries can’t overlap — except vacation, which spans the whole day.",

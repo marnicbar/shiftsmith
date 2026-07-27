@@ -47,5 +47,6 @@ mkIcon('settings', <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 
 mkIcon('play', <path d="M7 5l12 7-12 7V5Z"/>);
 mkIcon('pause', <><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></>);
 mkIcon('chevR2', <path d="M9 6l6 6-6 6"/>);
+mkIcon('download', <><path d="M12 3v12"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M4 20h16"/></>);
 
 export { Ic };
