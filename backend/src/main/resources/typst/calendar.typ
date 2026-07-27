@@ -31,6 +31,11 @@
 #let rule-strong = luma(150)
 #let dim-fill = luma(248)
 
+// Width of the hour-label gutter down the left of a day/week grid. The calendar
+// proper starts here, so anything that belongs to the calendar — including the rule
+// closing it off at the bottom — is indented by it and never runs under the labels.
+#let gutter = 13mm
+
 // --- page -------------------------------------------------------------------
 #set page(
   paper: meta.paper,
@@ -116,7 +121,6 @@
   let from = cfg.dayStart
   let to = cfg.dayEnd
   let span = calc.max(to - from, 60)
-  let gutter = 13mm
   let ndays = sec.days.len()
 
   grid(
@@ -149,18 +153,11 @@
         }
       }
 
-      // hour rules + gutter labels. A label straddles its line, except at the two
-      // edges, where it is nudged inwards so it can't collide with the header rule
-      // above or the footer rule below.
-      let first-hr = calc.ceil(from / 60)
-      let last-hr = calc.floor(to / 60)
-      for hr in range(first-hr, last-hr + 1) {
+      // hour rules + gutter labels, each label straddling its own line
+      for hr in range(calc.ceil(from / 60), calc.floor(to / 60) + 1) {
         let y = y-of(hr * 60)
         place(dx: gutter, dy: y, line(length: size.width - gutter, stroke: 0.4pt + hairline))
-        let dy = if hr == first-hr and y < 1pt { y }
-                 else if hr == last-hr and y > h-total - 1pt { y - 9pt }
-                 else { y - 4.5pt }
-        place(dx: 0pt, dy: dy, box(width: gutter - 3pt, align(right,
+        place(dx: 0pt, dy: y - 4.5pt, box(width: gutter - 3pt, align(right,
           text(size: 7pt, fill: ink-soft)[#cfg.hourLabels.at(str(hr), default: str(hr))])))
       }
 
@@ -255,8 +252,12 @@
 #let footer-band(sec) = {
   let has-band = sec.legend.len() > 0 or sec.stats.len() > 0
   if not has-band and sec.dropped.count == 0 { return }
+  // The rule closes off the calendar, so it starts where the calendar does: on a
+  // day/week page that is past the hour-label gutter, never underneath the labels.
+  // A month grid has no gutter and runs the full width.
+  let lead = if meta.view == "month" { 0pt } else { gutter }
   block(width: 100%, above: 5pt, {
-    line(length: 100%, stroke: 0.4pt + hairline)
+    pad(left: lead, line(length: 100%, stroke: 0.4pt + hairline))
     v(4pt)
     if has-band {
       grid(
