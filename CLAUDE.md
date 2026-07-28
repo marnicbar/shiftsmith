@@ -80,6 +80,8 @@ deltas, bounded solver scope and per-employee authorization are the rest of #47.
 - Dev (`mvn quarkus:dev`): Quarkus Dev Services auto-starts a throwaway Postgres
   (needs Docker). Prod/compose: connects to the `db` service via
   `QUARKUS_DATASOURCE_*` env (see `application.properties` `%prod` keys).
+- **PostgreSQL 14+** is the floor (the minimum Hibernate ORM supports as of
+  Quarkus 3.38); the compose files pin `postgres:16-alpine`.
 
 ### Backend is the source of truth
 The frontend owns the editor UI but the backend holds the canonical problem
