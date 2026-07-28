@@ -42,10 +42,9 @@ button { font-family: inherit; }
 .brand .brand-name { color: var(--text-3); font-weight: 500; letter-spacing: -0.02em; }
 .brand .brand-name b { color: var(--text); font-weight: 600; }
 
-/* The mark is drawn in deep blue on transparency, so it needs a light disc under it
-   to stay readable in dark mode. In light mode the surface is white anyway, so the
-   same disc is invisible and one rule covers both. */
-.brand .logo, .login-brand .logo { display: block; border-radius: 50%; background: #fff; }
+/* The light disc the mark needs in dark mode is part of the drawing (see logo.svg),
+   not a background here, so the favicon and the PDF footer get it too. */
+.brand .logo, .login-brand .logo { display: block; }
 
 .tabs { display: flex; align-items: center; gap: 2px; height: 100%; }
 .tab {

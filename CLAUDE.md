@@ -192,7 +192,10 @@ preferred weekly hours, workload balance. Constraint names must be alphanumeric 
   favicon at it, and the PDF export prints it in the page footer. The export runs in
   a separate build context that never sees `frontend/`, so the backend ships a copy at
   `backend/src/main/resources/typst/logo.svg` — `PdfExportServiceTest` fails if the two
-  drift apart, so **edit the logo in both places**.
+  drift apart, so **edit the logo in both places**. The mark is deep blue, so the SVG
+  itself carries the white disc it needs to stay readable on a dark surface; keeping
+  the plate in the drawing rather than in CSS means the favicon and the printed footer
+  get it as well.
 - Appearance/interaction prefs persist in `localStorage`; solver settings live in the backend.
 - `ShiftPlan` renders the solver's assignment map; the `AssignEditor` writes manual
   overrides which sync back as pins.
