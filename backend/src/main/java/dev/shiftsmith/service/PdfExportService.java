@@ -20,10 +20,10 @@ import java.util.concurrent.TimeUnit;
  * Renders a calendar PDF with <a href="https://typst.app">Typst</a>.
  *
  * <p>This is only the typesetting half: {@code dev.shiftsmith.export.CalendarDocumentBuilder}
- * decides what goes on the page. Here we drop that document's JSON next to
- * {@code typst/calendar.typ} in a throwaway directory and shell out to the
- * {@code typst} binary. The template reads the JSON and draws it; it composes no text
- * of its own.
+ * decides what goes on the page. Here we drop that document's JSON — and the brand
+ * mark the footer prints — next to {@code typst/calendar.typ} in a throwaway directory
+ * and shell out to the {@code typst} binary. The template reads the JSON and draws it;
+ * it composes no text of its own.
  *
  * <p>Typst runs sandboxed to that directory ({@code --root}), so the template cannot
  * reach outside it. The binary is invoked with a hard timeout and the scratch
@@ -37,6 +37,13 @@ public class PdfExportService {
     /** Template shipped on the classpath; copied into each render's scratch directory. */
     private static final String TEMPLATE_RESOURCE = "typst/calendar.typ";
     private static final String TEMPLATE_NAME = "calendar.typ";
+    /**
+     * The ShiftSmith mark the footer prints. Typst may only read files inside the
+     * sandbox root, so it is staged alongside the template under its bare name; the
+     * template refers to it as {@code image("logo.svg")}.
+     */
+    private static final String LOGO_RESOURCE = "typst/logo.svg";
+    private static final String LOGO_NAME = "logo.svg";
     private static final String DATA_NAME = "data.json";
     private static final String OUTPUT_NAME = "out.pdf";
 
@@ -79,7 +86,8 @@ public class PdfExportService {
         try {
             dir = Files.createTempDirectory("shiftsmith-export-");
             Files.write(dir.resolve(DATA_NAME), data);
-            Files.write(dir.resolve(TEMPLATE_NAME), template());
+            Files.write(dir.resolve(TEMPLATE_NAME), resource(TEMPLATE_RESOURCE));
+            Files.write(dir.resolve(LOGO_NAME), resource(LOGO_RESOURCE));
             return compile(dir);
         } catch (IOException e) {
             throw new ExportException("could not prepare the PDF render", e);
@@ -138,10 +146,11 @@ public class PdfExportService {
         }
     }
 
-    private static byte[] template() throws IOException {
+    /** Reads one of the render's classpath assets (template, brand mark). */
+    private static byte[] resource(String name) throws IOException {
         try (InputStream in = Thread.currentThread().getContextClassLoader()
-                .getResourceAsStream(TEMPLATE_RESOURCE)) {
-            if (in == null) throw new ExportException("missing template resource " + TEMPLATE_RESOURCE);
+                .getResourceAsStream(name)) {
+            if (in == null) throw new ExportException("missing template resource " + name);
             return in.readAllBytes();
         }
     }

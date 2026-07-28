@@ -4,6 +4,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Theme } from './theme.js';
 import { Ic } from './icons.jsx';
+import { Brand } from './brand.jsx';
 import { SS } from './data.js';
 import i18n from './i18n/index.js';
 import { Personnel } from './personnel.jsx';
@@ -461,7 +462,7 @@ export default function App() {
   return (
     <div className="app">
       <div className="topbar">
-        <div className="brand"><span className="logo">S</span><span className="brand-name"><b>Shift</b>Smith</span></div>
+        <Brand />
         <nav className="tabs">
           {TABS.map((x) => {
             const pill = x.id === 'shiftplan' && sched.unassigned > 0 ? <span className="pill">{sched.unassigned}</span> : null;
