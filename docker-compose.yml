@@ -49,6 +49,12 @@ services:
       - QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://db:5432/${POSTGRES_DB:-shiftsmith}
       - POSTGRES_USER=${POSTGRES_USER:-shiftsmith}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-shiftsmith}
+      # Credentials of the admin account seeded on a fresh database. Set
+      # SHIFTSMITH_ADMIN_PASSWORD before the first boot so the instance is never
+      # reachable on the well-known default; left empty, the account is seeded with
+      # it but blocked from every protected endpoint until it is rotated (issue #36).
+      - SHIFTSMITH_ADMIN_USERNAME=${SHIFTSMITH_ADMIN_USERNAME:-admin}
+      - SHIFTSMITH_ADMIN_PASSWORD=${SHIFTSMITH_ADMIN_PASSWORD:-}
       # The schedule model is zone-less: "today", the horizon roll-over and shift
       # wall-clock times all use the app's default timezone. Pin it explicitly to
       # your business timezone (e.g. Europe/Berlin) so the horizon rolls at local
