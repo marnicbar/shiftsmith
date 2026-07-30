@@ -32,7 +32,12 @@ The root `Dockerfile` is a multi-stage build: it builds the React SPA, bundles
 origin as `/api`), and packages the backend. One process, one port (8080), no
 nginx — bring your own PostgreSQL (`docker-compose.yml` wires up a `db` service;
 the database is deliberately not part of the image). Tagged builds (`v*`) are
-published to `ghcr.io/marnicbar/shiftsmith` by `.github/workflows/release.yml`.
+published to `ghcr.io/marnicbar/shiftsmith` by `.github/workflows/release.yml`, as a
+**multi-arch manifest** (`linux/amd64` + `linux/arm64`). The two build stages are
+`FROM --platform=$BUILDPLATFORM` — a JS bundle and JVM bytecode are
+architecture-independent, so npm/Maven run natively once and only the runtime stage
+(apt + the per-arch Typst tarball) is built per architecture under QEMU. Keep any new
+build stage on `$BUILDPLATFORM` unless it genuinely produces native code.
 Because the frontend has no client-side router, the SPA is only ever served at
 `/`, so no deep-link fallback is needed.
 

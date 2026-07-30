@@ -50,16 +50,19 @@ the Hibernate ORM version Quarkus ships) — the database is not part of the ima
 ```bash
 docker compose up -d --build
 ```
-Open **http://localhost:8080** (Swagger UI at `/q/swagger-ui`). The bundled
-`docker-compose.yml` runs the app plus a PostgreSQL container; override
-`POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` (and the image tag) via a
-`.env` file before going to production.
+Open **http://localhost:8080**. The bundled `docker-compose.yml` runs the app plus
+a PostgreSQL container; override `POSTGRES_USER` / `POSTGRES_PASSWORD` /
+`POSTGRES_DB` / `SHIFTSMITH_ADMIN_PASSWORD` (and the image tag) via a `.env` file
+before going to production. (The OpenAPI document and Swagger UI are developer
+aids and are disabled in the packaged app; `mvn quarkus:dev` serves Swagger UI at
+`/q/swagger-ui`.)
 
 To run a published image instead of building locally, drop the `build:` block in
 `docker-compose.yml` and keep the `image:` line (tagged builds are pushed to
-`ghcr.io/marnicbar/shiftsmith` on every `v*` git tag). Point the app at any
-PostgreSQL 14+ with the standard `QUARKUS_DATASOURCE_JDBC_URL`, `POSTGRES_USER`
-and `POSTGRES_PASSWORD` environment variables.
+`ghcr.io/marnicbar/shiftsmith` on every `v*` git tag, for `linux/amd64` and
+`linux/arm64`). Point the app at any PostgreSQL 14+ with the standard
+`QUARKUS_DATASOURCE_JDBC_URL`, `POSTGRES_USER` and `POSTGRES_PASSWORD`
+environment variables.
 
 #### Admin credentials
 On a **fresh database** ShiftSmith seeds a single admin account. Set the initial
@@ -76,6 +79,10 @@ password at deploy time so the instance is never reachable on a known credential
   (`admin` / `shiftsmith`) but is flagged for rotation: every protected endpoint
   returns `403` and the UI forces a password change on first sign-in, so the
   default password can never be used to operate the app.
+
+Both variables are passed through by the bundled `docker-compose.yml`, so a `.env`
+file (or the shell environment) is enough — with a plain `docker run`, pass them
+with `-e`.
 
 These only take effect when the account is first created. To rotate the password
 later, use **Account → Sign-in** in the app (or `POST /api/auth/change-password`).
@@ -106,4 +113,4 @@ cd frontend && npm install && npm run dev   # :5173 (proxies /api → :8080)
 
 ## License
 
-Apache 2.0
+MIT — see [LICENSE](LICENSE).

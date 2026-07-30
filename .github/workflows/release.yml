@@ -74,6 +74,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The runtime stage (apt + the Typst tarball) is built once per target
+      # architecture, so cross-building arm64 on an amd64 runner needs emulation.
+      # The npm/Maven stages are pinned to $BUILDPLATFORM and stay native.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -101,6 +107,7 @@ jobs:
         with:
           context: .
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
