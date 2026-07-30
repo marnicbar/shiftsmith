@@ -43,12 +43,10 @@ assign shifts automatically — respecting skills, availability, hour limits and
 ## Running
 
 ### Production (published image + your database)
-ShiftSmith ships as **one image** that serves the UI and the API together on
-port 8080. Bring your own PostgreSQL **14 or newer** (the minimum supported by
-the Hibernate ORM version Quarkus ships) — the database is not part of the image.
-
-Every `v*` git tag publishes a multi-arch image (`linux/amd64` + `linux/arm64`)
-to `ghcr.io/marnicbar/shiftsmith`, so deploying is a pull, not a build:
+ShiftSmith ships as **one image** serving the UI and the API on port 8080; bring
+your own PostgreSQL **14+**. Every `v*` tag publishes to
+`ghcr.io/marnicbar/shiftsmith` for `linux/amd64` and `linux/arm64`, so deploying
+is a pull, not a build:
 
 ```bash
 curl -O https://raw.githubusercontent.com/marnicbar/shiftsmith/main/examples/docker-compose.yml
@@ -56,19 +54,9 @@ $EDITOR docker-compose.yml    # fill in the <placeholders>
 docker compose up -d
 ```
 
-Then open **http://localhost:8080** and sign in with the admin credentials you
-just set. **[`examples/`](examples/)** has the compose files (bundled or external
-database) and the deployment guide: configuration, TLS, backups, upgrades,
-sizing, troubleshooting.
-
-Two things to get right before the first boot. Set `SHIFTSMITH_ADMIN_PASSWORD` —
-without it the seeded admin account falls back to a well-known default and is
-locked to a forced password change, so nothing works until you rotate it. And set
-`TZ` to your business timezone: the schedule model is zone-less, so `TZ` decides
-when "today" and the solve horizon roll over.
-
-(Swagger UI and the OpenAPI document are dev-mode aids and are not packaged into
-the release image; `mvn quarkus:dev` serves Swagger UI at `/q/swagger-ui`.)
+Open **http://localhost:8080** and sign in with the admin credentials you just
+set. **[`examples/`](examples/)** has both compose files and the deployment
+guide: configuration, TLS, backups, upgrades, troubleshooting.
 
 ### Development
 Hot-reload stack (separate Vite dev server + backend + db) in Docker:
@@ -76,7 +64,8 @@ Hot-reload stack (separate Vite dev server + backend + db) in Docker:
 docker compose -f docker-compose.dev.yml up --build
 ```
 Open **http://localhost:5173**; the Vite dev server proxies `/api/*` to the
-backend on :8080.
+backend on :8080. Swagger UI is served at `/q/swagger-ui` in dev mode only — it
+is not packaged into the release image.
 
 Or run the toolchains directly (requires Java 21 + Maven and Node 22.13+; CI and
 the Docker images use Node 24):
