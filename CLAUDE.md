@@ -43,12 +43,10 @@ Because the frontend has no client-side router, the SPA is only ever served at
 
 **Root compose files are development; `examples/` is deployment.** The root
 `docker-compose.yml` builds from the working tree and tags it `shiftsmith:local`;
-`examples/docker-compose.yml` (plus `docker-compose.external-db.yml` and
-`.env.example`) pulls a pinned published tag and never builds. `examples/README.md`
-is the operator-facing deployment guide (configuration, reverse proxy/TLS, backups,
-upgrades, sizing, troubleshooting) and the README's production section links to it
-rather than repeating it — when deployment behaviour changes (env vars, ports,
-first-boot admin seeding, migrations), update `examples/README.md`.
+`examples/` pulls a pinned published tag and never builds. `examples/README.md` is
+the operator-facing guide (configuration, TLS, backups, upgrades, sizing) and the
+README links to it rather than repeating it — keep it current when deployment
+behaviour changes (env vars, ports, first-boot admin seeding, migrations).
 
 ### Dev full stack (hot reload)
 ```bash

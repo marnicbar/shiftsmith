@@ -48,7 +48,7 @@ port 8080. Bring your own PostgreSQL **14 or newer** (the minimum supported by
 the Hibernate ORM version Quarkus ships) — the database is not part of the image.
 
 Every `v*` git tag publishes a multi-arch image (`linux/amd64` + `linux/arm64`)
-to `ghcr.io/marnicbar/shiftsmith`, so a deployment is a pull, not a build:
+to `ghcr.io/marnicbar/shiftsmith`, so deploying is a pull, not a build:
 
 ```bash
 curl -O https://raw.githubusercontent.com/marnicbar/shiftsmith/main/examples/docker-compose.yml
@@ -58,25 +58,17 @@ docker compose up -d
 ```
 
 Then open **http://localhost:8080** and sign in with the admin credentials from
-your `.env`.
+your `.env`. **[`examples/`](examples/)** has the compose files (bundled or
+external database) and the deployment guide: configuration, TLS, backups,
+upgrades, sizing, troubleshooting.
 
-**[`examples/`](examples/) is the deployment guide**: a compose file for the app
-plus a PostgreSQL container, another for a database you already operate, and a
-README covering configuration, the reverse proxy and TLS, backups, upgrades,
-sizing and troubleshooting.
+Two things to get right before the first boot. Set `SHIFTSMITH_ADMIN_PASSWORD` —
+without it the seeded admin account falls back to a well-known default and is
+locked to a forced password change, so nothing works until you rotate it. And set
+`TZ` to your business timezone: the schedule model is zone-less, so `TZ` decides
+when "today" and the solve horizon roll over.
 
-Two things worth knowing before the first boot:
-
-- **Set `SHIFTSMITH_ADMIN_PASSWORD`.** On a fresh database ShiftSmith seeds one
-  admin account. Without this variable it falls back to a well-known default but
-  is flagged for rotation — every protected endpoint answers `403` and the UI
-  forces a password change at first sign-in, so the default can never be used to
-  operate the app. Rotate it later under **Account → Sign-in**.
-- **Set `TZ` to your business timezone.** The schedule model is zone-less, so
-  `TZ` decides when "today" and the solve horizon roll over. It defaults to UTC
-  rather than the host's zone.
-
-(The OpenAPI document and Swagger UI are developer aids and are not packaged into
+(Swagger UI and the OpenAPI document are dev-mode aids and are not packaged into
 the release image; `mvn quarkus:dev` serves Swagger UI at `/q/swagger-ui`.)
 
 ### Development
@@ -94,12 +86,12 @@ cd backend && mvn quarkus:dev      # :8080
 cd frontend && npm install && npm run dev   # :5173 (proxies /api → :8080)
 ```
 
-The root `docker-compose.yml` builds the all-in-one image from your working tree
-and runs it against a PostgreSQL container — the packaged app, but from source:
+To check a change the way it will ship, the root `docker-compose.yml` builds the
+all-in-one image from your working tree:
 ```bash
-docker compose up -d --build       # :8080, image tagged shiftsmith:local
+docker compose up -d --build       # :8080, tagged shiftsmith:local
 ```
-Both root compose files are development stacks. To deploy a release, use
+Both root compose files are development stacks — deploy from
 [`examples/`](examples/).
 
 ## Tech stack

@@ -1,20 +1,12 @@
-# Development: the packaged app, built from this working tree.
-#
-# Builds the all-in-one image (React UI + Quarkus API on port 8080) from the
-# local source and runs it against a PostgreSQL container — the production
-# layout, so you can check a change the way it will actually ship. The database
-# is intentionally NOT baked into the image.
+# Development: the packaged app (UI + API on port 8080), built from this working
+# tree and run against PostgreSQL — the production layout, from source.
 #
 #   docker compose up -d --build
 #
-# Credentials default to "shiftsmith", which is fine for a local stack.
+# Credentials default to "shiftsmith", which is fine locally.
 #
-# TO DEPLOY A RELEASE, USE examples/ INSTEAD: those compose files pull a
-# published, versioned image from ghcr.io/marnicbar/shiftsmith and examples/README.md
-# covers TLS, backups, upgrades and sizing.
-#
-# For the hot-reload development stack (separate Vite dev server + backend),
-# see docker-compose.dev.yml.
+# To deploy a release, use examples/ instead: those pull a published, versioned
+# image and come with a deployment guide. For hot reload, docker-compose.dev.yml.
 
 services:
   db:
