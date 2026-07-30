@@ -19,3 +19,4 @@ dist/
 
 # Local PostgreSQL data dir (docker-compose bind mount)
 /data/
+examples/data/

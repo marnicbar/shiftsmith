@@ -41,6 +41,13 @@ build stage on `$BUILDPLATFORM` unless it genuinely produces native code.
 Because the frontend has no client-side router, the SPA is only ever served at
 `/`, so no deep-link fallback is needed.
 
+**Root compose files are development; `examples/` is deployment.** The root
+`docker-compose.yml` builds from the working tree and tags it `shiftsmith:local`;
+`examples/` pulls a pinned published tag and never builds. `examples/README.md` is
+the operator-facing guide (configuration, TLS, backups, upgrades, sizing) and the
+README links to it rather than repeating it — keep it current when deployment
+behaviour changes (env vars, ports, first-boot admin seeding, migrations).
+
 ### Dev full stack (hot reload)
 ```bash
 docker compose -f docker-compose.dev.yml up --build   # postgres :5432, backend :8080, frontend :5173

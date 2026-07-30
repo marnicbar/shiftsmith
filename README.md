@@ -42,50 +42,21 @@ assign shifts automatically — respecting skills, availability, hour limits and
 
 ## Running
 
-### Production (single image + your database)
-ShiftSmith ships as **one image** that serves the UI and the API together on
-port 8080. Bring your own PostgreSQL **14 or newer** (the minimum supported by
-the Hibernate ORM version Quarkus ships) — the database is not part of the image.
+### Production (published image + your database)
+ShiftSmith ships as **one image** serving the UI and the API on port 8080; bring
+your own PostgreSQL **14+**. Every `v*` tag publishes to
+`ghcr.io/marnicbar/shiftsmith` for `linux/amd64` and `linux/arm64`, so deploying
+is a pull, not a build:
 
 ```bash
-docker compose up -d --build
+curl -O https://raw.githubusercontent.com/marnicbar/shiftsmith/main/examples/docker-compose.yml
+$EDITOR docker-compose.yml    # fill in the <placeholders>
+docker compose up -d
 ```
-Open **http://localhost:8080**. The bundled `docker-compose.yml` runs the app plus
-a PostgreSQL container; override `POSTGRES_USER` / `POSTGRES_PASSWORD` /
-`POSTGRES_DB` / `SHIFTSMITH_ADMIN_PASSWORD` (and the image tag) via a `.env` file
-before going to production. (The OpenAPI document and Swagger UI are developer
-aids and are disabled in the packaged app; `mvn quarkus:dev` serves Swagger UI at
-`/q/swagger-ui`.)
 
-To run a published image instead of building locally, drop the `build:` block in
-`docker-compose.yml` and keep the `image:` line (tagged builds are pushed to
-`ghcr.io/marnicbar/shiftsmith` on every `v*` git tag, for `linux/amd64` and
-`linux/arm64`). Point the app at any PostgreSQL 14+ with the standard
-`QUARKUS_DATASOURCE_JDBC_URL`, `POSTGRES_USER` and `POSTGRES_PASSWORD`
-environment variables.
-
-#### Admin credentials
-On a **fresh database** ShiftSmith seeds a single admin account. Set the initial
-password at deploy time so the instance is never reachable on a known credential:
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `SHIFTSMITH_ADMIN_USERNAME` | `admin` | Username of the seeded account. |
-| `SHIFTSMITH_ADMIN_PASSWORD` | _(none)_ | Initial password. **Set this in production.** |
-
-- If `SHIFTSMITH_ADMIN_PASSWORD` is set, that password is used and the account is
-  ready immediately.
-- If it is **not** set, the account falls back to the well-known default
-  (`admin` / `shiftsmith`) but is flagged for rotation: every protected endpoint
-  returns `403` and the UI forces a password change on first sign-in, so the
-  default password can never be used to operate the app.
-
-Both variables are passed through by the bundled `docker-compose.yml`, so a `.env`
-file (or the shell environment) is enough — with a plain `docker run`, pass them
-with `-e`.
-
-These only take effect when the account is first created. To rotate the password
-later, use **Account → Sign-in** in the app (or `POST /api/auth/change-password`).
+Open **http://localhost:8080** and sign in with the admin credentials you just
+set. **[`examples/`](examples/)** has both compose files and the deployment
+guide: configuration, TLS, backups, upgrades, troubleshooting.
 
 ### Development
 Hot-reload stack (separate Vite dev server + backend + db) in Docker:
@@ -93,7 +64,8 @@ Hot-reload stack (separate Vite dev server + backend + db) in Docker:
 docker compose -f docker-compose.dev.yml up --build
 ```
 Open **http://localhost:5173**; the Vite dev server proxies `/api/*` to the
-backend on :8080.
+backend on :8080. Swagger UI is served at `/q/swagger-ui` in dev mode only — it
+is not packaged into the release image.
 
 Or run the toolchains directly (requires Java 21 + Maven and Node 22.13+; CI and
 the Docker images use Node 24):
@@ -101,6 +73,14 @@ the Docker images use Node 24):
 cd backend && mvn quarkus:dev      # :8080
 cd frontend && npm install && npm run dev   # :5173 (proxies /api → :8080)
 ```
+
+To check a change the way it will ship, the root `docker-compose.yml` builds the
+all-in-one image from your working tree:
+```bash
+docker compose up -d --build       # :8080, tagged shiftsmith:local
+```
+Both root compose files are development stacks — deploy from
+[`examples/`](examples/).
 
 ## Tech stack
 
