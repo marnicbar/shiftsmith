@@ -1,9 +1,13 @@
 # ShiftSmith
 
-An open-source employee scheduling app powered by constraint programming. Define
-your people and positions, set their calendars and working-time rules, and let the
-[Timefold Solver](https://timefold.ai) assign everyone automatically — respecting
-skills, availability, hour limits and fair distribution.
+An open-source constraints-based employee scheduling app powered by the [Timefold Solver](https://timefold.ai).
+Define people and positions, populate their calendars and working-time rules, and let the solver
+assign shifts automatically — respecting skills, availability, hour limits and fair distribution.
+
+> ℹ️ Note:
+>
+> This project is written entirely by AI coding agents (e.g. Claude Code) as an experiment in agentic development.
+> Despite that, it's actively maintained and used in production, so if you find a bug or have a feature request, please open an issue.
 
 ## Highlights
 
