@@ -44,7 +44,8 @@ assign shifts automatically — respecting skills, availability, hour limits and
 
 ### Production (single image + your database)
 ShiftSmith ships as **one image** that serves the UI and the API together on
-port 8080. Bring your own PostgreSQL — the database is not part of the image.
+port 8080. Bring your own PostgreSQL **14 or newer** (the minimum supported by
+the Hibernate ORM version Quarkus ships) — the database is not part of the image.
 
 ```bash
 docker compose up -d --build
@@ -57,8 +58,8 @@ Open **http://localhost:8080** (Swagger UI at `/q/swagger-ui`). The bundled
 To run a published image instead of building locally, drop the `build:` block in
 `docker-compose.yml` and keep the `image:` line (tagged builds are pushed to
 `ghcr.io/marnicbar/shiftsmith` on every `v*` git tag). Point the app at any
-PostgreSQL with the standard `QUARKUS_DATASOURCE_JDBC_URL`, `POSTGRES_USER` and
-`POSTGRES_PASSWORD` environment variables.
+PostgreSQL 14+ with the standard `QUARKUS_DATASOURCE_JDBC_URL`, `POSTGRES_USER`
+and `POSTGRES_PASSWORD` environment variables.
 
 #### Admin credentials
 On a **fresh database** ShiftSmith seeds a single admin account. Set the initial
@@ -87,7 +88,8 @@ docker compose -f docker-compose.dev.yml up --build
 Open **http://localhost:5173**; the Vite dev server proxies `/api/*` to the
 backend on :8080.
 
-Or run the toolchains directly (requires Java 21 + Maven and Node 20.19+):
+Or run the toolchains directly (requires Java 21 + Maven and Node 22.13+; CI and
+the Docker images use Node 24):
 ```bash
 cd backend && mvn quarkus:dev      # :8080
 cd frontend && npm install && npm run dev   # :5173 (proxies /api → :8080)
@@ -98,8 +100,9 @@ cd frontend && npm install && npm run dev   # :5173 (proxies /api → :8080)
 | Layer | Technology |
 |-------|-----------|
 | Frontend | React + Vite |
-| Backend | Quarkus 3.36 (Java 21) |
-| Solver | Timefold Solver 2.1 |
+| Backend | Quarkus 3.38 (Java 21) |
+| Solver | Timefold Solver 2.3 |
+| Database | PostgreSQL 14+ |
 
 ## License
 
