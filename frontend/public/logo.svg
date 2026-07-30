@@ -1,4 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="shiftsmith-logo-title">
+<!-- The drawing is centred on (256, 256) and its widest element is the outer ring,
+     whose outer edge sits at r=240 — so the artwork spans 16…496 on both axes and
+     the viewBox starts at (16, 16) to frame it edge to edge without off-centring it. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 16 480 480" width="480" height="480" role="img" aria-labelledby="shiftsmith-logo-title">
   <title id="shiftsmith-logo-title">ShiftSmith</title>
   <defs>
     <linearGradient id="ss-outer-r" gradientUnits="userSpaceOnUse"
@@ -52,6 +55,14 @@
       <circle cx="256" cy="256" r="240.0"/>
     </clipPath>
   </defs>
+
+  <!-- The mark is drawn in deep blue, so it needs a light plate under it to stay
+       readable on a dark surface (dark mode, the browser's tab strip). The disc is
+       part of the drawing rather than a CSS background, so every use of the file —
+       favicon and PDF footer included, where no CSS reaches — gets it. It stops
+       inside the outer ring (which spans r=215.6…240), so the ring keeps its edge
+       against the surface instead of sitting on a white halo. -->
+  <circle cx="256" cy="256" r="220" fill="#fff"/>
 
   <circle cx="256" cy="256" r="206.1" fill="none" stroke="url(#ss-inner)" stroke-width="19.1"/>
 

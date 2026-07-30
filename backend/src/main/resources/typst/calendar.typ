@@ -53,9 +53,12 @@
       align: (left, center, right),
       meta.generated,
       [#counter(page).display("1") / #counter(page).final().first()],
-      // The mark rides on the text baseline so it sits with the brand name rather
-      // than pushing the footer line taller.
-      [#box(baseline: 2.2pt, image("logo.svg", height: 8.5pt))#h(3.5pt)#meta.brand],
+      grid(
+        columns: 2,
+        column-gutter: 0.5em,
+        align: horizon,
+        image("logo.svg", height: 1.2em), [#meta.brand],
+      ),
     )
   ],
 )
@@ -93,7 +96,11 @@
 // Positions view on screen.
 #let avatar(c, size) = box(
   baseline: size * 0.22,
-  width: size, height: size, radius: 50%, fill: swatch(c.color), clip: true,
+  width: size,
+  height: size,
+  radius: 50%,
+  fill: swatch(c.color),
+  clip: true,
   align(center + horizon, text(size: size * 0.48, fill: white, weight: 700, c.initials)),
 )
 
@@ -155,8 +162,7 @@
       // out-of-scope / weekend day shading (drawn first, under everything)
       for (i, d) in sec.days.enumerate() {
         if d.dim {
-          place(dx: gutter + i * col-w, dy: 0pt,
-            rect(width: col-w, height: h-total, fill: dim-fill, stroke: none))
+          place(dx: gutter + i * col-w, dy: 0pt, rect(width: col-w, height: h-total, fill: dim-fill, stroke: none))
         }
       }
 
@@ -164,14 +170,15 @@
       for hr in range(calc.ceil(from / 60), calc.floor(to / 60) + 1) {
         let y = y-of(hr * 60)
         place(dx: gutter, dy: y, line(length: size.width - gutter, stroke: 0.4pt + hairline))
-        place(dx: 0pt, dy: y - 4.5pt, box(width: gutter - 3pt, align(right,
-          text(size: 7pt, fill: ink-soft)[#cfg.hourLabels.at(str(hr), default: str(hr))])))
+        place(dx: 0pt, dy: y - 4.5pt, box(width: gutter - 3pt, align(right, text(
+          size: 7pt,
+          fill: ink-soft,
+        )[#cfg.hourLabels.at(str(hr), default: str(hr))])))
       }
 
       // column separators + top/bottom frame
       for c in range(0, ndays + 1) {
-        place(dx: gutter + c * col-w, dy: 0pt,
-          line(angle: 90deg, length: h-total, stroke: 0.4pt + hairline))
+        place(dx: gutter + c * col-w, dy: 0pt, line(angle: 90deg, length: h-total, stroke: 0.4pt + hairline))
       }
       place(dx: gutter, dy: 0pt, line(length: size.width - gutter, stroke: 0.7pt + rule-strong))
       place(dx: gutter, dy: h-total, line(length: size.width - gutter, stroke: 0.7pt + rule-strong))
@@ -213,46 +220,56 @@
     // The day shading rides on the grid cell, not on the content block: a filled
     // block sized to the whole cell paints over the grid's own strokes and the
     // week/day rules disappear.
-    ..sec.weekdayHeads.map(w => align(center,
-      block(inset: (y: 3pt), text(size: 8.5pt, weight: 700, fill: ink-soft)[#w]))),
+    ..sec.weekdayHeads.map(w => align(center, block(inset: (y: 3pt), text(
+      size: 8.5pt,
+      weight: 700,
+      fill: ink-soft,
+    )[#w]))),
     ..sec.days.map(d => grid.cell(
       fill: if d.dim { dim-fill } else { none },
       block(
-      width: 100%, height: 100%, inset: 3pt, clip: true,
-      {
-        set par(leading: 0.35em)
-        text(size: 8pt, weight: 700, fill: if d.dim { luma(150) } else { ink })[#d.num]
-        if d.sub != "" {
-          h(3pt)
-          text(size: 7pt, fill: ink-soft)[#d.sub]
-        }
-        v(2.5pt, weak: true)
-        for chip in d.chips {
-          let col = swatch(chip.color)
-          block(
-            width: 100%, inset: (x: 2.5pt, y: 1.2pt), radius: 1.4pt, below: 1.6pt,
-            fill: white,
-            stroke: (left: 1.4pt + col),
-            // One line, clipped: a long crew list is cut off rather than wrapping, so
-            // the cell always fits the chip budget the caller sized it for. The inner
-            // `box` is wider than the cell, which is how you say "don't wrap"; the
-            // clipping block then cuts the overflow off at the edge. `height` is
-            // generous enough to keep descenders.
-            {
-              set text(size: 6.4pt)
-              block(width: 100%, height: 1.35em, clip: true, box(width: 600%)[
-                #text(weight: 700)[#chip.time]
-                #h(2.5pt)
-                #chip.label
-              ])
-            },
-          )
-        }
-        if d.more > 0 {
-          text(size: 6.4pt, fill: ink-soft)[#d.moreLabel]
-        }
-      },
-    ))),
+        width: 100%,
+        height: 100%,
+        inset: 3pt,
+        clip: true,
+        {
+          set par(leading: 0.35em)
+          text(size: 8pt, weight: 700, fill: if d.dim { luma(150) } else { ink })[#d.num]
+          if d.sub != "" {
+            h(3pt)
+            text(size: 7pt, fill: ink-soft)[#d.sub]
+          }
+          v(2.5pt, weak: true)
+          for chip in d.chips {
+            let col = swatch(chip.color)
+            block(
+              width: 100%,
+              inset: (x: 2.5pt, y: 1.2pt),
+              radius: 1.4pt,
+              below: 1.6pt,
+              fill: white,
+              stroke: (left: 1.4pt + col),
+              // One line, clipped: a long crew list is cut off rather than wrapping, so
+              // the cell always fits the chip budget the caller sized it for. The inner
+              // `box` is wider than the cell, which is how you say "don't wrap"; the
+              // clipping block then cuts the overflow off at the edge. `height` is
+              // generous enough to keep descenders.
+              {
+                set text(size: 6.4pt)
+                block(width: 100%, height: 1.35em, clip: true, box(width: 600%)[
+                  #text(weight: 700)[#chip.time]
+                  #h(2.5pt)
+                  #chip.label
+                ])
+              },
+            )
+          }
+          if d.more > 0 {
+            text(size: 6.4pt, fill: ink-soft)[#d.moreLabel]
+          }
+        },
+      ),
+    )),
   )
 }
 
@@ -277,7 +294,8 @@
         column-gutter: 10pt,
         {
           set text(size: 7.5pt)
-          sec.legend
+          sec
+            .legend
             .map(l => box(baseline: 1.5pt, {
               box(width: 6pt, height: 6pt, radius: 1pt, fill: swatch(l.color))
               h(3pt)
