@@ -1,23 +1,24 @@
 # ShiftSmith against a PostgreSQL 14+ you already operate. Point it at an empty
 # database with a role that may create tables — Flyway migrates it at startup.
 #
-#   cp .env.example .env      # set POSTGRES_JDBC_URL, user and password
+# Replace every <placeholder> below, then:
+#
 #   docker compose -f docker-compose.external-db.yml up -d
 
 services:
   app:
-    image: ghcr.io/marnicbar/shiftsmith:${SHIFTSMITH_VERSION:-0.1.0}
+    image: ghcr.io/marnicbar/shiftsmith:0.1.0
     ports:
       # Loopback — put a TLS proxy in front.
-      - "${SHIFTSMITH_BIND:-127.0.0.1}:${SHIFTSMITH_PORT:-8080}:8080"
+      - "127.0.0.1:8080:8080"
     environment:
-      # jdbc:postgresql://host:5432/shiftsmith — add ?sslmode=require if remote.
-      - QUARKUS_DATASOURCE_JDBC_URL=${POSTGRES_JDBC_URL:?set POSTGRES_JDBC_URL in .env}
-      - POSTGRES_USER=${POSTGRES_USER:?set POSTGRES_USER in .env}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-      - SHIFTSMITH_ADMIN_USERNAME=${SHIFTSMITH_ADMIN_USERNAME:-admin}
-      - SHIFTSMITH_ADMIN_PASSWORD=${SHIFTSMITH_ADMIN_PASSWORD:?set SHIFTSMITH_ADMIN_PASSWORD in .env}
-      - TZ=${TZ:-UTC}
+      # Add ?sslmode=require if the server is remote.
+      - QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://<your_db_host>:5432/shiftsmith
+      - POSTGRES_USER=<your_db_user>
+      - POSTGRES_PASSWORD=<your_db_password>
+      - SHIFTSMITH_ADMIN_USERNAME=admin
+      - SHIFTSMITH_ADMIN_PASSWORD=<choose_an_admin_password>
+      - TZ=<your_timezone>
     restart: unless-stopped
-    mem_limit: ${SHIFTSMITH_MEM_LIMIT:-1g}
-    cpus: ${SHIFTSMITH_CPUS:-2.0}
+    mem_limit: 1g
+    cpus: 2.0

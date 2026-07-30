@@ -8,19 +8,17 @@ published image and only need configuration.
 | --- | --- |
 | [`docker-compose.yml`](docker-compose.yml) | The app plus a PostgreSQL container. Start here. |
 | [`docker-compose.external-db.yml`](docker-compose.external-db.yml) | The app only, against a PostgreSQL you already operate. |
-| [`.env.example`](.env.example) | Every variable both files read. |
 
 ## Quick start
 
 ```bash
 curl -O https://raw.githubusercontent.com/marnicbar/shiftsmith/main/examples/docker-compose.yml
-curl -o .env https://raw.githubusercontent.com/marnicbar/shiftsmith/main/examples/.env.example
-$EDITOR .env            # set the two passwords and your timezone
+$EDITOR docker-compose.yml    # fill in the <placeholders>
 docker compose up -d
 ```
 
 The app is up once `docker compose ps` reports it healthy. Open
-<http://localhost:8080> and sign in with the admin credentials from your `.env`.
+<http://localhost:8080> and sign in with the admin credentials you just set.
 
 One image serves the React UI and the `/api` backend on **port 8080**. The
 database is not part of it: bring **PostgreSQL 14 or newer**. Every `v*` tag
@@ -55,7 +53,7 @@ occasionally matter:
 | `SHIFTSMITH_TYPST_BIN` | `typst` | Path to the Typst binary used for PDF export. Installed in the image. |
 
 Leave the container's port alone (`QUARKUS_HTTP_PORT`) — the healthcheck targets
-8080. Publish a different host port with `SHIFTSMITH_PORT` instead.
+8080. Change the host side of the `ports:` mapping instead.
 
 **The first admin account.** On a fresh database ShiftSmith seeds exactly one.
 Without `SHIFTSMITH_ADMIN_PASSWORD` it falls back to `admin` / `shiftsmith` but
@@ -98,14 +96,14 @@ docker compose exec -T db pg_dump -U shiftsmith shiftsmith | gzip > shiftsmith-$
 gunzip -c shiftsmith-2026-07-30.sql.gz | docker compose exec -T db psql -U shiftsmith shiftsmith
 ```
 
-The files also sit in `POSTGRES_DATA_DIR`, which you can snapshot — but only with
+The files also sit in `./data/postgres`, which you can snapshot — but only with
 the container stopped. `pg_dump` is the safer routine. Restoring a dump brings
 the signing secret back too, so sessions issued before it stay valid.
 
 ## Upgrading
 
 ```bash
-$EDITOR .env                 # SHIFTSMITH_VERSION=0.2.0
+$EDITOR docker-compose.yml   # image: ghcr.io/marnicbar/shiftsmith:0.2.0
 docker compose pull
 docker compose up -d
 ```

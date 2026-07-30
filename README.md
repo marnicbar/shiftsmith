@@ -52,15 +52,14 @@ to `ghcr.io/marnicbar/shiftsmith`, so deploying is a pull, not a build:
 
 ```bash
 curl -O https://raw.githubusercontent.com/marnicbar/shiftsmith/main/examples/docker-compose.yml
-curl -o .env https://raw.githubusercontent.com/marnicbar/shiftsmith/main/examples/.env.example
-$EDITOR .env            # set the two passwords and your timezone
+$EDITOR docker-compose.yml    # fill in the <placeholders>
 docker compose up -d
 ```
 
-Then open **http://localhost:8080** and sign in with the admin credentials from
-your `.env`. **[`examples/`](examples/)** has the compose files (bundled or
-external database) and the deployment guide: configuration, TLS, backups,
-upgrades, sizing, troubleshooting.
+Then open **http://localhost:8080** and sign in with the admin credentials you
+just set. **[`examples/`](examples/)** has the compose files (bundled or external
+database) and the deployment guide: configuration, TLS, backups, upgrades,
+sizing, troubleshooting.
 
 Two things to get right before the first boot. Set `SHIFTSMITH_ADMIN_PASSWORD` —
 without it the seeded admin account falls back to a well-known default and is
