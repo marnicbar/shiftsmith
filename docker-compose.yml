@@ -1,18 +1,17 @@
-# Production deployment.
+# Development: the packaged app, built from this working tree.
 #
-# The all-in-one ShiftSmith image (React UI + Quarkus API on port 8080) plus a
-# PostgreSQL database. The database is intentionally NOT baked into the image —
-# point the app at any PostgreSQL via the QUARKUS_DATASOURCE_* environment.
+# Builds the all-in-one image (React UI + Quarkus API on port 8080) from the
+# local source and runs it against a PostgreSQL container — the production
+# layout, so you can check a change the way it will actually ship. The database
+# is intentionally NOT baked into the image.
 #
-#   docker compose up -d --build      # build the image locally and run
+#   docker compose up -d --build
 #
-# To run a published image instead of building locally, drop the `build:` block
-# and keep just the `image:` line (optionally pinning a version tag):
+# Credentials default to "shiftsmith", which is fine for a local stack.
 #
-#   image: ghcr.io/marnicbar/shiftsmith:latest
-#
-# Credentials default to "shiftsmith"; override them (and the published image
-# tag) via a .env file or the shell environment before going to production.
+# TO DEPLOY A RELEASE, USE examples/ INSTEAD: those compose files pull a
+# published, versioned image from ghcr.io/marnicbar/shiftsmith and examples/README.md
+# covers TLS, backups, upgrades and sizing.
 #
 # For the hot-reload development stack (separate Vite dev server + backend),
 # see docker-compose.dev.yml.
@@ -40,7 +39,8 @@ services:
     restart: unless-stopped
 
   app:
-    image: ghcr.io/marnicbar/shiftsmith:latest
+    # A local tag, so this build is never confused with a published release.
+    image: shiftsmith:local
     build:
       context: .
     ports:

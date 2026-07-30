@@ -42,50 +42,42 @@ assign shifts automatically — respecting skills, availability, hour limits and
 
 ## Running
 
-### Production (single image + your database)
+### Production (published image + your database)
 ShiftSmith ships as **one image** that serves the UI and the API together on
 port 8080. Bring your own PostgreSQL **14 or newer** (the minimum supported by
 the Hibernate ORM version Quarkus ships) — the database is not part of the image.
 
+Every `v*` git tag publishes a multi-arch image (`linux/amd64` + `linux/arm64`)
+to `ghcr.io/marnicbar/shiftsmith`, so a deployment is a pull, not a build:
+
 ```bash
-docker compose up -d --build
+curl -O https://raw.githubusercontent.com/marnicbar/shiftsmith/main/examples/docker-compose.yml
+curl -o .env https://raw.githubusercontent.com/marnicbar/shiftsmith/main/examples/.env.example
+$EDITOR .env            # set the two passwords and your timezone
+docker compose up -d
 ```
-Open **http://localhost:8080**. The bundled `docker-compose.yml` runs the app plus
-a PostgreSQL container; override `POSTGRES_USER` / `POSTGRES_PASSWORD` /
-`POSTGRES_DB` / `SHIFTSMITH_ADMIN_PASSWORD` (and the image tag) via a `.env` file
-before going to production. (The OpenAPI document and Swagger UI are developer
-aids and are disabled in the packaged app; `mvn quarkus:dev` serves Swagger UI at
-`/q/swagger-ui`.)
 
-To run a published image instead of building locally, drop the `build:` block in
-`docker-compose.yml` and keep the `image:` line (tagged builds are pushed to
-`ghcr.io/marnicbar/shiftsmith` on every `v*` git tag, for `linux/amd64` and
-`linux/arm64`). Point the app at any PostgreSQL 14+ with the standard
-`QUARKUS_DATASOURCE_JDBC_URL`, `POSTGRES_USER` and `POSTGRES_PASSWORD`
-environment variables.
+Then open **http://localhost:8080** and sign in with the admin credentials from
+your `.env`.
 
-#### Admin credentials
-On a **fresh database** ShiftSmith seeds a single admin account. Set the initial
-password at deploy time so the instance is never reachable on a known credential:
+**[`examples/`](examples/) is the deployment guide**: a compose file for the app
+plus a PostgreSQL container, another for a database you already operate, and a
+README covering configuration, the reverse proxy and TLS, backups, upgrades,
+sizing and troubleshooting.
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `SHIFTSMITH_ADMIN_USERNAME` | `admin` | Username of the seeded account. |
-| `SHIFTSMITH_ADMIN_PASSWORD` | _(none)_ | Initial password. **Set this in production.** |
+Two things worth knowing before the first boot:
 
-- If `SHIFTSMITH_ADMIN_PASSWORD` is set, that password is used and the account is
-  ready immediately.
-- If it is **not** set, the account falls back to the well-known default
-  (`admin` / `shiftsmith`) but is flagged for rotation: every protected endpoint
-  returns `403` and the UI forces a password change on first sign-in, so the
-  default password can never be used to operate the app.
+- **Set `SHIFTSMITH_ADMIN_PASSWORD`.** On a fresh database ShiftSmith seeds one
+  admin account. Without this variable it falls back to a well-known default but
+  is flagged for rotation — every protected endpoint answers `403` and the UI
+  forces a password change at first sign-in, so the default can never be used to
+  operate the app. Rotate it later under **Account → Sign-in**.
+- **Set `TZ` to your business timezone.** The schedule model is zone-less, so
+  `TZ` decides when "today" and the solve horizon roll over. It defaults to UTC
+  rather than the host's zone.
 
-Both variables are passed through by the bundled `docker-compose.yml`, so a `.env`
-file (or the shell environment) is enough — with a plain `docker run`, pass them
-with `-e`.
-
-These only take effect when the account is first created. To rotate the password
-later, use **Account → Sign-in** in the app (or `POST /api/auth/change-password`).
+(The OpenAPI document and Swagger UI are developer aids and are not packaged into
+the release image; `mvn quarkus:dev` serves Swagger UI at `/q/swagger-ui`.)
 
 ### Development
 Hot-reload stack (separate Vite dev server + backend + db) in Docker:
@@ -101,6 +93,14 @@ the Docker images use Node 24):
 cd backend && mvn quarkus:dev      # :8080
 cd frontend && npm install && npm run dev   # :5173 (proxies /api → :8080)
 ```
+
+The root `docker-compose.yml` builds the all-in-one image from your working tree
+and runs it against a PostgreSQL container — the packaged app, but from source:
+```bash
+docker compose up -d --build       # :8080, image tagged shiftsmith:local
+```
+Both root compose files are development stacks. To deploy a release, use
+[`examples/`](examples/).
 
 ## Tech stack
 

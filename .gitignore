@@ -19,3 +19,7 @@ dist/
 
 # Local PostgreSQL data dir (docker-compose bind mount)
 /data/
+examples/data/
+
+# Deployment configuration (examples/.env.example is the template that is tracked)
+.env
