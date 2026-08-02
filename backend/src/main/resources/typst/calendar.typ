@@ -104,6 +104,11 @@
   align(center + horizon, text(size: size * 0.48, fill: white, weight: 700, c.initials)),
 )
 
+// One line of a month chip: a fixed-height strip that clips whatever overruns it, so a
+// long name shortens the line instead of growing the cell. The height is `1.5em` of the
+// caller's text size — enough for the avatars and the descenders.
+#let chip-line(body) = block(width: 100%, height: 1.5em, below: 0pt, clip: true, body)
+
 #let chip-body(seg, compact: false) = {
   let size = if compact { 6.4pt } else { 7.2pt }
   set text(size: size)
@@ -248,37 +253,42 @@
               below: 1.6pt,
               fill: white,
               stroke: (left: 1.4pt + col),
-              // One line, clipped: a long crew list is cut off rather than wrapping, so
-              // the cell always fits the chip budget the caller sized it for. The inner
-              // `box` is wider than the cell, which is how you say "don't wrap"; the
-              // clipping block then cuts the overflow off at the edge. `height` is
-              // generous enough to keep the avatars and the descenders.
+              // The time range, then one line per assignee — a day/week chip in
+              // miniature. Every line is clipped rather than wrapped, so a cell always
+              // fits the line budget the caller sized it for: the inner `box` is wider
+              // than the cell, which is how you say "don't wrap", and the clipping block
+              // then cuts the overflow off at the edge.
               {
                 let size = 6.4pt
                 set text(size: size)
-                let line = block(width: 100%, height: 1.5em, clip: true, box(width: 600%)[
+                let head = box(width: 600%)[
                   #text(weight: 700)[#chip.time]
                   #if chip.label != "" [#h(2.5pt) #chip.label]
-                  #for c in chip.crew [
-                    #h(2.5pt)
-                    #avatar(c, size * 1.25)
-                    #h(2pt)
-                    #text(fill: luma(55))[#c.name]
-                  ]
-                ])
+                ]
                 // The "n open" note rides in its own column rather than at the end of the
                 // clipped line: a shift being short-handed is the one thing on the chip a
-                // long crew list must not cut off.
-                if chip.note == none {
-                  line
+                // long label must not cut off. The columns sit *inside* the line, so this
+                // row is exactly as tall as every other and a cell's height stays the
+                // line count the caller budgeted for.
+                chip-line(if chip.note == none {
+                  head
                 } else {
                   grid(
                     columns: (1fr, auto),
                     column-gutter: 3pt,
-                    align: horizon,
-                    line,
+                    box(width: 100%, clip: true, head),
                     text(weight: 600, fill: luma(70))[#chip.note],
                   )
+                })
+                for c in chip.crew {
+                  chip-line(box(width: 600%)[
+                    #avatar(c, size * 1.25)
+                    #h(2pt)
+                    #text(fill: luma(55))[#c.name]
+                  ])
+                }
+                if chip.crewMore != "" {
+                  chip-line(text(fill: ink-soft)[#chip.crewMore])
                 }
               },
             )

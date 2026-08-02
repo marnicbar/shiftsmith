@@ -32,6 +32,20 @@ public final class CalendarDocumentBuilder {
     /** Chips a month cell can show before it starts saying "+n more". */
     private static final int MONTH_CHIP_LIMIT = 4;
 
+    /**
+     * Lines a month cell has room for, by how many week rows the page is split into —
+     * the grid fills the sheet, so a six-week month gets shorter cells than a five-week
+     * one. A chip costs one line for its time row plus one per assignee listed under it,
+     * so a cell shows a few tall crewed chips or up to {@link #MONTH_CHIP_LIMIT} bare
+     * ones. This budget is print's alone: the screen's month cell scrolls its overflow
+     * and paper cannot. Sized against the tightest sheet a month page can use (A4
+     * landscape) with room for the "+n more" line underneath.
+     */
+    private static final Map<Integer, Integer> MONTH_LINE_BUDGET = Map.of(4, 8, 5, 6, 6, 4);
+
+    /** Assignees one month chip lists before the rest become its own "+n more". */
+    private static final int MONTH_CREW_LINES = 4;
+
     /** Dropped-shift footnotes are a warning, not a report; keep the list short. */
     private static final int MAX_DROPPED_ITEMS = 8;
 
@@ -224,11 +238,12 @@ public final class CalendarDocumentBuilder {
         List<ExportDocument.Day> days = new ArrayList<>();
         for (LocalDate d : dayList) {
             List<ExportDocument.Chip> chips = month ? monthChips(byDay.get(d)) : List.of();
-            int more = Math.max(0, chips.size() - MONTH_CHIP_LIMIT);
+            int shown = chipsThatFit(chips);
+            int more = chips.size() - shown;
             days.add(new ExportDocument.Day(
                     d.toString(), labels.weekdayShort(d), subLabel(d), String.valueOf(d.getDayOfMonth()),
                     month ? !inFocusMonth(d, dayList) : isWeekend(d),
-                    chips.subList(0, Math.min(chips.size(), MONTH_CHIP_LIMIT)),
+                    chips.subList(0, shown),
                     more, more > 0 ? labels.more(more) : ""));
         }
 
@@ -337,13 +352,47 @@ public final class CalendarDocumentBuilder {
         List<ExportDocument.Chip> out = new ArrayList<>(sorted.size());
         for (Piece p : sorted) {
             Event ev = p.event;
-            // Same content as a day/week chip, one line deep: a person's page names the
-            // position, a position's page draws its crew as avatars, and either way an
-            // unfilled shift says so — a month cell must not be the one view that hides it.
-            out.add(new ExportDocument.Chip(minLabel(ev.start), ev.title, ev.crew,
+            // A small day/week chip: the shift's own hours, then its crew underneath. A
+            // person's page names the position instead, and either way an unfilled shift
+            // says so — a month cell must not be the one view that hides it.
+            // A chip lists as many assignees as it has lines for — its own time row and
+            // the "+n more" standing in for the rest both come out of the cell's budget.
+            int crewLines = Math.max(1, Math.min(MONTH_CREW_LINES, monthLineBudget() - 2));
+            List<ExportDocument.Crew> crew = ev.crew;
+            String crewMore = "";
+            if (crew.size() > crewLines) {
+                crewMore = labels.more(crew.size() - crewLines);
+                crew = crew.subList(0, crewLines);
+            }
+            out.add(new ExportDocument.Chip(timeRange(ev), ev.title, crew, crewMore,
                     ev.open > 0 ? labels.openSlots(ev.open) : null, ev.colour, ev.open > 0));
         }
         return out;
+    }
+
+    /**
+     * How many of a cell's chips it can print: as many as fit this page's line budget,
+     * and never more than {@link #MONTH_CHIP_LIMIT}. The first chip is always printed —
+     * a cell that can only hold one shift shows that shift rather than nothing but a
+     * "+n more" — and everything left over is counted into that label.
+     */
+    private int chipsThatFit(List<ExportDocument.Chip> chips) {
+        int budget = monthLineBudget();
+        int used = 0;
+        int shown = 0;
+        for (ExportDocument.Chip c : chips) {
+            if (shown == MONTH_CHIP_LIMIT) break;
+            int cost = 1 + c.crew().size() + (c.crewMore().isEmpty() ? 0 : 1);
+            if (shown > 0 && used + cost > budget) break;
+            used += cost;
+            shown++;
+        }
+        return shown;
+    }
+
+    /** This page's per-cell line budget — see {@link #MONTH_LINE_BUDGET}. */
+    private int monthLineBudget() {
+        return MONTH_LINE_BUDGET.getOrDefault(dayList.size() / 7, 4);
     }
 
     // --- labels --------------------------------------------------------------

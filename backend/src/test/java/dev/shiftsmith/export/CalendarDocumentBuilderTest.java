@@ -295,33 +295,62 @@ class CalendarDocumentBuilderTest {
         assertThat(s.days().get(3).sub()).isEmpty();
     }
 
+    /** Bare chips — a shift a day with nobody on it — still fill the cell four deep. */
     @Test
     void aMonthCellSummarisesItsShiftsAndSaysHowManyItHid() {
-        List<ShiftTemplate> many = new ArrayList<>();
-        Map<String, List<String>> a = new LinkedHashMap<>();
-        for (int i = 0; i < 6; i++) {
-            many.add(shift("s" + i, MON, 480 + i * 30, 960, 1));
-            a.put("s" + i + "@2026-07-27", List.of("e1"));
-        }
-        World w = new World(world().employees(),
-                List.of(pos("p1", "Kitchen", 2, many.toArray(new ShiftTemplate[0]))), a);
-        ExportDocument.Section s = only(build(req("month", "position:p1"), w));
-        ExportDocument.Day mon = s.days().stream()
-                .filter(d -> d.date().equals("2026-07-27")).findFirst().orElseThrow();
+        ExportDocument.Day mon = mondayCell(build(req("month", "position:p1"), manyShifts(6, 0)));
         assertThat(mon.chips()).hasSize(4);
-        assertThat(mon.chips().get(0).time()).isEqualTo("08:00");
+        assertThat(mon.chips().get(0).time()).isEqualTo("08:00–16:00");
         assertThat(mon.more()).isEqualTo(2);
         assertThat(mon.moreLabel()).isEqualTo("+2 more");
     }
 
-    /** A month cell shows the same crew badges a day/week chip does — just on one line. */
+    /**
+     * Listing the crew under each chip costs lines, so a cell holds fewer shifts — and a
+     * six-week month, whose rows are shorter still, holds fewer again. Whatever a cell
+     * cannot print is counted, never silently dropped.
+     */
     @Test
-    void aMonthChipCarriesItsCrew() {
+    void aMonthCellFitsFewerChipsWhenTheyCarryCrew() {
+        ExportDocument.Day fiveRows = mondayCell(build(req("month", "position:p1"), manyShifts(6, 1)));
+        assertThat(fiveRows.chips()).hasSize(3); // 3 × (time + one assignee) = 6 lines
+        assertThat(fiveRows.more()).isEqualTo(3);
+
+        // August 2026 runs Jul 27 – Sep 6: six rows, so the same day fits fewer chips.
+        ExportRequest august = ExportRequest.of(List.of("position:p1"), "month",
+                LocalDate.of(2026, 8, 15), 0, 1440, "a4", "landscape", "en", "first");
+        ExportDocument.Day sixRows = mondayCell(build(august, manyShifts(6, 1)));
+        assertThat(sixRows.chips()).hasSize(2);
+        assertThat(sixRows.more()).isEqualTo(4);
+    }
+
+    /** A cell too short even for one shift's crew prints the shift, and says who it left off. */
+    @Test
+    void aMonthChipTrimsACrewTooLongForTheCell() {
+        List<Employee> crowd = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            String letter = String.valueOf((char) ('A' + i));
+            crowd.add(emp("e" + i, letter + "nna", letter + "berg", i));
+        }
+        World w = new World(crowd,
+                List.of(pos("p1", "Kitchen", 2, shift("s1", MON, 480, 960, 6))),
+                assign("s1@2026-07-27", "e0,e1,e2,e3,e4,e5"));
+        ExportDocument.Chip chip = mondayChips(build(req("month", "position:p1"), w)).get(0);
+        assertThat(chip.crew()).extracting(ExportDocument.Crew::initials)
+                .containsExactly("AA", "BB", "CC", "DD");
+        assertThat(chip.crewMore()).isEqualTo("+2 more");
+    }
+
+    /** A month chip carries the same hours and crew badges a day/week chip does. */
+    @Test
+    void aMonthChipCarriesItsHoursAndCrew() {
         ExportDocument.Chip chip = mondayChips(build(req("month", "position:p1"), world())).get(0);
+        assertThat(chip.time()).isEqualTo("08:00–16:00");
         assertThat(chip.crew()).extracting(ExportDocument.Crew::initials).containsExactly("AM", "BO");
         assertThat(chip.crew()).extracting(ExportDocument.Crew::color)
                 .containsExactly(Palette.colorAt(0), Palette.colorAt(1));
         assertThat(chip.label()).isEmpty(); // the crew is the label on a position's page
+        assertThat(chip.crewMore()).isEmpty();
         assertThat(chip.note()).isNull();
         assertThat(chip.open()).isFalse();
     }
@@ -346,8 +375,24 @@ class CalendarDocumentBuilderTest {
     }
 
     private static List<ExportDocument.Chip> mondayChips(ExportDocument doc) {
+        return mondayCell(doc).chips();
+    }
+
+    private static ExportDocument.Day mondayCell(ExportDocument doc) {
         return only(doc).days().stream()
-                .filter(d -> d.date().equals("2026-07-27")).findFirst().orElseThrow().chips();
+                .filter(d -> d.date().equals("2026-07-27")).findFirst().orElseThrow();
+    }
+
+    /** {@code count} 08:00–16:00-ish shifts on the Monday, each with {@code crew} assignees. */
+    private static World manyShifts(int count, int crew) {
+        List<ShiftTemplate> shifts = new ArrayList<>();
+        Map<String, List<String>> a = new LinkedHashMap<>();
+        for (int i = 0; i < count; i++) {
+            shifts.add(shift("s" + i, MON, 480 + i * 30, 960, Math.max(crew, 1)));
+            if (crew > 0) a.put("s" + i + "@2026-07-27", List.of("e1,e2".split(",")).subList(0, crew));
+        }
+        return new World(world().employees(),
+                List.of(pos("p1", "Kitchen", 2, shifts.toArray(new ShiftTemplate[0]))), a);
     }
 
     // --- weekends, legend, hour labels ---------------------------------------
