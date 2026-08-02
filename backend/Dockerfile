@@ -8,7 +8,7 @@ RUN mvn package -DskipTests -B
 FROM eclipse-temurin:26-jre
 # Typst renders the calendar PDF exports; DejaVu is the sans-serif the template
 # asks for. Keep the version in step with the root Dockerfile.
-ARG TYPST_VERSION=0.14.2
+ARG TYPST_VERSION=0.15.1
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates xz-utils fonts-dejavu-core \
     && arch="$(dpkg --print-architecture)" \
