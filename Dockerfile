@@ -36,7 +36,7 @@ RUN mvn -B --no-transfer-progress package -DskipTests
 FROM eclipse-temurin:26-jre
 # Typst renders the calendar PDF exports (see PdfExportService). Pinned, and taken
 # from the upstream release tarball — there is no Debian package.
-ARG TYPST_VERSION=0.14.2
+ARG TYPST_VERSION=0.15.1
 # curl backs the container HEALTHCHECK (and fetches Typst); fonts-dejavu-core is the
 # sans-serif the PDF template asks for — Typst only embeds serif/mono faces.
 RUN apt-get update \
