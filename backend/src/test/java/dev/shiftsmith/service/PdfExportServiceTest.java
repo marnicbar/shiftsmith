@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +71,12 @@ class PdfExportServiceTest {
         e.setColor(colour);
         e.setSkills(new LinkedHashSet<>());
         return e;
+    }
+
+    private static ShiftTemplate daily(String id, LocalDate date, int start, int end, int headcount) {
+        ShiftTemplate t = template(id, date, start, end, headcount);
+        t.setRepeat("daily");
+        return t;
     }
 
     private static ShiftTemplate template(String id, LocalDate date, int start, int end, int headcount) {
@@ -157,6 +164,33 @@ class PdfExportServiceTest {
         assertThat(pdf).startsWith("%PDF".getBytes(StandardCharsets.US_ASCII));
         // Four sections page-break into four pages; the batch is meaningfully bigger.
         assertThat(pdf.length).isGreaterThan(service("typst").render(doc("week", "person:e1")).length);
+    }
+
+    /**
+     * A month page whose cells cannot hold what they are given: the template has to
+     * measure, trim the crew lists, drop whole chips and still print the "+n more". This
+     * is the only place that code runs, so render it rather than trust it.
+     */
+    @Test
+    void rendersAMonthPageTooCrowdedForItsCells() {
+        assumeTrue(typstAvailable(), "typst binary not on PATH");
+        List<Employee> staff = new ArrayList<>();
+        for (int i = 0; i < 6; i++) staff.add(employee("e" + i, "First" + i, "Last" + i, i));
+        List<ShiftTemplate> shifts = new ArrayList<>();
+        Map<String, List<String>> assign = new LinkedHashMap<>();
+        List<String> crew = staff.stream().map(Employee::getId).toList();
+        for (int i = 0; i < 5; i++) {
+            shifts.add(daily("s" + i, MON, 360 + i * 180, 480 + i * 180, crew.size() + 1));
+            for (int d = 0; d < 45; d++) assign.put("s" + i + "@" + MON.plusDays(d), crew);
+        }
+        Position kitchen = position("p1", "Kitchen", 2, shifts.toArray(new ShiftTemplate[0]));
+        // August 2026 runs Jul 27 – Sep 6: six week rows, the shortest cells a month gets.
+        ExportRequest req = ExportRequest.of(List.of("position:p1"), "month",
+                LocalDate.of(2026, 8, 15), 0, 1440, "a4", "landscape", "en", "first");
+        ExportDocument doc = new CalendarDocumentBuilder(req, staff, List.of(kitchen), assign,
+                LocalDateTime.of(2026, 7, 27, 14, 3)).build();
+        assertThat(doc.sections().get(0).days().get(7).chips()).hasSize(5);
+        assertThat(service("typst").render(doc)).startsWith("%PDF".getBytes(StandardCharsets.US_ASCII));
     }
 
     @Test

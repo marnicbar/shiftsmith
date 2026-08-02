@@ -227,7 +227,12 @@ scheduled/emailed export uses the same path:
   the footer prints — Typst may only read inside the sandbox root), beside
   `typst/calendar.typ` in a scratch directory and shells out to
   `typst compile --root <dir>` (sandboxed, timed out, cleaned up). The template composes
-  **no text of its own**; a section is a page.
+  **no text of its own**; a section is a page. It does own one layout decision, because
+  only it can measure: a month cell `layout`s its own height and fits as many chips as
+  actually go in (trimming a chip's crew list before dropping the chip, and keeping room
+  for the "+n more"). So the builder ships *every* chip of a day plus a pre-formatted
+  "+n more" for each possible remainder (`Day.moreLabels` / `Chip.crewMoreLabels`) — no
+  per-paper line counts anywhere.
 - `ScheduleService.assignMap(from, to)` — durable rows overlaid with the live in-memory
   solution, exactly as the UI overlays them.
 

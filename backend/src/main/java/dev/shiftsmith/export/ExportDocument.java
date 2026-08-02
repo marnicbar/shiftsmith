@@ -29,21 +29,25 @@ public record ExportDocument(Meta meta, List<Section> sections, Labels labels) {
     public record Grid(int dayStart, int dayEnd, Map<String, String> hourLabels) {}
 
     /**
-     * One column (day/week view) or cell (month view). {@code chips} and {@code more}
-     * are only populated for the month view, which has no time axis to place events on.
+     * One column (day/week view) or cell (month view). {@code chips} is only populated
+     * for the month view, which has no time axis to place events on; it holds <em>every</em>
+     * shift of the day, because only the template knows how tall the cell it has to fill
+     * is. {@code moreLabels} is the pre-formatted "+n more" for each remainder it might
+     * end up with: {@code moreLabels[i]} names {@code i + 1} hidden shifts.
      */
     public record Day(String date, String head, String sub, String num, boolean dim,
-                      List<Chip> chips, int more, String moreLabel) {}
+                      List<Chip> chips, List<String> moreLabels) {}
 
     /**
      * A shift inside a month cell, laid out like a small day/week chip: the time range
      * and the {@code note} counting the still-open slots on the first line, then one
      * line per assignee ({@code crew}, drawn as avatars — or {@code label}, where there
-     * is no crew to name). {@code crewMore} is the "+n more" standing in for the
-     * assignees a cell has no room to list, empty when everyone fits.
+     * is no crew to name). A cell too short to list everyone cuts the list off, so
+     * {@code crewMoreLabels} carries the "+n more" for each remainder, indexed as in
+     * {@link Day#moreLabels}.
      */
-    public record Chip(String time, String label, List<Crew> crew, String crewMore, String note,
-                       Color color, boolean open) {}
+    public record Chip(String time, String label, List<Crew> crew, List<String> crewMoreLabels,
+                       String note, Color color, boolean open) {}
 
     /**
      * A shift as it is drawn on the time grid: already split at midnight, clipped to

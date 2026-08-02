@@ -104,10 +104,66 @@
   align(center + horizon, text(size: size * 0.48, fill: white, weight: 700, c.initials)),
 )
 
+// --- month chip ---------------------------------------------------------------
+// Built as its own pieces so the month grid can *measure* a chip before committing to
+// it: `month-chip(colour, month-chip-lines(chip, k))` is exactly what gets drawn, so
+// what the cell measures is what the cell gets.
+
+#let month-chip-size = 6.4pt
+
+// Vertical gap between two chips in a cell.
+#let month-chip-gap = 1.6pt
+
 // One line of a month chip: a fixed-height strip that clips whatever overruns it, so a
 // long name shortens the line instead of growing the cell. The height is `1.5em` of the
 // caller's text size — enough for the avatars and the descenders.
 #let chip-line(body) = block(width: 100%, height: 1.5em, below: 0pt, clip: true, body)
+
+// The lines of a month chip, listing `k` of its assignees. The head line carries the
+// time range (and, on a person's page, the position); anything past `k` is named by the
+// "+n more" the builder pre-formatted, never dropped in silence.
+#let month-chip-lines(chip, k) = {
+  set text(size: month-chip-size)
+  let head = box(width: 600%)[
+    #text(weight: 700)[#chip.time]
+    #if chip.label != "" [#h(2.5pt) #chip.label]
+  ]
+  // The "n open" note rides in its own column rather than at the end of the clipped
+  // line: a shift being short-handed is the one thing on the chip a long label must not
+  // cut off. The columns sit *inside* the line, so this row is exactly as tall as the
+  // others and a chip's height stays its line count.
+  chip-line(if chip.note == none {
+    head
+  } else {
+    grid(
+      columns: (1fr, auto),
+      column-gutter: 3pt,
+      box(width: 100%, clip: true, head),
+      text(weight: 600, fill: luma(70))[#chip.note],
+    )
+  })
+  for c in chip.crew.slice(0, k) {
+    chip-line(box(width: 600%)[
+      #avatar(c, month-chip-size * 1.25)
+      #h(2pt)
+      #text(fill: luma(55))[#c.name]
+    ])
+  }
+  if k < chip.crew.len() {
+    chip-line(text(fill: ink-soft)[#chip.crewMoreLabels.at(chip.crew.len() - k - 1)])
+  }
+}
+
+// The card the lines sit in: white body, the position's colour down the left edge.
+#let month-chip(col, body) = block(
+  width: 100%,
+  inset: (x: 2.5pt, y: 1.2pt),
+  radius: 1.4pt,
+  below: month-chip-gap,
+  fill: white,
+  stroke: (left: 1.4pt + col),
+  body,
+)
 
 #let chip-body(seg, compact: false) = {
   let size = if compact { 6.4pt } else { 7.2pt }
@@ -213,7 +269,70 @@
 }
 
 // --- month view -------------------------------------------------------------
-// Week rows × seven day cells, each listing compact one-line chips.
+// Week rows × seven day cells, each listing as many chips as its own height allows.
+//
+// The document hands over *every* shift of a day, because how many of them fit is only
+// knowable here: `layout` reports the cell the grid's `1fr` rows worked out, and
+// `measure` gives the real height of a chip in it — so the same page prints more per
+// cell on A3 than on A4, and a six-week month prints less than a four-week one, without
+// a single hard-coded line count. A cell never starts a chip it cannot finish, and never
+// spends its last line on a shift when it still owes the reader a "+n more".
+
+#let month-cell(d) = layout(size => {
+  set par(leading: 0.35em)
+
+  let head = {
+    text(size: 8pt, weight: 700, fill: if d.dim { luma(150) } else { ink })[#d.num]
+    if d.sub != "" {
+      h(3pt)
+      text(size: 7pt, fill: ink-soft)[#d.sub]
+    }
+  }
+  head
+
+  if d.chips.len() > 0 {
+    v(2.5pt, weak: true)
+
+    let more-line(n) = text(size: month-chip-size, fill: ink-soft)[#d.moreLabels.at(n - 1)]
+    let height-of(body) = measure(block(width: size.width, body)).height
+    // A chip's drawn height, gap included — what committing to it actually costs.
+    let chip-height(chip, k) = height-of(month-chip(black, month-chip-lines(chip, k))) + month-chip-gap
+
+    let avail = size.height - height-of(head) - 2.5pt
+    let more-height = height-of(more-line(1))
+
+    // Fit greedily, trimming a chip's crew list before giving up on the chip itself, and
+    // holding back room for the "+n more" line whenever shifts would be left over: a cell
+    // too tight for both prints the count rather than a shift it cannot account for.
+    let fitted = ()
+    let used = 0pt
+    let i = 0
+    while i < d.chips.len() {
+      let chip = d.chips.at(i)
+      let reserve = if i + 1 < d.chips.len() { more-height } else { 0pt }
+      let k = chip.crew.len()
+      let placed = false
+      while k >= 0 {
+        let h = chip-height(chip, k)
+        if used + h + reserve <= avail {
+          fitted.push((chip, k))
+          used += h
+          placed = true
+          break
+        }
+        k -= 1
+      }
+      if not placed { break }
+      i += 1
+    }
+
+    for (chip, k) in fitted {
+      month-chip(swatch(chip.color), month-chip-lines(chip, k))
+    }
+    let hidden = d.chips.len() - fitted.len()
+    if hidden > 0 and used + more-height <= avail { more-line(hidden) }
+  }
+})
 
 #let month-grid(sec) = {
   let nrows = calc.ceil(sec.days.len() / 7)
@@ -231,73 +350,7 @@
     )[#w]))),
     ..sec.days.map(d => grid.cell(
       fill: if d.dim { dim-fill } else { none },
-      block(
-        width: 100%,
-        height: 100%,
-        inset: 3pt,
-        clip: true,
-        {
-          set par(leading: 0.35em)
-          text(size: 8pt, weight: 700, fill: if d.dim { luma(150) } else { ink })[#d.num]
-          if d.sub != "" {
-            h(3pt)
-            text(size: 7pt, fill: ink-soft)[#d.sub]
-          }
-          v(2.5pt, weak: true)
-          for chip in d.chips {
-            let col = swatch(chip.color)
-            block(
-              width: 100%,
-              inset: (x: 2.5pt, y: 1.2pt),
-              radius: 1.4pt,
-              below: 1.6pt,
-              fill: white,
-              stroke: (left: 1.4pt + col),
-              // The time range, then one line per assignee — a day/week chip in
-              // miniature. Every line is clipped rather than wrapped, so a cell always
-              // fits the line budget the caller sized it for: the inner `box` is wider
-              // than the cell, which is how you say "don't wrap", and the clipping block
-              // then cuts the overflow off at the edge.
-              {
-                let size = 6.4pt
-                set text(size: size)
-                let head = box(width: 600%)[
-                  #text(weight: 700)[#chip.time]
-                  #if chip.label != "" [#h(2.5pt) #chip.label]
-                ]
-                // The "n open" note rides in its own column rather than at the end of the
-                // clipped line: a shift being short-handed is the one thing on the chip a
-                // long label must not cut off. The columns sit *inside* the line, so this
-                // row is exactly as tall as every other and a cell's height stays the
-                // line count the caller budgeted for.
-                chip-line(if chip.note == none {
-                  head
-                } else {
-                  grid(
-                    columns: (1fr, auto),
-                    column-gutter: 3pt,
-                    box(width: 100%, clip: true, head),
-                    text(weight: 600, fill: luma(70))[#chip.note],
-                  )
-                })
-                for c in chip.crew {
-                  chip-line(box(width: 600%)[
-                    #avatar(c, size * 1.25)
-                    #h(2pt)
-                    #text(fill: luma(55))[#c.name]
-                  ])
-                }
-                if chip.crewMore != "" {
-                  chip-line(text(fill: ink-soft)[#chip.crewMore])
-                }
-              },
-            )
-          }
-          if d.more > 0 {
-            text(size: 6.4pt, fill: ink-soft)[#d.moreLabel]
-          }
-        },
-      ),
+      block(width: 100%, height: 100%, inset: 3pt, clip: true, month-cell(d)),
     )),
   )
 }

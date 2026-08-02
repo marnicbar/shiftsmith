@@ -295,50 +295,43 @@ class CalendarDocumentBuilderTest {
         assertThat(s.days().get(3).sub()).isEmpty();
     }
 
-    /** Bare chips — a shift a day with nobody on it — still fill the cell four deep. */
-    @Test
-    void aMonthCellSummarisesItsShiftsAndSaysHowManyItHid() {
-        ExportDocument.Day mon = mondayCell(build(req("month", "position:p1"), manyShifts(6, 0)));
-        assertThat(mon.chips()).hasSize(4);
-        assertThat(mon.chips().get(0).time()).isEqualTo("08:00–16:00");
-        assertThat(mon.more()).isEqualTo(2);
-        assertThat(mon.moreLabel()).isEqualTo("+2 more");
-    }
-
     /**
-     * Listing the crew under each chip costs lines, so a cell holds fewer shifts — and a
-     * six-week month, whose rows are shorter still, holds fewer again. Whatever a cell
-     * cannot print is counted, never silently dropped.
+     * A cell gets every shift of its day: how many of them fit is the template's call,
+     * because only it has measured the cell. What the builder owes it is a "+n more" for
+     * each remainder it might be left with — nothing is dropped without one.
      */
     @Test
-    void aMonthCellFitsFewerChipsWhenTheyCarryCrew() {
-        ExportDocument.Day fiveRows = mondayCell(build(req("month", "position:p1"), manyShifts(6, 1)));
-        assertThat(fiveRows.chips()).hasSize(3); // 3 × (time + one assignee) = 6 lines
-        assertThat(fiveRows.more()).isEqualTo(3);
-
-        // August 2026 runs Jul 27 – Sep 6: six rows, so the same day fits fewer chips.
-        ExportRequest august = ExportRequest.of(List.of("position:p1"), "month",
-                LocalDate.of(2026, 8, 15), 0, 1440, "a4", "landscape", "en", "first");
-        ExportDocument.Day sixRows = mondayCell(build(august, manyShifts(6, 1)));
-        assertThat(sixRows.chips()).hasSize(2);
-        assertThat(sixRows.more()).isEqualTo(4);
+    void aMonthCellCarriesEveryShiftAndALabelForEachRemainder() {
+        ExportDocument.Day mon = mondayCell(build(req("month", "position:p1"), manyShifts(6, 0)));
+        assertThat(mon.chips()).hasSize(6);
+        assertThat(mon.chips().get(0).time()).isEqualTo("08:00–16:00");
+        assertThat(mon.moreLabels())
+                .containsExactly("+1 more", "+2 more", "+3 more", "+4 more", "+5 more", "+6 more");
     }
 
-    /** A cell too short even for one shift's crew prints the shift, and says who it left off. */
     @Test
-    void aMonthChipTrimsACrewTooLongForTheCell() {
+    void aDayWithNoShiftsOwesNoMoreLabels() {
+        ExportDocument.Day tue = only(build(req("month", "position:p1"), world())).days().stream()
+                .filter(d -> d.date().equals("2026-07-28")).findFirst().orElseThrow();
+        assertThat(tue.chips()).isEmpty();
+        assertThat(tue.moreLabels()).isEmpty();
+    }
+
+    /** Same contract one level down: a crew list a cell has to cut off is counted, not dropped. */
+    @Test
+    void aMonthChipLabelsEachRemainderOfItsCrew() {
         List<Employee> crowd = new ArrayList<>();
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 3; i++) {
             String letter = String.valueOf((char) ('A' + i));
             crowd.add(emp("e" + i, letter + "nna", letter + "berg", i));
         }
         World w = new World(crowd,
-                List.of(pos("p1", "Kitchen", 2, shift("s1", MON, 480, 960, 6))),
-                assign("s1@2026-07-27", "e0,e1,e2,e3,e4,e5"));
+                List.of(pos("p1", "Kitchen", 2, shift("s1", MON, 480, 960, 3))),
+                assign("s1@2026-07-27", "e0,e1,e2"));
         ExportDocument.Chip chip = mondayChips(build(req("month", "position:p1"), w)).get(0);
         assertThat(chip.crew()).extracting(ExportDocument.Crew::initials)
-                .containsExactly("AA", "BB", "CC", "DD");
-        assertThat(chip.crewMore()).isEqualTo("+2 more");
+                .containsExactly("AA", "BB", "CC");
+        assertThat(chip.crewMoreLabels()).containsExactly("+1 more", "+2 more", "+3 more");
     }
 
     /** A month chip carries the same hours and crew badges a day/week chip does. */
@@ -350,7 +343,6 @@ class CalendarDocumentBuilderTest {
         assertThat(chip.crew()).extracting(ExportDocument.Crew::color)
                 .containsExactly(Palette.colorAt(0), Palette.colorAt(1));
         assertThat(chip.label()).isEmpty(); // the crew is the label on a position's page
-        assertThat(chip.crewMore()).isEmpty();
         assertThat(chip.note()).isNull();
         assertThat(chip.open()).isFalse();
     }
