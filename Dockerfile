@@ -11,7 +11,7 @@
 # and JVM bytecode) are architecture-independent, so a multi-arch build runs npm and
 # Maven natively once instead of emulating them per target architecture. Only the
 # runtime stage below is built per architecture.
-FROM --platform=$BUILDPLATFORM node:24-alpine AS frontend
+FROM --platform=$BUILDPLATFORM node:25-alpine AS frontend
 WORKDIR /frontend
 # Install dependencies first so the layer is cached unless the lockfile changes.
 COPY frontend/package.json frontend/package-lock.json ./
