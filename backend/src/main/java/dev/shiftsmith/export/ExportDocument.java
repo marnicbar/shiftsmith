@@ -35,8 +35,13 @@ public record ExportDocument(Meta meta, List<Section> sections, Labels labels) {
     public record Day(String date, String head, String sub, String num, boolean dim,
                       List<Chip> chips, int more, String moreLabel) {}
 
-    /** A one-line summary of a shift inside a month cell. */
-    public record Chip(String time, String label, Color color, boolean open) {}
+    /**
+     * A one-line summary of a shift inside a month cell. It carries the same three
+     * things the on-screen month cell shows — the time, who is on ({@code crew}, drawn
+     * as avatars, or {@code label} where there is no crew to name) and the
+     * {@code note} counting the slots still open — just packed onto one clipped line.
+     */
+    public record Chip(String time, String label, List<Crew> crew, String note, Color color, boolean open) {}
 
     /**
      * A shift as it is drawn on the time grid: already split at midnight, clipped to

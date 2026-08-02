@@ -190,17 +190,16 @@
         let x = gutter + seg.day * col-w + seg.lane * lane-w
         let y = y-of(seg.start)
         let hh = calc.max(y-of(seg.end) - y, 9pt)
-        // White body, colour only in the accent bar down the left edge: the page
-        // stays legible in bulk (and photocopies) while the bar still carries the
-        // position. The remaining edges are a neutral hairline, just enough to read
-        // the chip as a card.
+        // White body, colour in the border: a thick accent bar down the left edge and
+        // a hairline of the same colour around the rest, so the whole card is framed in
+        // the position's colour while the body stays legible in bulk (and photocopies).
         place(dx: x + 0.7pt, dy: y + 0.5pt, block(
           width: lane-w - 1.4pt,
           height: hh - 1pt,
           clip: true,
           radius: 1.6pt,
           fill: white,
-          stroke: (left: 1.6pt + col, rest: 0.4pt + hairline),
+          stroke: (left: 1.6pt + col, rest: 0.4pt + col),
           chip-body(seg, compact: lane-w < 34mm),
         ))
       }
@@ -253,14 +252,34 @@
               // the cell always fits the chip budget the caller sized it for. The inner
               // `box` is wider than the cell, which is how you say "don't wrap"; the
               // clipping block then cuts the overflow off at the edge. `height` is
-              // generous enough to keep descenders.
+              // generous enough to keep the avatars and the descenders.
               {
-                set text(size: 6.4pt)
-                block(width: 100%, height: 1.35em, clip: true, box(width: 600%)[
+                let size = 6.4pt
+                set text(size: size)
+                let line = block(width: 100%, height: 1.5em, clip: true, box(width: 600%)[
                   #text(weight: 700)[#chip.time]
-                  #h(2.5pt)
-                  #chip.label
+                  #if chip.label != "" [#h(2.5pt) #chip.label]
+                  #for c in chip.crew [
+                    #h(2.5pt)
+                    #avatar(c, size * 1.25)
+                    #h(2pt)
+                    #text(fill: luma(55))[#c.name]
+                  ]
                 ])
+                // The "n open" note rides in its own column rather than at the end of the
+                // clipped line: a shift being short-handed is the one thing on the chip a
+                // long crew list must not cut off.
+                if chip.note == none {
+                  line
+                } else {
+                  grid(
+                    columns: (1fr, auto),
+                    column-gutter: 3pt,
+                    align: horizon,
+                    line,
+                    text(weight: 600, fill: luma(70))[#chip.note],
+                  )
+                }
               },
             )
           }

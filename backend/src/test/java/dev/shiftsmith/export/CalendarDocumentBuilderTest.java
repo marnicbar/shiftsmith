@@ -314,6 +314,42 @@ class CalendarDocumentBuilderTest {
         assertThat(mon.moreLabel()).isEqualTo("+2 more");
     }
 
+    /** A month cell shows the same crew badges a day/week chip does — just on one line. */
+    @Test
+    void aMonthChipCarriesItsCrew() {
+        ExportDocument.Chip chip = mondayChips(build(req("month", "position:p1"), world())).get(0);
+        assertThat(chip.crew()).extracting(ExportDocument.Crew::initials).containsExactly("AM", "BO");
+        assertThat(chip.crew()).extracting(ExportDocument.Crew::color)
+                .containsExactly(Palette.colorAt(0), Palette.colorAt(1));
+        assertThat(chip.label()).isEmpty(); // the crew is the label on a position's page
+        assertThat(chip.note()).isNull();
+        assertThat(chip.open()).isFalse();
+    }
+
+    /** …and it names the unfilled slots too, rather than leaving a month page to imply a full shift. */
+    @Test
+    void aMonthChipLabelsUnfilledSlots() {
+        World w = world();
+        ExportDocument.Chip chip = mondayChips(build(req("month", "position:p1"),
+                new World(w.employees(), w.positions(), assign("s1@2026-07-27", "e1")))).get(0);
+        assertThat(chip.crew()).extracting(ExportDocument.Crew::initials).containsExactly("AM");
+        assertThat(chip.note()).isEqualTo("1 open");
+        assertThat(chip.open()).isTrue();
+    }
+
+    @Test
+    void aPersonsMonthChipNamesThePositionInstead() {
+        ExportDocument.Chip chip = mondayChips(build(req("month", "person:e1"), world())).get(0);
+        assertThat(chip.label()).isEqualTo("Kitchen");
+        assertThat(chip.crew()).isEmpty();
+        assertThat(chip.note()).isNull();
+    }
+
+    private static List<ExportDocument.Chip> mondayChips(ExportDocument doc) {
+        return only(doc).days().stream()
+                .filter(d -> d.date().equals("2026-07-27")).findFirst().orElseThrow().chips();
+    }
+
     // --- weekends, legend, hour labels ---------------------------------------
 
     @Test

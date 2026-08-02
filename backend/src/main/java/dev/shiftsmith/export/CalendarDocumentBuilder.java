@@ -337,8 +337,11 @@ public final class CalendarDocumentBuilder {
         List<ExportDocument.Chip> out = new ArrayList<>(sorted.size());
         for (Piece p : sorted) {
             Event ev = p.event;
-            String label = !ev.title.isEmpty() ? ev.title : ev.crewNames();
-            out.add(new ExportDocument.Chip(minLabel(ev.start), label, ev.colour, ev.open > 0));
+            // Same content as a day/week chip, one line deep: a person's page names the
+            // position, a position's page draws its crew as avatars, and either way an
+            // unfilled shift says so — a month cell must not be the one view that hides it.
+            out.add(new ExportDocument.Chip(minLabel(ev.start), ev.title, ev.crew,
+                    ev.open > 0 ? labels.openSlots(ev.open) : null, ev.colour, ev.open > 0));
         }
         return out;
     }
