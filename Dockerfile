@@ -33,7 +33,7 @@ COPY --from=frontend /frontend/dist/ ./src/main/resources/META-INF/resources/
 RUN mvn -B --no-transfer-progress package -DskipTests
 
 # ---- Stage 3: slim runtime (built per target architecture) ------------------
-FROM eclipse-temurin:26-jre
+FROM eclipse-temurin:27-jre
 # Typst renders the calendar PDF exports (see PdfExportService). Pinned, and taken
 # from the upstream release tarball — there is no Debian package.
 ARG TYPST_VERSION=0.15.1
