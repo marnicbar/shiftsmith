@@ -20,7 +20,7 @@ COPY frontend/ ./
 RUN npm run build          # → /frontend/dist (index.html + /assets/*)
 
 # ---- Stage 2: build the Quarkus backend, bundling the SPA -------------------
-FROM --platform=$BUILDPLATFORM maven:3-eclipse-temurin-26 AS backend
+FROM --platform=$BUILDPLATFORM maven:3-eclipse-temurin-27 AS backend
 WORKDIR /build
 # Resolve dependencies first so they are cached unless the POM changes.
 COPY backend/pom.xml ./
